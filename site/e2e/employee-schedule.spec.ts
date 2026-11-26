@@ -4,9 +4,13 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const dayOf = (url: string) => new URL(url).searchParams.get('from')!.slice(0, 10);
 const addDay = (day: string, count: number) => new Date(Date.parse(`${day}T12:00:00Z`) + count * 86_400_000).toISOString().slice(0, 10);
+const localIso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const mondayOf = (date: Date) => { const copy = new Date(date); copy.setDate(copy.getDate() - ((copy.getDay() + 6) % 7)); return localIso(copy); };
+// A fixed Monday, so the tests do not depend on today's date.
+const MONDAY = '2030-01-14';
 
 // Requests served by the mock, so the tests can check which week was asked for.
-async function setup(page: Page, options: { scheduleStatus?: number; empty?: boolean } = {}) {
+async function setup(page: Page, options: { scheduleStatus?: number; empty?: boolean; query?: string } = {}) {
   await setupAdminMocks(page);
   const requests: string[] = [];
   // Failing stays on until a test turns it off, so dev-mode double effects cannot consume the failure.
@@ -36,29 +40,32 @@ async function setup(page: Page, options: { scheduleStatus?: number; empty?: boo
         later: { shiftId: 'other', shiftName: 'Evening deep clean', startUtc: `${day}T06:30:00Z`, endUtc: `${day}T08:30:00Z` } }] });
     }
     if (path.endsWith('/employees')) return route.fulfill({ headers, json: [
-      { id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true },
-      { id: 'second', firstName: 'Second', lastName: 'Employee', role: 'employee', isActive: true },
-      { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true },
+      { id: 'employee', firstName: 'Test', lastName: 'Employee', role: 'employee', isActive: true, defaultHours: {} },
+      { id: 'second', firstName: 'Second', lastName: 'Employee', role: 'employee', isActive: true, defaultHours: {} },
+      { id: 'partner-owner', firstName: 'Active', lastName: 'Partner', role: 'partner', isActive: true, defaultHours: {} },
     ] });
     if (path.endsWith('/tenant')) return route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } });
     return route.fulfill({ headers, json: [] });
   });
-  await page.goto('/admin/shifts/employee-schedule/');
+  await page.goto(`/admin/shifts/employee-schedule/${options.query ?? `?date=${MONDAY}`}`);
   await expect.poll(() => requests.length).toBeGreaterThan(0);
   return { requests, stopFailing: () => { failing = false; } };
 }
 
-test('admin sees each employee by day with visits and overlaps flagged', async ({ page }) => {
-  const state = await setup(page);
-  const first = state.requests[0];
+test('admin sees each employee on the chosen day with visits and overlaps flagged', async ({ page }) => {
+  await setup(page);
   await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
-  const cell = page.getByLabel(`Test Employee, ${first}`);
-  await expect(cell.getByText('Overlap')).toBeVisible();
-  await expect(cell.getByText(/Morning clean 08:00/)).toBeVisible();
-  await expect(cell.getByText(/Evening deep clean 08:30/)).toBeVisible();
-  await expect(page.getByLabel(`Second Employee, ${addDay(first, 1)}`).getByText(/Morning clean 08:00/)).toBeVisible();
-  await expect(page.getByText('Active Partner')).toHaveCount(0);
-  await expect(page.getByLabel(`Second Employee, ${addDay(first, 1)}`).getByText('Overlap')).toHaveCount(0);
+  const column = page.getByRole('group', { name: `Test Employee, ${MONDAY}` });
+  await expect(column.getByRole('button', { name: /^Morning clean, 08:00–10:00, Scheduled, overlaps another visit$/ })).toBeVisible();
+  await expect(column.getByRole('button', { name: /^Evening deep clean, 08:30–10:30, Scheduled, overlaps another visit$/ })).toBeVisible();
+  await expect(column.getByText('Overlap', { exact: true })).toHaveCount(2);
+  // The second employee has no visit on Monday; partners never get a column.
+  await expect(page.getByRole('group', { name: `Second Employee, ${MONDAY}` }).getByRole('button')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: /Active Partner/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next day' }).click();
+  const tuesday = page.getByRole('group', { name: `Second Employee, ${addDay(MONDAY, 1)}` });
+  await expect(tuesday.getByRole('button', { name: /^Morning clean, 08:00–10:00, Scheduled$/ })).toBeVisible();
+  await expect(tuesday.getByText('Overlap', { exact: true })).toHaveCount(0);
 });
 
 test('a week with no visits says so and points to other weeks', async ({ page }) => {
@@ -71,30 +78,39 @@ test('a failed load explains the problem and can be retried', async ({ page }) =
   await expect(page.getByText('Could not load the schedule. Check your connection, then retry.')).toBeVisible();
   state.stopFailing();
   await page.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByLabel(`Test Employee, ${state.requests[0]}`).getByText(/Morning clean 08:00/)).toBeVisible();
+  await expect(page.getByRole('group', { name: `Test Employee, ${MONDAY}` }).getByRole('button', { name: /^Morning clean/ })).toBeVisible();
+});
+
+test('previous day from a Monday loads the week before', async ({ page }) => {
+  const state = await setup(page);
+  expect(state.requests[0]).toBe(MONDAY);
+  await page.getByRole('button', { name: 'Previous day' }).click();
+  await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, -7));
+  await expect(page.getByLabel('Date', { exact: true })).toHaveValue(addDay(MONDAY, -1));
 });
 
 test('previous and next week move the requested range by seven days', async ({ page }) => {
   const state = await setup(page);
-  const start = state.requests[0];
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
   await page.getByRole('button', { name: 'Next week' }).click();
-  await expect.poll(() => state.requests.at(-1)).toBe(addDay(start, 7));
+  await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, 7));
   await page.getByRole('button', { name: 'Previous week' }).click();
   await page.getByRole('button', { name: 'Previous week' }).click();
-  await expect.poll(() => state.requests.at(-1)).toBe(addDay(start, -7));
+  await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, -7));
 });
 
-test('this week returns to the starting week after moving away', async ({ page }) => {
+test('this week returns to the current week after moving away', async ({ page }) => {
   const state = await setup(page);
-  const start = state.requests[0];
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
   await page.getByRole('button', { name: 'Next week' }).click();
-  await expect.poll(() => state.requests.at(-1)).toBe(addDay(start, 7));
+  await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, 7));
   await page.getByRole('button', { name: 'This week' }).click();
-  await expect.poll(() => state.requests.at(-1)).toBe(start);
+  await expect.poll(() => state.requests.at(-1)).toBe(mondayOf(new Date()));
 });
 
 test('a date typed into Week starting jumps to the Monday of that week', async ({ page }) => {
   const state = await setup(page);
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
   // 2026-10-14 is a Wednesday, so the requested week starts on Monday 2026-10-12.
   await page.getByLabel('Week starting').fill('2026-10-14');
   await expect.poll(() => state.requests.at(-1)).toBe('2026-10-12');
@@ -109,7 +125,7 @@ test('a failed time-zone load blocks the schedule instead of showing times in th
   await page.goto('/admin/shifts/employee-schedule/');
   await expect(page.getByText('Time zone unavailable')).toBeVisible();
   await expect(page.getByText('Could not load the workplace time zone')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Previous week' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Previous day' })).toHaveCount(0);
 });
 
 test('a failed overlap audit shows a retryable error instead of reporting no overlaps', async ({ page }) => {
@@ -161,18 +177,21 @@ test('the Reload button in the time-zone error recovers the schedule once the zo
   await expect(page.getByText('Time zone unavailable')).toBeVisible();
   zoneHealthy = true;
   await page.getByRole('button', { name: 'Reload', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Previous week' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous day' })).toBeVisible();
   await expect(page.getByText('Time zone unavailable')).toHaveCount(0);
   expect(tenantCalls).toBeGreaterThanOrEqual(2);
 });
 
-
 test('conflict deep link opens the selected employee and week, with a way back to all employees', async ({ page }) => {
-  const state = await setup(page);
-  await page.goto('/admin/shifts/employee-schedule/?employee=employee&date=2030-01-15');
-  await expect.poll(() => state.requests.at(-1)).toBe('2030-01-14');
-  await expect(page.getByRole('rowheader', { name: 'Test Employee', exact: true })).toBeVisible();
-  await expect(page.getByRole('rowheader', { name: 'Second Employee', exact: true })).toHaveCount(0);
+  const state = await setup(page, { query: '?employee=employee&date=2030-01-15' });
+  await expect.poll(() => state.requests.at(-1)).toBe(MONDAY);
+  // Week view: one column per day for the linked employee only.
+  await expect(page.getByRole('group', { name: `Test Employee, ${MONDAY}` })).toBeVisible();
+  // Monday to Friday by default; the weekend appears only when Show weekends is ticked.
+  await expect(page.getByRole('group', { name: `Test Employee, ${addDay(MONDAY, 4)}` })).toBeVisible();
+  await expect(page.getByRole('group', { name: `Test Employee, ${addDay(MONDAY, 6)}` })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: /^Second Employee/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Show all employees', exact: true }).click();
-  await expect(page.getByRole('rowheader', { name: 'Second Employee', exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: `Second Employee, 2030-01-15` })).toBeVisible();
+  await expect(page.getByRole('group', { name: `Test Employee, 2030-01-15` })).toBeVisible();
 });

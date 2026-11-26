@@ -12,6 +12,8 @@ export type { EyebrowProps, HeadingLevel, HeadingProps, HeadingSize } from './He
 export { Field, Input, Textarea } from './Input';
 export type { FieldProps } from './Input';
 export { Logo } from './Logo';
+export { MultiSelect, multiSelectSummary } from './MultiSelect';
+export type { MultiSelectOption, MultiSelectProps } from './MultiSelect';
 export type { LogoProps, LogoSize } from './Logo';
 export { cx } from './utils';
 export { fontFamily, fontSize, palette, radius, shadow } from './tokens';

@@ -1,10 +1,23 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Group, Loader, Paper, ScrollArea, Stack, Table, Text, TextInput, Title } from '@mantine/core';
-import { adminEmployees, adminShifts, adminTenant, type Employee, type EmployeeDaySchedule, type OverlapFinding, type ScheduleVisit } from '@/lib/adminApi';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
+import { Alert, Loader } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
+import { Badge, Button, Card, Eyebrow, Heading, MultiSelect, buttonClasses, cx, type BadgeVariant } from '@/ds';
+import { adminEmployees, adminShifts, adminTenant, authorizedFetch, type Employee, type EmployeeDaySchedule, type OverlapFinding, type ScheduleVisit } from '@/lib/adminApi';
 
 const DAYS = 7;
+// Drag and drop: drops snap to 15 minutes and save at once with these reasons; Undo reverses them.
+const SNAP_MINUTES = 15;
+const MOVE_REASON = 'Moved in the employee calendar';
+const ASSIGN_REASON = 'Reassigned in the employee calendar';
+const UNDO_REASON = 'Undo in the employee calendar';
+const MODE_REPLACE = 1;
+const STATUS_MOVED = 1;
+const STATUS_EXTRA = 4;
+// Tall enough that a one-hour visit shows its name, time and status in a narrow week column.
+const HOUR_PX = 72;
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function isoDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -18,9 +31,77 @@ function mondayOf(day: string) {
   const weekday = new Date(y, m - 1, d).getDay();
   return addDays(day, weekday === 0 ? -6 : 1 - weekday);
 }
+const weekdayOf = (day: string) => WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()];
+const isDay = (value: string | null): value is string => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value));
+
+// Work state of a visit, the same values as the shift's Visits list. One badge style per state.
+const STATUS: Record<string, { label: string; badge: BadgeVariant; block: string }> = {
+  Scheduled: { label: 'Scheduled', badge: 'outline', block: 'bg-white border-gray-200 border-l-accent-900' },
+  InProgress: { label: 'In progress', badge: 'gold', block: 'bg-brand-50 border-brand-100 border-l-brand-500' },
+  Completed: { label: 'Completed', badge: 'navy', block: 'bg-gray-100 border-gray-200 border-l-accent-900' },
+  NeedsAction: { label: 'Needs action', badge: 'danger', block: 'bg-red-50 border-red-200 border-l-red-600' },
+};
+const statusOf = (visit: ScheduleVisit) => STATUS[visit.workStatus ?? ''] ?? STATUS.Scheduled;
+
+type Placed = { key: string; employeeId: string; day: string; visit: ScheduleVisit; start: number; end: number; overlap: boolean };
+type Column = { key: string; label: string; title: string; hours: string; employeeId: string; day: string; visits: Placed[] };
+
+/** Side-by-side lanes for visits that overlap in one column, so none hides another. */
+function lanes(items: Placed[]) {
+  const sorted = [...items].sort((a, b) => a.start - b.start || a.end - b.end);
+  const placed = new Map<string, { lane: number; lanes: number }>();
+  let cluster: Placed[] = []; let clusterEnd = -1; let laneEnds: number[] = [];
+  const flush = () => { cluster.forEach(item => { placed.get(item.key)!.lanes = laneEnds.length; }); cluster = []; laneEnds = []; clusterEnd = -1; };
+  for (const item of sorted) {
+    if (cluster.length && item.start >= clusterEnd) flush();
+    let lane = laneEnds.findIndex(end => end <= item.start);
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(item.end); } else laneEnds[lane] = item.end;
+    placed.set(item.key, { lane, lanes: 0 }); cluster.push(item); clusterEnd = Math.max(clusterEnd, item.end);
+  }
+  flush();
+  return placed;
+}
+
+function hoursFor(employee: Employee | undefined, day: string, short = false) {
+  const hours = employee?.defaultHours?.[weekdayOf(day)];
+  if (!hours?.start || !hours?.end) return short ? 'No hours set' : 'No working hours set';
+  const range = `${hours.start.slice(0, 5)}–${hours.end.slice(0, 5)}`;
+  return short ? range : `Available ${range}`;
+}
+
+function Donut({ done, total }: { done: number; total: number }) {
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+  return <svg width="40" height="40" viewBox="0 0 40 40" role="img" aria-label={`${done} of ${total} checklist items done`} className="shrink-0 -rotate-90">
+    <circle cx="20" cy="20" r="15.9" fill="none" stroke="#f3f4f6" strokeWidth="5" />
+    <circle cx="20" cy="20" r="15.9" fill="none" stroke="#0d1428" strokeWidth="5" pathLength={100} strokeDasharray={`${percent} 100`} />
+  </svg>;
+}
+
+/** A labelled checkbox in the DS field style, with a 44 px touch target. */
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-gray-700">
+    <input type="checkbox" checked={checked} onChange={event => onChange(event.currentTarget.checked)}
+      className="h-4 w-4 accent-accent-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500" />
+    {label}
+  </label>;
+}
+
+/** Desktop visit details: slides in from the right over the calendar, below the admin header. No backdrop, so other visits stay clickable. */
+function SlideOver({ children }: { children: ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => { const frame = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(frame); }, []);
+  return <aside aria-label="Visit details" style={{ top: 'var(--app-shell-header-offset, 0px)' }}
+    className={cx('fixed bottom-0 right-0 z-40 w-[22rem] max-w-full overflow-y-auto border-l border-gray-100 bg-gray-50 p-4 shadow-xl shadow-accent-900/10',
+      'transition-transform duration-200 ease-out motion-reduce:transition-none', shown ? 'translate-x-0' : 'translate-x-full')}>
+    {children}
+  </aside>;
+}
 
 export default function EmployeeSchedulePage() {
-  const [weekStart, setWeekStart] = useState(() => mondayOf(isoDate(new Date())));
+  const [anchor, setAnchor] = useState(() => isoDate(new Date()));
+  const [view, setView] = useState<'day' | 'week'>('day');
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const [weekEmployee, setWeekEmployee] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<EmployeeDaySchedule[] | null>(null);
   const [overlaps, setOverlaps] = useState<OverlapFinding[]>([]);
   const [employees, setEmployees] = useState<Employee[] | null>(null);
@@ -29,24 +110,62 @@ export default function EmployeeSchedulePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const [employeeFilter, setEmployeeFilter] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [canUseCalendar, setCanUseCalendar] = useState(false);
+  // Working hours and working days by default; the full day and the weekend are opt-in.
+  const [showFullDay, setShowFullDay] = useState(false);
+  const [showWeekends, setShowWeekends] = useState(false);
+  // Drag and drop (desktop grid only).
+  const dragged = useRef<{ item: Placed; grabMinutes: number } | null>(null);
+  const [dropHint, setDropHint] = useState<{ column: string; minutes: number; duration: number } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean; undo?: () => Promise<void> } | null>(null);
+  // The link's date and employee are read before the first load, so a deep link does not load this week first.
+  const [ready, setReady] = useState(false);
+  const wide = useMediaQuery('(min-width: 48em)', true);
+  // Focus moves into the details when they open and back to the visit that opened them when they close.
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const detailsOpen = selectedKey !== null;
+  const closeDetails = () => {
+    setSelectedKey(null);
+    const back = opener.current;
+    setTimeout(() => { if (back?.isConnected) back.focus(); }, 0);
+  };
+  useEffect(() => { if (detailsOpen) closeButton.current?.focus(); }, [detailsOpen]);
   useEffect(() => {
+    if (!detailsOpen) return;
+    // Escape closes the details, unless something inside already used it (an open dropdown list closes itself first).
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented) closeDetails(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [detailsOpen]);
+
+  useEffect(() => {
+    // A conflict link opens one employee's week; a date opens that day or week.
     const params = new URLSearchParams(window.location.search);
-    setEmployeeFilter(params.get('employee'));
+    const employee = params.get('employee');
     const day = params.get('date');
-    if (day && /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day))) setWeekStart(mondayOf(day));
+    if (isDay(day)) setAnchor(day);
+    if (employee) { setWeekEmployee(employee); setView('week'); }
+    setReady(true);
   }, []);
+
+  const weekStart = mondayOf(anchor);
   const weekEnd = addDays(weekStart, DAYS - 1);
-  const days = useMemo(() => Array.from({ length: DAYS }, (_, index) => addDays(weekStart, index)), [weekStart]);
 
   useEffect(() => {
     // Times are grouped by the workplace day, so they must use the workplace zone. Without it the page does not render times.
     adminTenant.get()
       .then(tenant => { if (tenant?.timeZoneId) setTimeZone(tenant.timeZoneId); else setZoneError(true); })
       .catch(() => setZoneError(true));
+    // Only admins with the shift calendar can record work there, so the link is offered to them only.
+    authorizedFetch('/api/v1/me').then(response => response.ok ? response.json() : null)
+      .then(identity => setCanUseCalendar(identity?.canUseShiftCalendar === true)).catch(() => setCanUseCalendar(false));
   }, []);
 
   useEffect(() => {
+    if (!ready) return;
     let cancelled = false;
     setLoading(true); setError('');
     Promise.all([adminShifts.employeeSchedule(weekStart, weekEnd), adminShifts.overlapAudit(weekStart, weekEnd), adminEmployees.list()])
@@ -59,73 +178,405 @@ export default function EmployeeSchedulePage() {
       .catch(() => { if (!cancelled) setError('Could not load the schedule. Check your connection, then retry.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [weekStart, weekEnd, reloadKey]);
+  }, [ready, weekStart, weekEnd, reloadKey]);
 
-  // Times are shown in the tenant zone, the same zone the server uses to group visits by day.
-  const timeOf = (value: string) => new Date(value).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone });
-  const visitsFor = (employeeId: string, day: string) => schedule?.find(row => row.employeeId === employeeId && row.localDay.slice(0, 10) === day)?.visits ?? [];
-  // Flag a cell when one of its visits is part of an overlap finding for this employee.
+  const staff = useMemo(() => (employees ?? []).filter(employee => employee.isActive && employee.role !== 'partner'), [employees]);
+  const selectedIds = chosen ?? staff.map(employee => employee.id);
+  const oneEmployee = staff.find(employee => employee.id === weekEmployee) ?? staff[0];
+  const nameOf = (employee: Employee | undefined) => employee ? `${employee.firstName} ${employee.lastName}` : '';
+
+  const formatTime = (value: string) => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(new Date(value));
+  const local = (value: string) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone })
+      .formatToParts(new Date(value));
+    const get = (type: string) => parts.find(part => part.type === type)?.value ?? '00';
+    return { day: `${get('year')}-${get('month')}-${get('day')}`, minutes: Number(get('hour')) * 60 + Number(get('minute')) };
+  };
   const sameVisit = (a: ScheduleVisit, b: ScheduleVisit) => a.shiftId === b.shiftId && a.startUtc === b.startUtc;
-  const overlapFor = (employeeId: string, day: string) => visitsFor(employeeId, day).some(visit => overlaps.some(finding => finding.employeeId === employeeId
-    && (sameVisit(finding.earlier, visit) || sameVisit(finding.later, visit))));
-  const staff = (employees ?? []).filter(employee => employee.isActive && employee.role !== 'partner' && (!employeeFilter || employee.id === employeeFilter));
-  const visitLabel = (visit: ScheduleVisit) => `${visit.shiftName} ${timeOf(visit.startUtc)}–${timeOf(visit.endUtc)}`;
+
+  /** A workplace-local day and minute as a UTC instant, correct across clock changes. */
+  const zonedToUtc = (day: string, minutes: number) => {
+    const [y, m, d] = day.split('-').map(Number);
+    const wanted = Date.UTC(y, m - 1, d, Math.floor(minutes / 60), minutes % 60);
+    let instant = wanted;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const seen = local(new Date(instant).toISOString());
+      const [sy, sm, sd] = seen.day.split('-').map(Number);
+      const shown = Date.UTC(sy, sm - 1, sd, Math.floor(seen.minutes / 60), seen.minutes % 60);
+      if (shown === wanted) break;
+      instant += wanted - shown;
+    }
+    return new Date(instant).toISOString();
+  };
+
+  // Each employee's visits on each day of the week, positioned in minutes from local midnight.
+  const placedFor = (employeeId: string, day: string): Placed[] =>
+    (schedule?.find(row => row.employeeId === employeeId && row.localDay.slice(0, 10) === day)?.visits ?? []).map(visit => {
+      const start = local(visit.startUtc);
+      const end = local(visit.endUtc);
+      const endMinutes = end.day === start.day ? Math.max(end.minutes, start.minutes + 15) : 24 * 60;
+      return { key: `${employeeId}|${visit.shiftId}|${visit.startUtc}`, employeeId, day, visit, start: start.minutes, end: endMinutes,
+        overlap: overlaps.some(finding => finding.employeeId === employeeId && (sameVisit(finding.earlier, visit) || sameVisit(finding.later, visit))) };
+    });
+
+  const columns: Column[] = !timeZone ? [] : view === 'week'
+    ? (oneEmployee ? Array.from({ length: showWeekends ? DAYS : 5 }, (_, index) => {
+      const day = addDays(weekStart, index);
+      const label = new Date(`${day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      return { key: day, label, title: label, hours: hoursFor(oneEmployee, day, true), employeeId: oneEmployee.id, day, visits: placedFor(oneEmployee.id, day) };
+    }) : [])
+    : staff.filter(employee => selectedIds.includes(employee.id)).map(employee => ({
+      key: employee.id, label: nameOf(employee), title: nameOf(employee), hours: hoursFor(employee, anchor), employeeId: employee.id, day: anchor,
+      visits: placedFor(employee.id, anchor),
+    }));
+  const allPlaced = columns.flatMap(column => column.visits);
+  const selected = allPlaced.find(item => item.key === selectedKey) ?? null;
+
+  // Weekend visits of the week's employee while Mon–Fri is shown, so they are never missed.
+  const weekendVisits = view === 'week' && !showWeekends && oneEmployee
+    ? [5, 6].reduce((count, index) => count + placedFor(oneEmployee.id, addDays(weekStart, index)).length, 0) : 0;
+
+  // 08:00–17:00 by default, widened to fit any earlier or later visit; Show 24 h shows the whole day.
+  const firstHour = showFullDay ? 0 : Math.max(0, Math.min(8, ...allPlaced.map(item => Math.floor(item.start / 60))));
+  const lastHour = showFullDay ? 24 : Math.min(24, Math.max(17, ...allPlaced.map(item => Math.ceil(item.end / 60))));
+  const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, index) => firstHour + index);
+
+  const needAction = allPlaced.filter(item => item.visit.workStatus === 'NeedsAction').length;
+  const summary = view === 'week'
+    ? `${allPlaced.length + weekendVisits} ${allPlaced.length + weekendVisits === 1 ? 'visit' : 'visits'} this week · ${nameOf(oneEmployee)}`
+    : `${allPlaced.length} ${allPlaced.length === 1 ? 'visit' : 'visits'} · ${columns.length} ${columns.length === 1 ? 'employee' : 'employees'} · ${needAction} ${needAction === 1 ? 'needs' : 'need'} action`;
+  const heading = view === 'week'
+    ? `Week of ${new Date(`${weekStart}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    : new Date(`${anchor}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  const step = (count: number) => { setSelectedKey(null); setAnchor(view === 'week' ? addDays(weekStart, count * DAYS) : addDays(anchor, count)); };
+  const today = () => { setSelectedKey(null); setAnchor(isoDate(new Date())); };
+  const showWeek = () => { setSelectedKey(null); setWeekEmployee(weekEmployee ?? selectedIds[0] ?? staff[0]?.id ?? null); setView('week'); };
+  const showDay = () => { setSelectedKey(null); setView('day'); };
+  const showAll = () => { setSelectedKey(null); setChosen(null); setView('day'); };
 
   if (zoneError) return (
-    <Stack p="md" gap="md">
-      <Title order={2}>Employee schedule</Title>
+    <div className="space-y-4 p-4">
+      <Heading as="h2" size="md">Employee schedule</Heading>
       <Alert color="red" title="Time zone unavailable">Could not load the workplace time zone, so visit times cannot be shown correctly. Reload the page to try again.</Alert>
-      <Button variant="default" onClick={() => window.location.reload()}>Reload</Button>
-    </Stack>
+      <Button variant="outline" size="sm" onClick={() => window.location.reload()}>Reload</Button>
+    </div>
   );
   if (!timeZone) return (
-    <Stack p="md" gap="md"><Title order={2}>Employee schedule</Title><Loader /></Stack>
+    <div className="space-y-4 p-4"><Heading as="h2" size="md">Employee schedule</Heading><Loader /></div>
   );
+
+  // ---- Drag and drop ----
+  const isManual = (visit: ScheduleVisit) => visit.status === STATUS_EXTRA;
+  const movable = (item: Placed) => wide && !saving && typeof item.visit.rosterVersion === 'string' && !item.visit.moveLockReason
+    && item.visit.workStatus !== 'InProgress' && item.visit.workStatus !== 'Completed';
+  // A drop on another employee's column reassigns the visit; main-shift visits change employee through their offer instead.
+  const canDropOn = (item: Placed, column: Column) => column.employeeId === item.employeeId
+    || (!item.visit.isBranchMain && !(item.visit.assigneeIds ?? []).includes(column.employeeId));
+
+  const move = (visit: ScheduleVisit, startUtc: string, endUtc: string, reason: string, exceptionId?: string | null) =>
+    adminShifts.saveOccurrenceException(visit.shiftId, {
+      id: (isManual(visit) ? visit.extraExceptionId ?? visit.exceptionId : exceptionId ?? visit.exceptionId) ?? null,
+      originalStartUtc: isManual(visit) ? null : visit.originalStartUtc ?? visit.startUtc,
+      startUtc, endUtc, status: isManual(visit) ? STATUS_EXTRA : STATUS_MOVED, reason,
+      // A move replaces the employee on the visit's record, so the current one is sent back unchanged.
+      employeeId: visit.visitEmployeeId ?? null,
+    });
+  const reassign = (visit: ScheduleVisit, from: string, to: string, reason: string) =>
+    adminShifts.setVisitAssignees(visit.shiftId, {
+      originalStartUtc: isManual(visit) ? null : visit.originalStartUtc ?? visit.startUtc,
+      extraExceptionId: isManual(visit) ? visit.extraExceptionId ?? visit.exceptionId ?? null : null,
+      mode: MODE_REPLACE, employeeIds: [...(visit.assigneeIds ?? []).filter(id => id !== from), to],
+      reason, rosterVersion: visit.rosterVersion ?? '', assignmentVersion: visit.assignmentVersion ?? null, fromThisDate: false, preview: false,
+    });
+  /** The visit as the server has it now, for an undo that needs fresh roster versions. */
+  const freshVisit = async (employeeId: string, visit: ScheduleVisit, startUtc: string) => {
+    const rows = await adminShifts.employeeSchedule(weekStart, weekEnd);
+    const original = visit.originalStartUtc ?? (isManual(visit) ? null : visit.startUtc);
+    return rows?.filter(row => row.employeeId === employeeId).flatMap(row => row.visits).find(item => item.shiftId === visit.shiftId
+      && (isManual(visit) ? (item.extraExceptionId ?? item.exceptionId) === (visit.extraExceptionId ?? visit.exceptionId)
+        : (item.originalStartUtc ?? item.startUtc) === original || Date.parse(item.startUtc) === Date.parse(startUtc)));
+  };
+  const failureText = (failure: unknown) => failure instanceof Error && failure.message ? failure.message : 'Could not save the change. Reload and try again.';
+  const when = (day: string, startUtc: string) =>
+    `${new Date(`${day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} ${formatTime(startUtc)}`;
+
+  const dropMinutes = (column: Column, event: DragEvent<HTMLDivElement>, grabMinutes: number, duration: number) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointer = firstHour * 60 + ((event.clientY - rect.top) / HOUR_PX) * 60;
+    const snapped = Math.round((pointer - grabMinutes) / SNAP_MINUTES) * SNAP_MINUTES;
+    return Math.min(24 * 60 - duration, Math.max(0, snapped));
+  };
+  const onColumnDragOver = (column: Column, event: DragEvent<HTMLDivElement>) => {
+    const drag = dragged.current;
+    if (!drag || !canDropOn(drag.item, column)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const duration = Math.round((Date.parse(drag.item.visit.endUtc) - Date.parse(drag.item.visit.startUtc)) / 60000);
+    const minutes = dropMinutes(column, event, drag.grabMinutes, duration);
+    if (dropHint?.column !== column.key || dropHint.minutes !== minutes) setDropHint({ column: column.key, minutes, duration });
+  };
+  const onColumnDrop = async (column: Column, event: DragEvent<HTMLDivElement>) => {
+    const drag = dragged.current;
+    dragged.current = null; setDropHint(null);
+    if (!drag || !canDropOn(drag.item, column)) return;
+    event.preventDefault();
+    const { item } = drag; const visit = item.visit;
+    const durationMs = Date.parse(visit.endUtc) - Date.parse(visit.startUtc);
+    const startUtc = zonedToUtc(column.day, dropMinutes(column, event, drag.grabMinutes, Math.round(durationMs / 60000)));
+    const endUtc = new Date(Date.parse(startUtc) + durationMs).toISOString();
+    const timeChanged = Date.parse(startUtc) !== Date.parse(visit.startUtc);
+    const employeeChanged = column.employeeId !== item.employeeId;
+    if (!timeChanged && !employeeChanged) return;
+    const from = staff.find(employee => employee.id === item.employeeId);
+    const to = staff.find(employee => employee.id === column.employeeId);
+    setSaving(true); setNotice({ text: 'Saving…' }); setSelectedKey(null);
+    let reassigned = false;
+    try {
+      // Reassign first: it checks the roster version, so a stale calendar is refused before anything changes.
+      if (employeeChanged) { await reassign(visit, item.employeeId, column.employeeId, ASSIGN_REASON); reassigned = true; }
+      const moved = timeChanged ? await move(visit, startUtc, endUtc, MOVE_REASON) : null;
+      const parts = [employeeChanged ? `Reassigned ${visit.shiftName} from ${nameOf(from)} to ${nameOf(to)}` : `Moved ${visit.shiftName}`,
+        timeChanged ? `${employeeChanged ? 'and moved it' : ''} to ${when(column.day, startUtc)}`.trim() : ''].filter(Boolean);
+      setNotice({ text: `${parts.join(' ')}.`, undo: async () => {
+        if (moved) await move(visit, visit.startUtc, visit.endUtc, UNDO_REASON, moved.exceptionId);
+        if (employeeChanged) {
+          const current = await freshVisit(column.employeeId, visit, startUtc);
+          if (!current) throw new Error('The visit changed again, so it cannot be undone here. Reload and check it.');
+          await reassign(current, column.employeeId, item.employeeId, UNDO_REASON);
+        }
+      } });
+    } catch (failure) {
+      setNotice({ error: true, text: reassigned
+        ? `Reassigned ${visit.shiftName} to ${nameOf(to)}, but the time could not be changed: ${failureText(failure)}`
+        : failureText(failure),
+        undo: reassigned ? async () => {
+          const current = await freshVisit(column.employeeId, visit, visit.startUtc);
+          if (!current) throw new Error('The visit changed again, so it cannot be undone here. Reload and check it.');
+          await reassign(current, column.employeeId, item.employeeId, UNDO_REASON);
+        } : undefined });
+    } finally {
+      setSaving(false); setReloadKey(key => key + 1);
+    }
+  };
+  const undoLast = async () => {
+    const undo = notice?.undo;
+    if (!undo) return;
+    setSaving(true); setNotice({ text: 'Undoing…' });
+    try { await undo(); setNotice({ text: 'Change undone.' }); }
+    catch (failure) { setNotice({ error: true, text: failureText(failure) }); }
+    finally { setSaving(false); setReloadKey(key => key + 1); }
+  };
+
+  const visitButton = (item: Placed, style?: CSSProperties) => {
+    const status = statusOf(item.visit);
+    const time = `${formatTime(item.visit.startUtc)}–${formatTime(item.visit.endUtc)}`;
+    return <button key={item.key} type="button" onClick={event => { opener.current = event.currentTarget; setSelectedKey(item.key); }} aria-pressed={selectedKey === item.key}
+      aria-label={`${item.visit.shiftName}, ${time}, ${status.label}${item.overlap ? ', overlaps another visit' : ''}`}
+      style={style}
+      {...(style && movable(item) ? {
+        draggable: true,
+        onDragStart: (event: DragEvent<HTMLButtonElement>) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          dragged.current = { item, grabMinutes: Math.round(((event.clientY - rect.top) / HOUR_PX) * 60) };
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', item.key);
+        },
+        onDragEnd: () => { dragged.current = null; setDropHint(null); },
+      } : {})}
+      title={style && item.visit.moveLockReason ? item.visit.moveLockReason : undefined}
+      className={cx('overflow-hidden rounded-xl border border-l-4 px-2 py-1.5 text-left text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500',
+        status.block, selectedKey === item.key && 'ring-2 ring-accent-900', style ? 'absolute' : 'w-full',
+        style && movable(item) && 'cursor-grab active:cursor-grabbing')}>
+      <span className="block truncate text-xs font-bold leading-tight">{item.visit.shiftName}</span>
+      <span className="mt-0.5 block text-[11px] tabular-nums text-gray-700">{time}</span>
+      <span className="mt-1 flex flex-wrap items-center gap-1">
+        <Badge variant={status.badge} className="!px-1.5 !text-[10px]">{status.label}</Badge>
+        {item.overlap && <Badge variant="danger" className="!px-1.5 !text-[10px]">Overlap</Badge>}
+      </span>
+    </button>;
+  };
+
+  const details = selected && (() => {
+    const visit = selected.visit;
+    const status = statusOf(visit);
+    const employee = staff.find(person => person.id === selected.employeeId);
+    const minutes = Math.round((Date.parse(visit.endUtc) - Date.parse(visit.startUtc)) / 60000);
+    const duration = minutes % 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes / 60} h`;
+    const date = new Date(`${selected.day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const place = [visit.companyName, visit.branchName].filter(Boolean).join(' · ');
+    return <Card padding="sm" className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant={status.badge}>{status.label}</Badge>
+            {selected.overlap && <Badge variant="danger">Overlap</Badge>}
+          </div>
+          <Heading as="h2" size="sm">{visit.shiftName}</Heading>
+          {place && <p className="text-sm text-gray-700">{place}</p>}
+        </div>
+        <button ref={closeButton} type="button" onClick={closeDetails} aria-label="Close visit details"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-700 hover:border-brand-300">×</button>
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
+        <dt className="text-gray-500">Visit</dt><dd className="font-semibold tabular-nums">{date} · {formatTime(visit.startUtc)}–{formatTime(visit.endUtc)}</dd>
+        {visit.visitNumber != null && <><dt className="text-gray-500">Number</dt><dd>Visit {visit.visitNumber}</dd></>}
+        <dt className="text-gray-500">Employee</dt><dd className="font-semibold">{nameOf(employee)}</dd>
+        <dt className="text-gray-500">Duration</dt><dd>{duration}</dd>
+        {visit.address && <><dt className="text-gray-500">Site</dt><dd>{visit.address}</dd></>}
+        <dt className="text-gray-500">Checklist</dt>
+        <dd className="flex items-center gap-2.5">
+          {visit.checklistTotal ? <><Donut done={visit.checklistDone ?? 0} total={visit.checklistTotal} /><span>{visit.checklistDone ?? 0} of {visit.checklistTotal} done</span></>
+            : <span className="text-gray-500">No checklist yet</span>}
+        </dd>
+      </dl>
+      {selected.overlap && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">This visit overlaps another visit for {nameOf(employee)}. Move or reassign one of them.</p>}
+      {visit.visitNotes && <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide">Visit notes</p>{visit.visitNotes}
+      </div>}
+      {canUseCalendar && <a href={`/admin/shifts/calendar/?date=${selected.day}`} className={cx(buttonClasses('primary', 'md'), 'w-full')}>Open in shift calendar</a>}
+    </Card>;
+  })();
+
   return (
-    <Stack p="md" gap="md">
-      <Title order={2}>Employee schedule</Title>
-      <Group align="flex-end">
-        {employeeFilter && <Button variant="subtle" onClick={() => setEmployeeFilter(null)}>Show all employees</Button>}
-        <TextInput type="date" label="Week starting" value={weekStart} onChange={event => { if (event.currentTarget.value) setWeekStart(mondayOf(event.currentTarget.value)); }} />
-        <Button variant="default" onClick={() => setWeekStart(addDays(weekStart, -DAYS))}>Previous week</Button>
-        <Button variant="default" onClick={() => setWeekStart(addDays(weekStart, DAYS))}>Next week</Button>
-        <Button variant="subtle" onClick={() => setWeekStart(mondayOf(isoDate(new Date())))}>This week</Button>
-      </Group>
+    <div className="space-y-4 p-1 sm:p-2">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <Eyebrow>Employees</Eyebrow>
+          <Heading as="h2" size="md" className="mt-1">Employee schedule</Heading>
+          <p className="mt-1 text-sm text-gray-700">{heading} · {summary}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {view === 'week'
+            ? <>
+              <Button variant="outline" size="sm" onClick={() => step(-1)}>Previous week</Button>
+              <Button variant="outline" size="sm" onClick={today}>This week</Button>
+              <Button variant="outline" size="sm" onClick={() => step(1)}>Next week</Button>
+            </>
+            : <>
+              <Button variant="outline" size="sm" onClick={() => step(-1)}>Previous day</Button>
+              <Button variant="outline" size="sm" onClick={today}>Today</Button>
+              <Button variant="outline" size="sm" onClick={() => step(1)}>Next day</Button>
+            </>}
+        </div>
+      </header>
+
+      <div className="grid gap-4 sm:grid-cols-[repeat(3,minmax(0,1fr))] lg:grid-cols-[repeat(4,minmax(0,1fr))]">
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-gray-700">{view === 'week' ? 'Week starting' : 'Date'}</span>
+          <input type="date" value={view === 'week' ? weekStart : anchor}
+            onChange={event => { const value = event.currentTarget.value; if (value) { setSelectedKey(null); setAnchor(view === 'week' ? mondayOf(value) : value); } }}
+            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-base text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20" />
+        </label>
+        <div>
+          <span className="mb-1.5 block text-sm font-semibold text-gray-700">View</span>
+          <div className="flex gap-2" role="group" aria-label="View">
+            <Button size="sm" variant={view === 'day' ? 'primary' : 'outline'} aria-pressed={view === 'day'} onClick={showDay} className="flex-1">Day</Button>
+            <Button size="sm" variant={view === 'week' ? 'primary' : 'outline'} aria-pressed={view === 'week'} onClick={showWeek} className="flex-1">Week</Button>
+          </div>
+        </div>
+        {staff.length > 0 && (view === 'week'
+          ? <MultiSelect label="Employee" multiple={false} options={staff.map(employee => ({ value: employee.id, label: nameOf(employee) }))}
+            value={oneEmployee ? [oneEmployee.id] : []} onChange={value => { setSelectedKey(null); setWeekEmployee(value[0] ?? null); }}
+            hint="Week view shows one employee." />
+          : <MultiSelect label="Employees" options={staff.map(employee => ({ value: employee.id, label: nameOf(employee) }))}
+            value={selectedIds} onChange={value => { setSelectedKey(null); setChosen(value); }} placeholder="Choose employees" />)}
+        {view === 'week' && staff.length > 0 && <div className="flex items-end">
+          <Button variant="ghost" size="sm" onClick={showAll}>Show all employees</Button>
+        </div>}
+        {(wide || view === 'week') && <div className="flex flex-wrap items-center gap-x-6 sm:col-span-full" role="group" aria-label="Show more">
+          {wide && <Toggle label="Show 24 h" checked={showFullDay} onChange={setShowFullDay} />}
+          {view === 'week' && <Toggle label="Show weekends" checked={showWeekends} onChange={setShowWeekends} />}
+          {wide && <span className="text-sm text-gray-500">Drag a visit to change its time{view === 'day' ? ' or employee' : ' or day'}.</span>}
+        </div>}
+      </div>
+
       {loading && <Loader aria-label="Loading schedule" />}
-      {error && <Alert color="red" title="Schedule unavailable"><Stack gap="xs"><Text>{error}</Text><Button size="xs" variant="light" onClick={() => setReloadKey(key => key + 1)}>Retry</Button></Stack></Alert>}
-      {!loading && !error && schedule && staff.length === 0 && <Text>No active employees yet. Add employees, then their visits appear here.</Text>}
-      {!loading && !error && schedule && staff.length > 0 && schedule.length === 0 && <Text>No visits this week. Choose another week or check the shift schedules.</Text>}
-      {!loading && !error && schedule && staff.length > 0 && (
-        <ScrollArea type="auto">
-          <Table withTableBorder withColumnBorders miw={860}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Employee</Table.Th>
-                {days.map(day => <Table.Th key={day}>{new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</Table.Th>)}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {staff.map(employee => (
-                <Table.Tr key={employee.id}>
-                  <Table.Th>{employee.firstName} {employee.lastName}</Table.Th>
-                  {days.map(day => {
-                    const visits = visitsFor(employee.id, day);
-                    return (
-                      <Table.Td key={day} aria-label={`${employee.firstName} ${employee.lastName}, ${day}`}>
-                        {overlapFor(employee.id, day) && <Badge color="red" size="sm" mb={4}>Overlap</Badge>}
-                        <Stack gap={4}>
-                          {visits.length === 0 && <Text size="sm" c="dimmed">Free</Text>}
-                          {visits.map(visit => <Paper key={`${visit.shiftId}-${visit.startUtc}`} p={4} withBorder><Text size="xs">{visitLabel(visit)}</Text></Paper>)}
-                        </Stack>
-                      </Table.Td>
-                    );
-                  })}
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
+      {error && <Alert color="red" title="Schedule unavailable"><div className="space-y-2"><p>{error}</p><Button size="sm" variant="outline" onClick={() => setReloadKey(key => key + 1)}>Retry</Button></div></Alert>}
+      {!loading && !error && schedule && staff.length === 0 && <p className="text-gray-700">No active employees yet. Add employees, then their visits appear here.</p>}
+      {!loading && !error && schedule && staff.length > 0 && schedule.length === 0 && <p className="text-gray-700">No visits this week. Choose another week or check the shift schedules.</p>}
+      {!loading && !error && schedule && weekendVisits > 0 && <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-gray-700">
+        {weekendVisits} weekend {weekendVisits === 1 ? 'visit' : 'visits'} — tick Show weekends to see {weekendVisits === 1 ? 'it' : 'them'}.
+      </p>}
+      {!loading && !error && schedule && staff.length > 0 && view === 'day' && columns.length === 0 && <p className="text-gray-700">Choose at least one employee to see their visits.</p>}
+
+      {notice && <div role="status" className={cx('flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm',
+        notice.error ? 'border-red-200 bg-red-50 text-red-600' : 'border-gray-200 bg-white text-gray-700')}>
+        <span>{notice.text}</span>
+        <span className="flex gap-2">
+          {notice.undo && !saving && <Button size="sm" variant="outline" onClick={() => { void undoLast(); }}>Undo</Button>}
+          {!saving && <Button size="sm" variant="ghost" onClick={() => setNotice(null)} aria-label="Dismiss message">×</Button>}
+        </span>
+      </div>}
+      {!loading && !error && schedule && columns.length > 0 && (
+        <div>
+          <section aria-label="Visits" className="min-w-0">
+            {wide ? (
+              <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white">
+                <div style={{ minWidth: 56 + columns.length * (view === 'week' ? 120 : 150) }}>
+                  <div className="sticky top-0 z-10 grid border-b border-gray-100 bg-white" style={{ gridTemplateColumns: `56px repeat(${columns.length}, minmax(0, 1fr))` }}>
+                    <div />
+                    {columns.map(column => <div key={column.key} className="min-w-0 border-l border-gray-100 px-3 py-2.5">
+                      <p className="truncate text-sm font-semibold text-gray-900">{column.title}</p>
+                      <p className="truncate text-xs text-gray-500">{column.hours}</p>
+                      <p className="text-xs font-semibold text-brand-600">{column.visits.length} {column.visits.length === 1 ? 'visit' : 'visits'}</p>
+                    </div>)}
+                  </div>
+                  <div className="grid" style={{ gridTemplateColumns: `56px repeat(${columns.length}, minmax(0, 1fr))` }}>
+                    <div className="relative" style={{ height: (lastHour - firstHour) * HOUR_PX }} aria-hidden="true">
+                      {hours.map(hour => <span key={hour} className="absolute right-2 text-xs tabular-nums text-gray-500"
+                        style={{ top: Math.min((lastHour - firstHour) * HOUR_PX - 18, Math.max(2, (hour - firstHour) * HOUR_PX - 8)) }}>{String(hour).padStart(2, '0')}:00</span>)}
+                    </div>
+                    {columns.map(column => {
+                      const layout = lanes(column.visits);
+                      return <div key={column.key} role="group" aria-label={`${nameOf(staff.find(e => e.id === column.employeeId))}, ${column.day}`}
+                        className="relative border-l border-gray-100"
+                        onDragOver={event => onColumnDragOver(column, event)}
+                        onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && dropHint?.column === column.key) setDropHint(null); }}
+                        onDrop={event => { void onColumnDrop(column, event); }}
+                        style={{ height: (lastHour - firstHour) * HOUR_PX, backgroundImage: 'repeating-linear-gradient(to bottom, #f3f4f6 0, #f3f4f6 1px, transparent 1px, transparent 72px)' }}>
+                        {dropHint?.column === column.key && <div aria-hidden="true" data-testid="drop-marker"
+                          className="pointer-events-none absolute inset-x-1 z-10 rounded-xl border-2 border-dashed border-brand-500 bg-brand-50/70"
+                          style={{ top: ((dropHint.minutes - firstHour * 60) / 60) * HOUR_PX, height: Math.max(24, (dropHint.duration / 60) * HOUR_PX) }}>
+                          <span className="m-1 inline-block rounded-full bg-brand-500 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-accent-950">
+                            {String(Math.floor(dropHint.minutes / 60)).padStart(2, '0')}:{String(dropHint.minutes % 60).padStart(2, '0')}
+                          </span>
+                        </div>}
+                        {column.visits.map(item => {
+                          const place = layout.get(item.key) ?? { lane: 0, lanes: 1 };
+                          const width = 100 / Math.max(1, place.lanes);
+                          return visitButton(item, {
+                            top: ((item.start - firstHour * 60) / 60) * HOUR_PX + 2,
+                            height: Math.max(28, ((item.end - item.start) / 60) * HOUR_PX - 4),
+                            left: `calc(${place.lane * width}% + 3px)`, width: `calc(${width}% - 6px)`,
+                          });
+                        })}
+                      </div>;
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {columns.map(column => <div key={column.key} role="group" aria-label={`${nameOf(staff.find(e => e.id === column.employeeId))}, ${column.day}`} className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-gray-900">{column.title}</h3>
+                    <span className="text-xs text-gray-500">{column.hours}</span>
+                  </div>
+                  {column.visits.length === 0 ? <p className="text-sm text-gray-500">No visits</p>
+                    : [...column.visits].sort((a, b) => a.start - b.start).map(item => visitButton(item))}
+                </div>)}
+              </div>
+            )}
+          </section>
+
+          {details && (wide ? <SlideOver key="details">{details}</SlideOver> : (
+            <aside aria-label="Visit details" className="fixed inset-x-0 bottom-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-3xl bg-white p-4 shadow-xl shadow-accent-900/10">
+              {details}
+            </aside>
+          ))}
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

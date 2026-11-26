@@ -605,7 +605,26 @@ export interface VisitAssigneesInput {
   mode: number; employeeIds: string[]; reason: string; rosterVersion: string;
   assignmentVersion: string | null; fromThisDate: boolean; preview: boolean;
 }
-export interface ScheduleVisit { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+export interface ScheduleVisit {
+  shiftId: string; shiftName: string; startUtc: string; endUtc: string;
+  // Set on the employee schedule only; the overlap audit sends the four fields above.
+  exceptionId?: string | null; companyName?: string | null; branchName?: string | null; address?: string | null;
+  /** Completed, InProgress, Scheduled or NeedsAction, as in the shift's Visits list. */
+  workStatus?: string | null;
+  visitNotes?: string | null; visitNumber?: number | null;
+  /** This employee's checklist for the visit: ticked items and all items. Null before a checklist exists. */
+  checklistDone?: number | null; checklistTotal?: number | null;
+  // Identity and versions for moving or reassigning the visit from the calendar.
+  originalStartUtc?: string | null; extraExceptionId?: string | null;
+  /** 1 moved, 4 manual (extra) visit; null for an unchanged scheduled visit. */
+  status?: number | null;
+  /** The employee stored on the visit's change record; a move sends it back unchanged. */
+  visitEmployeeId?: string | null;
+  assigneeIds?: string[]; rosterVersion?: string; assignmentVersion?: string | null;
+  isBranchMain?: boolean; isPartnerBooking?: boolean;
+  /** Why the calendar cannot move or reassign this visit; null when it can. */
+  moveLockReason?: string | null;
+}
 export interface EmployeeDaySchedule { employeeId: string; localDay: string; visits: ScheduleVisit[] }
 export interface OverlapFinding { employeeId: string; earlier: ScheduleVisit; later: ScheduleVisit }
 export interface VisitAssignmentResult { employeeIds: string[]; message: string; preview: boolean }
