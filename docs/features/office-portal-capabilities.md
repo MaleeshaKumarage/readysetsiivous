@@ -13,6 +13,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Shift calendar (work order calendar in the redesign) | `/admin/shifts/calendar/` | Inventoried |
 | Employee schedule | `/admin/shifts/employee-schedule/` | Inventoried |
 | Work queue | `/admin/work-queue/` | Inventoried |
+| Partner operations | `/admin/partner-requests/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -395,3 +396,53 @@ Each item shows the customer, the reference and scheduled time, a state badge (f
 - Customer, contact (phone and email), service and length, start, status, assigned employee.
 - Actions by status, as on the Bookings page: New offers **Confirm** and **Cancel booking**; Confirmed offers **Mark completed** and **Cancel booking**. Cancelling asks for confirmation first.
 - "This booking could not be loaded. Retry." and "The action could not be completed. Refresh and check the booking status."
+
+## Partner operations
+
+Route: `/admin/partner-requests/` (Quote requests tab: `?tab=quotes`). Source: `site/src/components/PartnerOperations.tsx`, `PartnerKeyRequestsStaff.tsx`, `QuoteRequests.tsx`. Managers use the same page.
+
+Work for partner companies: pricing their properties, arranging one-time cleanings, handling their change requests and key requests. Only companies with partner access are included. Times use the tenant time zone.
+
+### Page
+
+- Title, a **Refresh** button, and "Price properties, arrange one-time cleaning and handle owner change requests."
+- Status lines: "Saving changes…", "Loading partner operations…", the result of the last action, or an error.
+- Tabs: **Requests**, **Assigned**, **Completed requests**, **Cancelled requests**, **Quote requests**, **Changes**, **Key requests**, **Properties**. Requests, Quote requests and Changes show a count of items needing action (the same counts as the sidebar badge).
+- The Requests tab explains that its badge counts requests needing arrangement, while the list also includes offers waiting for an employee's answer.
+
+### Request lists (Requests, Assigned, Completed requests, Cancelled requests)
+
+- Requests: waiting for an employee (including offers sent). Assigned: accepted or in progress. Completed and Cancelled: closed.
+- Each request: property and status, the date window (and fixed start time if set), price excl. VAT, VAT and estimated duration, "Deep cleaning · adds €15.00" when deep, the employee ("Not accepted" until accepted), and the owner's notes.
+- Actions while not started, completed or cancelled:
+  - **Arrange employee / time**: choose an employee (shown with whether they accept automatically) and an optional planned start inside the window. If someone already accepted, the dialog warns that a new offer removes them. **Send cleaning offer** gives "Work scheduled automatically." or "Offer sent. Waiting for employee…".
+  - **Edit / reschedule request**: from date, to date, an optional exact start time (single date only) and cleaning instructions. Changes cancel outstanding offers and need the employee to accept again; started or billed work is protected.
+  - **Cancel request**: a required reason. The offer and any scheduled visit are removed and the owner is notified.
+- Each list is paged. Empty states: "No requests waiting for an employee.", "No assigned visits.", "No completed requests.", "No cancelled requests."
+
+### Quote requests
+
+- Properties waiting for a price, oldest first: property, company and how long it has waited.
+- **Set cleaning price**: fixed price excl. VAT, VAT and estimated duration in minutes. New requests use the new price; existing requests keep their agreed price.
+- **Reject quote**: a required reason, which the owner sees; the property leaves the queue.
+- Empty state: "No quotes awaiting pricing."
+
+### Changes
+
+- Owner change requests, each with the property, the message, the requested change (for a reschedule: new dates, time and notes) and, when resolved, the resolution.
+- **Review and apply** (for a structured change) or **Resolve change request** (for a message): a required resolution text. A structured change is applied to the request as the staff saw it; if the request has changed since, the page asks to reload.
+- Paged. Empty state: "No change requests."
+
+### Key requests
+
+- **Fee per key request, excl. VAT**, with **Save fee**. New requests use the new fee. The current fee and VAT are shown.
+- Each key request: property, Key handover or Key pickup, date, status, fee, assigned employee, notes and cancellation reason.
+- While open: choose who collects or hands over the key, **Assign**, and **Mark completed** (after assignment).
+- Once assigned: add photos.
+- Empty state: "No key requests yet."
+
+### Properties
+
+- **Add property** and a list of partner properties: name, address, an Inactive badge, and the price (or that it needs a price).
+- **Edit property** and **Set cleaning price** per property.
+- Property form: company (new properties only), property name (required), street, postal code, city, country, contact phone, contact email, rooms and beds (optional), and **Active property**.
