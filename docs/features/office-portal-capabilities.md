@@ -9,6 +9,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Office shell (every page) | all `/admin/` routes | Inventoried |
 | Dashboard | `/admin/` | Inventoried |
 | Shifts (work orders in the redesign) | `/admin/shifts/` | Inventoried |
+| Bookings | `/admin/bookings/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -233,3 +234,38 @@ Pricing basis (fixed monthly fee, per visit, or property price), net rate, VAT, 
 ### Checklist template
 
 Choose a checklist template for the shift's company and branch, or none. It applies to upcoming visits and to the current visit if it has no checklist yet; started and submitted checklists keep their items.
+
+## Bookings
+
+Route: `/admin/bookings/`. Source: `site/src/app/admin/bookings/page.tsx`.
+
+Bookings made by customers on the public booking page.
+
+### Page
+
+- **Filter by status**: All statuses, New, Confirmed, Completed, Cancelled.
+- View switch: **Bookings** (the list) or **Day view**.
+- A success message after each change, for example "B-1042 is now Confirmed.", "B-1042 assigned to Anna K." or "B-1042 is unassigned."
+- Errors: "Bookings could not be loaded. Reload and retry." and "Employees could not be loaded, so bookings cannot be assigned. Reload and retry."
+
+### Bookings list
+
+Columns: Booking (number), When (date and time), Customer, Service (Finnish name), Status (New, Confirmed, Completed or Cancelled), Employee (or "Unassigned"), and a **Details** button.
+
+- Empty state: "No bookings." or "No bookings with status (status)."
+
+### Booking details (dialog)
+
+- Status, when, customer (name, phone, email), service and its length in minutes, employee.
+- **History**: each change with its time (UTC), status, who made it and a note. "History could not be loaded." on failure.
+- Status actions (admin only), depending on the status:
+  - New: **Confirm** or **Cancel booking**.
+  - Confirmed: **Mark completed** or **Cancel booking**.
+  - Completed or Cancelled: no actions; "This booking is (status). No further changes are available."
+- Assignment (admin only, while New or Confirmed): choose an active employee and **Assign**; **Unassign** when someone is assigned.
+
+### Day view
+
+- Choose a **Day** and an **Employee** to see that employee's bookings that day.
+- Columns: Time, Booking, Customer, Service, Status.
+- States: "Choose a day and an employee to see their bookings.", "No bookings for this employee on (date).", and "The day schedule could not be loaded. Reload and retry."
