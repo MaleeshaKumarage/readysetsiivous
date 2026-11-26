@@ -15,6 +15,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Work queue | `/admin/work-queue/` | Inventoried |
 | Partner operations | `/admin/partner-requests/` | Inventoried |
 | Quality Cycle | `/admin/quality-cycle/` | Inventoried |
+| Leads | `/admin/leads/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -495,3 +496,79 @@ Route: `/admin/quality-cycle/`. Source: `site/src/app/admin/quality-cycle/page.t
 - Links expire after 30 days and include report photos and notes. Acknowledgment records receipt through the link, not a signature.
 - Each share: recipient (or "Existing report link"), a status badge (Acknowledged, Email failed, Email sent or Link created), an Inactive badge when revoked or expired, the period, language and expiry, when the email provider accepted it, when it was acknowledged, and any email error.
 - Actions while active: **Open report**, **Retry email** (when the email was not sent) and **Revoke**.
+
+## Leads
+
+Route: `/admin/leads/`. Source: `site/src/app/admin/leads/page.tsx` and `site/src/components/leads/` (`LeadBranchesEditor`, `LeadCollaborationPanel`, `VoiceRecorder`). Managers have a separate, smaller leads page at `/manager/leads/` (not part of the office portal).
+
+### Lead list
+
+- **New lead**.
+- **Search leads**: company, business ID or email (up to 200 characters; results update as you type).
+- **Lead filter**: Active (default), Inactive, Converted, New, Contacted, In discussion or Lost.
+- Table: company (with business ID), branches (names, or "No branches"), contact (primary email or company phone, and how many email addresses), status badge, images (n/3), and **View lead**.
+- Paging of 25 with **Previous** and **Next** and "1–25 of n".
+- States: loading, "No leads in this view.", and a load error with **Retry loading leads**.
+- A link with `?lead=<id>` opens that lead directly.
+
+### Lead dialog (create, view and edit)
+
+The title is the company name, or "New lead". Closing with unsaved changes, an unsaved recording or an unsaved follow-up asks for confirmation. The close button is hidden while something is saving.
+
+- Load error with **Retry loading lead**; error and success messages at the top.
+- **Converted lead:** a read-only notice, with **Open customer** (to the company) or "The converted customer or branch is no longer available."
+- **Company details:**
+  - **Company name** (required).
+  - **Business ID** (required for conversion).
+  - **Contact name** and **Company phone**.
+  - **Contact email addresses**: one per line, up to 20.
+  - **Primary company email**: chosen from those addresses.
+  - **Lead status**: New, Contacted, In discussion or Lost.
+  - **Company notes** (up to 5,000 characters) and **Description** (up to 10,000).
+- **Branches (n):**
+  - **Add branch**.
+  - Each branch has name (required), street, postal code, city, country (default FI), phone and email, plus **Remove branch n** (with a confirmation).
+  - Branches are shown five at a time, with **Previous branches** and **Next branches**.
+  - A lead can be saved and converted without a branch.
+- **Save lead** (a saved lead may also show a business ID warning) and **Reload lead** (asks before discarding changes).
+- **Images (n/3):** JPEG, PNG or WebP up to 5 MiB each, private to tenant admins and managers.
+  - **View images**: open an image full size, or **Retry image** when it fails to load.
+  - **Manage images**: upload one or more (up to 3 in total, with upload progress) and **Remove image** (with a confirmation).
+  - The lead must be saved and active before images can be managed. Partial upload failures keep the images already uploaded.
+- **Lifecycle** (saved, not converted, no unsaved changes):
+  - **Deactivate** or **Reactivate**.
+  - **Convert to customer** (active leads).
+  - **Delete lead** (inactive leads; permanent, after a confirmation).
+
+### Voice notes (in the lead dialog)
+
+- **Refresh notes and follow-ups**.
+- **Record voice note**: asks for microphone access, records up to 5 minutes (shown as a timer) and **Stop recording**. Then preview it, and **Save recording** or **Discard recording**. A failed save keeps the recording so it can be retried.
+- Each note: author, date and time with time zone, length, **Load audio** (then play) or **Retry audio**, and **Delete voice note** (admins, not converted; with a confirmation).
+- Paged by 25.
+- Recording is disabled for lost, inactive or converted leads. Clear messages cover an unsupported browser, a denied microphone and a recording over 20 MiB.
+
+### Follow-ups (in the lead dialog)
+
+- Reminder emails are sent at 06:00 in the tenant time zone. Lost, inactive or converted leads stop future reminders.
+- **Add follow-up** opens a form:
+  - **Follow-up reason** (required, up to 1,000 characters).
+  - **First reminder date** (defaults to tomorrow).
+  - **Repeat follow-up**: Once, Daily, Weekly or Monthly. When it repeats: **Repeat every** (1–365) and **Last reminder date** (optional).
+  - **Notify tenant admins**: one or more admins, searchable; **Reload admin recipients**.
+  - **Save follow-up** and **Discard follow-up**.
+- Each follow-up: reason, state badge, repeat rule, next date, number of recipients, author, last error and last checked time. Active follow-ups have **Edit follow-up** and **Cancel follow-up** (with a confirmation).
+- Paged by 25.
+
+### Notification history (in the lead dialog)
+
+- Each email: recipient and address, scheduled time and time zone, state badge, sent time, error and number of attempts.
+- "Sent" means the email provider accepted it; "Needs review" means acceptance could not be confirmed.
+- Paged by 25.
+
+### Convert lead to customer (dialog)
+
+- Creates a company and all of its added branches (zero branches is allowed). The business ID is required.
+- The primary email becomes the company contact email. The other emails, the description and the images stay on the linked lead.
+- Shows the company name, business ID, the branches that will be created (read-only) and the primary email.
+- **Cancel** and **Confirm conversion**.
