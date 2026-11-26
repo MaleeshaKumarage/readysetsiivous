@@ -10,6 +10,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Dashboard | `/admin/` | Inventoried |
 | Shifts (work orders in the redesign) | `/admin/shifts/` | Inventoried |
 | Bookings | `/admin/bookings/` | Inventoried |
+| Shift calendar (work order calendar in the redesign) | `/admin/shifts/calendar/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -269,3 +270,44 @@ Columns: Booking (number), When (date and time), Customer, Service (Finnish name
 - Choose a **Day** and an **Employee** to see that employee's bookings that day.
 - Columns: Time, Booking, Customer, Service, Status.
 - States: "Choose a day and an employee to see their bookings.", "No bookings for this employee on (date).", and "The day schedule could not be loaded. Reload and retry."
+
+## Shift calendar
+
+Route: `/admin/shifts/calendar/`. Source: `site/src/app/admin/shifts/calendar/page.tsx`, `site/src/lib/adminShiftCalendarApi.ts`. Background: `docs/features/admin-shift-calendar.md`.
+
+A one-day view of every visit, used to check work and to record work times for past visits.
+
+### Access
+
+- Only admins with shift calendar access enabled (set on the Employees page) can use it. Others see an access message and no calendar.
+
+### Day controls
+
+- **Previous day**, a **Calendar date** picker, **Next day**, **Today** and **Refresh**.
+- "Times shown in (time zone). Work times can be recorded for past dates only."
+- Review summary: "No visits need review on this day." or "N visit(s) need review."
+- **Show only visits that need review** checkbox.
+- Messages: "Work times saved." and "Photos added to the visit." An error shows with **Retry**.
+- Empty states: "No shifts on this day." and "Turn off the review filter to see every visit."
+
+### Visit cards
+
+Sorted by start time. Each card shows:
+
+- Shift name, company and branch, scheduled start and end, a **Cancelled** badge when cancelled.
+- "Overlapping visits require review before work times can be recorded." for visits that cannot be told apart.
+- An **Unassigned** badge when nobody is assigned.
+- For each assigned employee: name, work status and hours, actual start and end ("Not ended" while running), and a review badge (**Missing completion** or **Unusual time**) with its explanation.
+- Per employee: **Record work** (or **Correct times** when times exist), shown only for past visits where recording is allowed; and **Add photos** once a work record exists.
+
+### Record work / Correct work times (dialog)
+
+- Employee and shift, the scheduled times, and the review explanation when there is one.
+- **Actual start** and **Actual end** (prefilled with the scheduled times for new records), the calculated work duration, and a required **Reason**.
+- Saving records the past visit as completed; checklist evidence is kept. Errors: "Enter both times and a reason." and "End must be after start."
+
+### Add photos to this visit (dialog)
+
+- For photos the employee sent outside the app.
+- Choose one or more photos (PNG, JPEG, WebP or BMP); each needs its own note. A required reason is kept with the visit.
+- Errors: "Choose at least one photo.", a missing note, and "Enter a reason."
