@@ -271,8 +271,9 @@ export default function EmployeeSchedulePage() {
   const movable = (item: Placed) => wide && !saving && typeof item.visit.rosterVersion === 'string' && !item.visit.moveLockReason
     && item.visit.workStatus !== 'InProgress' && item.visit.workStatus !== 'Completed';
   // A drop on another employee's column reassigns the visit; main-shift visits change employee through their offer instead.
+  // Past visits can be moved to a new time but not given to someone else (the server refuses that).
   const canDropOn = (item: Placed, column: Column) => column.employeeId === item.employeeId
-    || (!item.visit.isBranchMain && !(item.visit.assigneeIds ?? []).includes(column.employeeId));
+    || (!item.visit.isBranchMain && !item.visit.reassignLockReason && !(item.visit.assigneeIds ?? []).includes(column.employeeId));
 
   const move = (visit: ScheduleVisit, startUtc: string, endUtc: string, reason: string, exceptionId?: string | null) =>
     adminShifts.saveOccurrenceException(visit.shiftId, {

@@ -163,6 +163,7 @@ public class EmployeeScheduleTests
         Assert.False(item.IsPartnerBooking);
         // Its checklist has started, so the calendar must not offer to move it.
         Assert.Equal("Started or completed work cannot be moved or reassigned.", item.MoveLockReason);
+        Assert.Equal(item.MoveLockReason, item.ReassignLockReason);
     }
 
     [Fact]
@@ -172,15 +173,17 @@ public class EmployeeScheduleTests
         var visit = ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Added", employee);
         var item = await OnlyVisit(shift, visit, BeforeTheVisit);
         Assert.Null(item.MoveLockReason);
+        Assert.Null(item.ReassignLockReason);
     }
 
     [Fact]
-    public async Task A_past_visit_cannot_be_moved()
+    public async Task A_past_visit_that_has_not_started_can_be_moved_but_not_reassigned()
     {
         var employee = Guid.NewGuid(); var shift = OnCall("Deep clean");
         var visit = ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Added", employee);
         var item = await OnlyVisit(shift, visit, new FixedClock(new DateTime(2026, 12, 9, 9, 0, 0, DateTimeKind.Utc)));
-        Assert.Equal("Past visits cannot be moved or reassigned.", item.MoveLockReason);
+        Assert.Null(item.MoveLockReason);
+        Assert.Equal("Past visits cannot be reassigned.", item.ReassignLockReason);
     }
 
     [Fact]
@@ -191,6 +194,7 @@ public class EmployeeScheduleTests
         var item = await OnlyVisit(shift, visit, BeforeTheVisit);
         Assert.True(item.IsPartnerBooking);
         Assert.Equal("Manage this visit through Partner requests.", item.MoveLockReason);
+        Assert.Equal("Manage this visit through Partner requests.", item.ReassignLockReason);
     }
 
     [Fact]

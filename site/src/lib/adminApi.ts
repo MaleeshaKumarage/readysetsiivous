@@ -622,8 +622,10 @@ export interface ScheduleVisit {
   visitEmployeeId?: string | null;
   assigneeIds?: string[]; rosterVersion?: string; assignmentVersion?: string | null;
   isBranchMain?: boolean; isPartnerBooking?: boolean;
-  /** Why the calendar cannot move or reassign this visit; null when it can. */
+  /** Why the calendar cannot move this visit; null when it can (a not-started visit on a past day still can). */
   moveLockReason?: string | null;
+  /** Why the visit cannot be given to another employee, e.g. a past visit; null when it can. */
+  reassignLockReason?: string | null;
 }
 export interface EmployeeDaySchedule { employeeId: string; localDay: string; visits: ScheduleVisit[] }
 export interface OverlapFinding { employeeId: string; earlier: ScheduleVisit; later: ScheduleVisit }

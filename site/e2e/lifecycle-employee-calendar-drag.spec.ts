@@ -40,6 +40,11 @@ async function setup(page: Page, options: { moveConflict?: boolean } = {}) {
         { shiftId: 'lawn', shiftName: 'Lawn service', startUtc: `${MONDAY}T08:00:00Z`, endUtc: `${MONDAY}T09:00:00Z`, workStatus: 'Scheduled',
           status: 4, originalStartUtc: null, extraExceptionId: 'extra-1', exceptionId: 'extra-1', visitEmployeeId: 'aiden',
           assigneeIds: ['aiden'], rosterVersion: 'roster-3', assignmentVersion: null, isBranchMain: false, isPartnerBooking: false, moveLockReason: null },
+        // 15:00–16:00, scheduled but never started on a past day: it can be moved in time, not reassigned.
+        { shiftId: 'overdue', shiftName: 'Overdue clean', startUtc: `${MONDAY}T13:00:00Z`, endUtc: `${MONDAY}T14:00:00Z`, workStatus: 'NeedsAction',
+          status: null, originalStartUtc: null, extraExceptionId: null, exceptionId: null, visitEmployeeId: null,
+          assigneeIds: ['aiden'], rosterVersion: 'roster-4', assignmentVersion: null, isBranchMain: false, isPartnerBooking: false,
+          moveLockReason: null, reassignLockReason: 'Past visits cannot be reassigned.' },
       ] },
     ] });
     if (path.endsWith('/overlap-audit')) return route.fulfill({ headers, json: [] });
@@ -109,6 +114,21 @@ test.describe('desktop', () => {
     await drag(page, card(page, 'Neil Park', /^Deep clean/), column(page, 'Neil Park'), yFor(12));
     await expect(page.getByRole('status')).toContainText('Neil Park already has Window clean at this time.');
     await expect(page.getByRole('status').getByRole('button', { name: 'Undo' })).toHaveCount(0);
+  });
+
+  test('a scheduled visit that never started can be moved to a new time but not to another employee', async ({ page }) => {
+    const saved = await setup(page);
+    const overdue = card(page, 'Aiden Grey', /^Overdue clean/);
+    await expect(overdue).toHaveAttribute('draggable', 'true');
+    // Dropping it on another employee is not offered: nothing is saved and nothing is reported.
+    await drag(page, overdue, column(page, 'Neil Park'), yFor(15));
+    await expect(page.getByRole('status')).toHaveCount(0);
+    expect(saved).toHaveLength(0);
+    // Moving it within its own column saves the new time.
+    await drag(page, overdue, column(page, 'Aiden Grey'), yFor(16));
+    await expect(page.getByRole('status')).toContainText('Moved Overdue clean to Mon 14 Jan 16:00.');
+    const move = saved.find(item => item.path.endsWith('/shifts/overdue/occurrence-exceptions'))!;
+    expect(move.body).toMatchObject({ status: 1, originalStartUtc: '2030-01-14T13:00:00Z', startUtc: '2030-01-14T14:00:00.000Z' });
   });
 
   test('finished visits cannot be dragged and say why on hover', async ({ page }) => {
