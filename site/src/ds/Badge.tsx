@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
 import { cx } from './utils';
 
-export type BadgeVariant = 'gold' | 'navy' | 'green' | 'outline' | 'subtle';
+export type BadgeVariant = 'gold' | 'navy' | 'green' | 'outline' | 'subtle' | 'danger';
 export type BadgeSize = 'sm' | 'md';
 
 export const badgeVariants: Record<BadgeVariant, string> = {
@@ -14,6 +14,9 @@ export const badgeVariants: Record<BadgeVariant, string> = {
   // Hairline outline.
   outline:
     'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200',
+  // Red — needs attention; same red as form errors (Input.tsx).
+  danger:
+    'bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/30',
   // Soft gold wash — for inline labels on white.
   subtle:
     'bg-brand-50 text-brand-800 dark:bg-brand-500/10 dark:text-brand-400 border border-brand-200/60 dark:border-brand-500/20',

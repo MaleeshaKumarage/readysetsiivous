@@ -54,7 +54,7 @@ for (const selected of ['none', 'subset', 'all']) {
     await page.goto('/me/shifts/');
     await page.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(page.getByText(/^Actual start: /)).toBeVisible();
-    await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
+    await page.getByRole('button', { name: 'Add shift photos', exact: true }).click();
     if (selected !== 'none') await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
     if (selected === 'all') await page.getByRole('checkbox', { name: 'Gym', exact: true }).check();
     await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked({ checked: selected !== 'none' });
@@ -73,12 +73,12 @@ for (const selected of ['none', 'subset', 'all']) {
 test('activity selections and notes survive calendar tab changes', async ({ page }) => {
   await setupWork(page); await page.goto('/me/shifts/');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Keep my work');
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
   await page.getByRole('tab', { name: 'Today', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Keep my work');
 });
@@ -88,7 +88,7 @@ test('tenant midnight reloads Today and preserves an open activity draft', async
   await page.clock.pauseAt(new Date('2026-10-17T20:59:10Z'));
   const work = await setupWork(page, { startAt: '2026-10-17T20:00:00Z' }); await page.goto('/me/shifts/');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Midnight work');
   const before = work.loadCalls;
@@ -96,7 +96,7 @@ test('tenant midnight reloads Today and preserves an open activity draft', async
   await expect.poll(() => work.loadCalls).toBeGreaterThan(before);
   await expect(page.getByRole('tab', { name: 'Today', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Midnight work');
 });
@@ -113,7 +113,7 @@ test('changing calendar days preserves activity selections, shift notes and phot
   } }));
   await page.getByRole('tab', { name: 'Past', exact: true }).click();
   await page.getByRole('button', { name: /16\/10\/2026 Friday.*1 shift/ }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Preserve day draft');
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
@@ -121,7 +121,7 @@ test('changing calendar days preserves activity selections, shift notes and phot
   await page.getByRole('button', { name: /15\/10\/2026 Thursday.*1 shift/ }).click();
   await expect(page.getByRole('heading', { name: 'Other day' })).toBeVisible();
   await page.getByRole('button', { name: /16\/10\/2026 Friday.*1 shift/ }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await expect(page.getByRole('checkbox', { name: 'Corridor', exact: true })).toBeChecked();
   await expect(page.getByRole('textbox', { name: 'Shift note' })).toHaveValue('Preserve day draft');
   await expect(page.getByRole('textbox', { name: 'Photo 1 note' })).toHaveValue('Corridor evidence');
@@ -164,7 +164,7 @@ test('scheduled date, timezone and actual times are grouped in the job-time bloc
 test('a partner visit cannot end until each required photo section has a photo', async ({ page }) => {
   const work = await setupWork(page, { photoSections: ['Before', 'Keys'] });
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   const group = page.getByRole('group', { name: 'Required photos' });
   const end = page.getByRole('button', { name: 'End shift', exact: true });
   await expect(group.getByText('Needed')).toHaveCount(2);
@@ -182,7 +182,7 @@ test('a partner visit cannot end until each required photo section has a photo',
 test('employee can start and end a shift without an assigned checklist', async ({ page }) => {
   const work = await setupWork(page, { empty: true });
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await expect(page.getByText('No checklist assigned. You can end this shift without recording activities.')).toBeVisible();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.submitted.items).toEqual([]);
@@ -191,7 +191,7 @@ test('employee can start and end a shift without an assigned checklist', async (
 test('photos require their own note even with a general note and retry keeps evidence', async ({ page }) => {
   const work = await setupWork(page, { failEnd: true });
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
   await expect(page.getByRole('button', { name: 'Remove photo' })).toHaveCount(1);
@@ -218,7 +218,7 @@ test('photos require their own note even with a general note and retry keeps evi
 test('removing the last photo removes the note requirement and notes alone remain valid', async ({ page }) => {
   const work = await setupWork(page);
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
   await page.getByRole('button', { name: 'Remove photo' }).click();
   const note = page.getByRole('textbox', { name: 'Shift note' });
@@ -231,7 +231,7 @@ test('removing the last photo removes the note requirement and notes alone remai
 
 test('each photo needs its own note and removing one preserves the other note', async ({ page }) => {
   const work = await setupWork(page); await page.goto('/me/shifts/');
-  await page.getByRole('button', { name: 'Start', exact: true }).click(); await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Start', exact: true }).click(); await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByLabel('Add shift photos').setInputFiles([evidencePhoto, { ...evidencePhoto, name: 'gym.png' }]);
   await page.getByRole('textbox', { name: 'Photo 1 note' }).fill('Corridor cleaned');
   await page.getByRole('textbox', { name: 'Shift note' }).fill('General shift note');
@@ -252,7 +252,7 @@ test('shift cannot end while a selected photo is still being read', async ({ pag
   });
   const work = await setupWork(page);
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('textbox', { name: 'Shift note' }).fill('Photo evidence of corridor cleaning.');
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
   await expect(page.getByRole('status').filter({ hasText: 'Reading photos...' })).toHaveText('Reading photos...');
@@ -270,7 +270,7 @@ test('failed photo reads and unsupported files are visible and do not stop note-
   });
   const work = await setupWork(page);
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByLabel('Add shift photos').setInputFiles(evidencePhoto);
   await expect(page.getByRole('alert', { name: 'Shift error' })).toHaveText('Could not read the photo. Please select it again.');
   await page.getByLabel('Add shift photos').setInputFiles({ name: 'document.txt', mimeType: 'text/plain', buffer: Buffer.from('not a photo') });
@@ -285,7 +285,7 @@ test('failed start and end retries retain selected activities and notes', async 
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(page.getByText('Could not start shift. Please retry.')).toBeVisible();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
   await page.getByPlaceholder('Notes (optional)').fill('Gym was not done today.');
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
@@ -299,7 +299,7 @@ test('failed start and end retries retain selected activities and notes', async 
 test('lost start and end responses recover the already saved shift state', async ({ page }) => {
   const work = await setupWork(page, { lostStart: true, lostEnd: true });
   await page.goto('/me/shifts/'); await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('checkbox', { name: 'Gym', exact: true }).check();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible();
@@ -328,7 +328,7 @@ test('a future shift becomes startable on its scheduled local date', async ({ pa
   await page.clock.fastForward(86405000);
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Record activities & end' })).toBeVisible(); expect(work.startCalls).toBe(1);
+  await expect(page.getByRole('button', { name: 'Add shift photos' })).toBeVisible(); expect(work.startCalls).toBe(1);
 });
 
 test('a shift can be started before its scheduled time on the scheduled date', async ({ page }) => {
@@ -365,7 +365,7 @@ for (const role of ['admin', 'manager'] as const) {
     await expect(page.getByRole('heading', { name: 'My Shifts', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AAA1 weekday shift' })).toBeVisible();
     await page.getByRole('button', { name: 'Start', exact: true }).click();
-    await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
+    await page.getByRole('button', { name: 'Add shift photos', exact: true }).click();
     await page.getByRole('checkbox', { name: 'Corridor', exact: true }).check();
     // The phone pointer check reports the photo-note help text over this button after scrolling, although the
     // button is the top element in a plain screenshot. Activate it from the keyboard so the flow itself is tested.
@@ -407,7 +407,7 @@ test('a past visit can be started and ended with actual times recorded today', a
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(page.getByText(/^Actual start: /)).toBeVisible();
-  await page.getByRole('button', { name: 'Record activities & end' }).click();
+  await page.getByRole('button', { name: 'Add shift photos' }).click();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible();
   await expect(page.getByText(/Scheduled:.*Oct 1, 2026/)).toBeVisible();
@@ -438,7 +438,7 @@ test('A01 verified automatic preference hides approval section while assigned wo
   await expect(page.getByRole('region', { name: 'Notifications', exact: true })).toHaveCount(0);
   await chooseEmployeeSection(page, 'Schedules');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
-  await page.getByRole('button', { name: 'Record activities & end', exact: true }).click();
+  await page.getByRole('button', { name: 'Add shift photos', exact: true }).click();
   await page.getByRole('button', { name: 'End shift', exact: true }).click();
   await expect(page.getByText('Done', { exact: true })).toBeVisible(); expect(work.endCalls).toBe(1);
   automatic = false; await page.evaluate(() => window.dispatchEvent(new Event('focus')));

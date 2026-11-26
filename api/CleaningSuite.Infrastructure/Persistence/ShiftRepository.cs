@@ -363,6 +363,33 @@ public class ShiftRepository : IShiftRepository
 
     public async Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default)
     { var old = await Session.LoadAsync<ShiftOccurrenceException>(id, ct); if (old is not null) await StageVisitChange(old.ShiftId, old.OriginalStartUtc, old.OriginalStartUtc.HasValue ? null : old.Id, null, null, old, null, ct); Session.Delete<ShiftOccurrenceException>(id); await Session.SaveChangesAsync(ct); }
+    public Task<CancelledVisit?> GetCancelledVisitAsync(Guid id, CancellationToken ct = default) => Session.LoadAsync<CancelledVisit>(id, ct);
+
+    public async Task<IReadOnlyList<CancelledVisit>> ListCancelledVisitsAsync(Guid shiftId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
+    {
+        var from = DateTime.SpecifyKind(fromUtc, DateTimeKind.Unspecified);
+        var to = DateTime.SpecifyKind(toUtc, DateTimeKind.Unspecified);
+        return await Session.Query<CancelledVisit>().Where(x => x.ShiftId == shiftId && x.StartUtc >= from && x.StartUtc < to).ToListAsync(ct);
+    }
+
+    public async Task CancelManualVisitAsync(CancelledVisit cancelled, CancellationToken ct = default)
+    {
+        var old = await Session.LoadAsync<ShiftOccurrenceException>(cancelled.Visit.Id, ct);
+        if (old is not null) await StageVisitChange(old.ShiftId, null, old.Id, null, null, old, null, ct);
+        Session.Delete<ShiftOccurrenceException>(cancelled.Visit.Id);
+        Session.Store(cancelled);
+        await Session.SaveChangesAsync(ct);
+    }
+
+    public async Task RestoreManualVisitAsync(CancelledVisit cancelled, CancellationToken ct = default)
+    {
+        var visit = cancelled.Visit;
+        await StageVisitChange(visit.ShiftId, null, visit.Id, null, null, null, visit, ct);
+        Session.Store(visit);
+        Session.Delete<CancelledVisit>(cancelled.Id);
+        await Session.SaveChangesAsync(ct);
+    }
+
     private static T Snapshot<T>(T value) => System.Text.Json.JsonSerializer.Deserialize<T>(System.Text.Json.JsonSerializer.Serialize(value))!;
 
     private async Task StageVisitChange(Guid shiftId, DateTime? original, Guid? extra,

@@ -79,3 +79,15 @@
 .dark .employee-photo-add { border-color: #6b7280; }
 .dark .employee-photo-add:focus-within { outline-color: #e0c56e; }
 .employee-portal [aria-label='Selected photos'] button { min-width: 44px; min-height: 44px; }
+
+/* Employee portal: Work Sans for text and Outfit for headings, as in the brand guidelines. */
+.employee-portal {
+  --font-outfit: 'Outfit', 'Arial', sans-serif;
+  --font-work-sans: 'Work Sans', 'Arial', sans-serif;
+  font-family: var(--font-work-sans), 'Work Sans', sans-serif;
+}
+.employee-portal h1,
+.employee-portal h2,
+.employee-portal h3 {
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
+}

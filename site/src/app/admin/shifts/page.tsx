@@ -3,7 +3,7 @@
 import { showError } from '@/lib/toast';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
-  Title, Button, Table, Modal, TextInput, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
+  Title, Button, Table, Modal, TextInput, Textarea, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
 } from '@mantine/core';
 import { Plus, Trash2, Pencil, MoreHorizontal, Eye, UserPlus, CalendarDays, CalendarPlus, ListChecks, Receipt, PauseCircle, PlayCircle, ChevronDown, ChevronRight, Sparkles, UserRound, CircleCheck, Clock } from 'lucide-react';
 import {
@@ -225,6 +225,10 @@ export default function ShiftsAdminPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [priceFrom, setPriceFrom] = useState<string | null>(null);
+  // The shift's own contract price. 'branch' keeps the property price.
+  const [pricingChoice, setPricingChoice] = useState<'branch' | 'Monthly' | 'PerVisit'>('branch');
+  const [contractRate, setContractRate] = useState<string>('');
+  const [contractVat, setContractVat] = useState<string>('25.5');
   const [name, setName] = useState('');
   const [validFrom, setValidFrom] = useState('');
   const [validUntil, setValidUntil] = useState('');
@@ -274,6 +278,12 @@ export default function ShiftsAdminPage() {
   const [occurrenceStart, setOccurrenceStart] = useState('');
   const [occurrenceEnd, setOccurrenceEnd] = useState('');
   const [occurrenceReason, setOccurrenceReason] = useState('');
+  const [occurrenceNotes, setOccurrenceNotes] = useState('');
+  // Cancelling a manually created visit keeps it in the list so it can be restored.
+  const [cancellingVisit, setCancellingVisit] = useState<ShiftOccurrence | null>(null);
+  const [cancelVisitStatus, setCancelVisitStatus] = useState('3');
+  const [cancelVisitReason, setCancelVisitReason] = useState('');
+  const [cancelVisitError, setCancelVisitError] = useState('');
   const [occurrenceEmployee, setOccurrenceEmployee] = useState<string | null>(null);
   const [occurrenceSaving, setOccurrenceSaving] = useState(false);
   const [assigningVisit, setAssigningVisit] = useState<ShiftOccurrence | null>(null);
@@ -395,7 +405,7 @@ export default function ShiftsAdminPage() {
   };
 
   const closeModal = () => {
-    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setQualityCycleTemplateId(null); setScheduleType(''); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
+    setName(''); setNotes(''); setWeekDays([]); setCompanyId(null); setBranchId(null); setPriceFrom(null); setPricingChoice('branch'); setContractRate(''); setContractVat('25.5'); setQualityCycleTemplateId(null); setScheduleType(''); setStart('08:00'); setEnd('17:00'); setWeekParity('1'); setMonthlyDay(1); setOneTimeDate(''); setOneTimeStart('08:00'); setOneTimeEnd('17:00'); setDailyTimes({}); setEditingShift(null); setError(''); setModalOpen(false);
   };
 
   // A customer workspace link carries ?company= so the create form opens with that customer selected.
@@ -406,6 +416,8 @@ export default function ShiftsAdminPage() {
     const schedule = shift.schedule;
     setEditingShift(shift); setCompanyId(shift.companyId); setBranchId(shift.branchId);
     setName(shift.name); setNotes(shift.notes ?? ''); setQualityCycleTemplateId(shift.qualityCycleTemplateId ?? null);
+    setPricingChoice(shift.pricingMode === 0 ? 'Monthly' : shift.pricingMode === 1 ? 'PerVisit' : 'branch');
+    setContractRate(shift.rateNet != null ? String(shift.rateNet) : ''); setContractVat(shift.vatRatePercent != null ? String(shift.vatRatePercent) : '25.5');
     setValidFrom(shift.validFrom?.slice(0, 10) ?? ''); setValidUntil(shift.validUntil?.slice(0, 10) ?? '');
     setScheduleType(String(schedule.type));
     setStart((schedule.dailyStart ?? schedule.weeklyStart ?? schedule.biWeeklyStart ?? schedule.monthlyStart ?? '08:00').slice(0, 5));
@@ -441,6 +453,7 @@ export default function ShiftsAdminPage() {
     // A weekday without its own times uses the shown default (the same fallback the saved schedule uses).
     if (scheduleType === '1' && (!weekDays.length || weekDays.some(day => { const range = dailyTimes[day] ?? { start, end }; return !range.start || !range.end || range.end <= range.start; }))) { setError('Select at least one day and ensure each end time is after its start time.'); return; }
     if (scheduleType === '3' && weekDays.length === 0) { setError('Select a day.'); return; }
+    if (pricingChoice !== 'branch' && (!(Number(contractRate) > 0) || !(Number(contractVat) >= 0 && Number(contractVat) <= 100))) { setError('Enter a price above zero and a VAT rate from 0 to 100.'); return; }
     submitting.current = true; setSaving(true); setError('');
     const branchVersions = branches.find(b => b.id === branchId)?.priceVersions;
     const chosenPriceFrom = priceFrom && branchVersions?.some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branchVersions) ?? undefined;
@@ -449,9 +462,13 @@ export default function ShiftsAdminPage() {
     // The server builds every shift name from the property, so the name sent here is only a placeholder.
     const shiftName = autoShiftName(branches.find(b => b.id === branchId));
     if (!shiftName) { setError('Could not name this shift. Choose a property and schedule, then save again.'); return; }
+    // Editing always sends the price choice; the server clears the shift's own price when 'Property price' is chosen.
+    const priceFields = pricingChoice === 'branch'
+      ? { changePrice: true, pricingMode: null, rateNet: null, vatRatePercent: null }
+      : { changePrice: true, pricingMode: pricingChoice === 'Monthly' ? 0 : 1, rateNet: Number(contractRate), vatRatePercent: Number(contractVat) };
     const fields = { companyId, branchId, name: shiftName, schedule: buildSchedule(), notes: notes.trim() || undefined, isActive: editingShift?.isActive ?? true, validFrom: oneTime ? oneTimeDate : validFrom || undefined, validUntil: oneTime ? oneTimeDate : validUntil || undefined, qualityCycleTemplateId: qualityCycleTemplateId || undefined,
       // Creating a shift picks the branch price version it bills at; the default is the price in force today.
-      priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom };
+      priceEffectiveFrom: editingShift ? undefined : chosenPriceFrom, ...priceFields };
     const result = await (editingShift ? adminShifts.update(editingShift.id, fields) : adminShifts.create(fields)).finally(() => { submitting.current = false; });
     setSaving(false);
     if (!result.ok) {
@@ -631,6 +648,7 @@ export default function ShiftsAdminPage() {
     setOccurrenceEnd(occurrence?.endUtc ? localInputValue(occurrence.endUtc, timeZoneId) : '');
     setOccurrenceReason(occurrence?.reason ?? (quick ? (quick.notes?.trim() || 'Quick visit') : ''));
     setOccurrenceEmployee(occurrence?.employeeId ?? quick?.defaultEmployeeId ?? null); setOccurrenceEditError('');
+    setOccurrenceNotes(occurrence?.visitNotes ?? '');
   };
 
   const saveOccurrence = async () => {
@@ -644,7 +662,7 @@ export default function ShiftsAdminPage() {
         id: editingOccurrence.exceptionId,
         originalStartUtc: status === 4 ? null : (editingOccurrence.originalStartUtc ?? editingOccurrence.startUtc),
         startUtc: tenantLocalToUtc(occurrenceStart, timeZoneId), endUtc: tenantLocalToUtc(occurrenceEnd, timeZoneId),
-        status, reason: occurrenceReason.trim(), employeeId: occurrenceEmployee,
+        status, reason: occurrenceReason.trim(), employeeId: occurrenceEmployee, notes: occurrenceNotes.trim() ? occurrenceNotes : (editingOccurrence.visitNotes ? '' : undefined),
       });
       setEditingOccurrence(null);
       setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned employees see it in My shifts.' : 'Visit updated.');
@@ -654,7 +672,27 @@ export default function ShiftsAdminPage() {
         setOccurrenceFrom(savedDay); setOccurrenceTo(savedDay);
         await loadOccurrences(occurrenceShift, savedDay, savedDay);
       } else await loadOccurrences();
-    } catch (failure) { setOccurrenceEditError(failure instanceof Error ? failure.message : 'Could not update this occurrence.'); }
+    } catch (failure) { setOccurrenceEditError(failure instanceof Error ? failure.message : 'Could not update this visit.'); }
+    finally { setOccurrenceSaving(false); }
+  };
+
+  const openCancelVisit = (item: ShiftOccurrence) => { setCancellingVisit(item); setCancelVisitStatus('3'); setCancelVisitReason(''); setCancelVisitError(''); };
+  const confirmCancelVisit = async () => {
+    if (!occurrenceShift || !cancellingVisit?.exceptionId) return;
+    if (!cancelVisitReason.trim()) { setCancelVisitError('Enter a reason.'); return; }
+    setOccurrenceSaving(true); setCancelVisitError('');
+    try {
+      await adminShifts.cancelVisit(occurrenceShift.id, cancellingVisit.exceptionId, { status: Number(cancelVisitStatus), reason: cancelVisitReason.trim() });
+      setCancellingVisit(null); setShiftNotice('Visit cancelled. You can restore it from this list.');
+      await loadOccurrences();
+    } catch (failure) { setCancelVisitError(failure instanceof Error ? failure.message : 'Could not cancel this visit.'); }
+    finally { setOccurrenceSaving(false); }
+  };
+  const restoreManualVisit = async (item: ShiftOccurrence) => {
+    if (!occurrenceShift || !item.exceptionId) return;
+    setOccurrenceSaving(true); setOccurrenceError('');
+    try { await adminShifts.restoreVisit(occurrenceShift.id, item.exceptionId); setShiftNotice('Visit restored.'); await loadOccurrences(); }
+    catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not restore this visit.'); }
     finally { setOccurrenceSaving(false); }
   };
 
@@ -786,7 +824,7 @@ export default function ShiftsAdminPage() {
                             {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit schedule</Menu.Item>}
                             {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} leftSection={<UserPlus size={13} />} onClick={() => openAssign(s.id)}>Assign employees</Menu.Item>}
                             {s.isActive && s.isBranchMain && <Menu.Item leftSection={<UserPlus size={13} />} onClick={() => { setDefaultCleanerError(''); setDefaultCleanerPick(s.defaultEmployeeId ?? null); setDefaultCleanerFor(s); }}>Assign employees</Menu.Item>}
-                            {s.isActive && <Menu.Item leftSection={<CalendarDays size={13} />} onClick={() => openOccurrences(s)}>Occurrences</Menu.Item>}
+                            {s.isActive && <Menu.Item leftSection={<CalendarDays size={13} />} onClick={() => openOccurrences(s)}>Visits</Menu.Item>}
                             {s.isActive && s.isBranchMain && <Menu.Item leftSection={<Plus size={13} />} onClick={() => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } })}>Add visit</Menu.Item>}
                             {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item leftSection={<CalendarPlus size={13} />} onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4', s); }}>Add visit</Menu.Item>}
                             {isAdmin() && s.isActive && <Menu.Item leftSection={<ListChecks size={13} />} onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
@@ -931,7 +969,7 @@ export default function ShiftsAdminPage() {
         </Stack>
       </Modal>
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
-      <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Occurrences${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
+      <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Visits${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
         <Stack>
           <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
           {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose an employee below or assign employees to this shift.</Text>}
@@ -951,7 +989,7 @@ export default function ShiftsAdminPage() {
             {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
           </>}
           {occurrenceError && <Text role="alert" c="red">{occurrenceError}</Text>}
-          {occurrenceLoading ? <Loader /> : occurrences.length === 0 ? <Text c="dimmed">No occurrences in this period.</Text> : (
+          {occurrenceLoading ? <Loader /> : occurrences.length === 0 ? <Text c="dimmed">No visits in this period.</Text> : (
             <Table.ScrollContainer minWidth={820}><Table striped withTableBorder>
               <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Assignees</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
@@ -964,15 +1002,17 @@ export default function ShiftsAdminPage() {
                   <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the employee to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No employee yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() ? <Text size="xs" c="orange" data-testid="past-offer-note">This visit has already ended. The employee can still accept the offer. To change the employee, delete this visit and add it again.</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
                 <Table.Td>{item.reason ?? '—'}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
-                  {item.isPartnerBooking ? <><Text size="xs" c="dimmed">Managed under Partner requests</Text><Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button></> : <>
-                  {isAdmin() && (occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
+                  {item.isCancelledManualVisit ? <Button size="xs" variant="light" loading={occurrenceSaving} onClick={() => { void restoreManualVisit(item); }}>Restore</Button>
+                  : item.isPartnerBooking ? <><Text size="xs" c="dimmed">Managed under Partner requests</Text><Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button></> : <>
+                  {isAdmin() && occurrenceShift?.pricingMode !== 0 && (occurrenceShift?.pricingMode === 1 || occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
                   {occurrenceShift?.isBranchMain
                     ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change employee</Button>
                     : <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>}
                   {occurrenceShift?.isBranchMain && item.exceptionId && <Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button>}
                   <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
                   {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
-                  {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? (occurrenceShift?.isBranchMain ? 'Delete visit' : 'Delete extra') : 'Restore'}</Button>}
+                  {item.status === 4 && item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openCancelVisit(item)}>Cancel</Button>}
+                  {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? 'Delete visit' : 'Restore'}</Button>}
                   </>}
                 </Group></Table.Td>
               </Table.Tr>)}</Table.Tbody>
@@ -1003,17 +1043,31 @@ export default function ShiftsAdminPage() {
       {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
         shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
         onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} onOpenConflict={openClashingShift} />}
-      <Modal opened={Boolean(editingOccurrence)} onClose={() => { if (!occurrenceSaving) setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title="Change occurrence">
+      <Modal opened={Boolean(editingOccurrence)} onClose={() => { if (!occurrenceSaving) setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title="Change visit">
         <Stack>
           <Select label="Action" value={occurrenceStatus} onChange={value => setOccurrenceStatus(value ?? '1')} data={OCCURRENCE_STATUSES}
             disabled={Boolean(editingOccurrence?.exceptionId)} />
           <TextInput label={`Start (${timeZoneId})`} type="datetime-local" required value={occurrenceStart} onChange={e => setOccurrenceStart(e.target.value)} />
           <TextInput label={`End (${timeZoneId})`} type="datetime-local" required value={occurrenceEnd} onChange={e => setOccurrenceEnd(e.target.value)} />
-          <Select label="Replacement employee (optional)" clearable searchable value={occurrenceEmployee} onChange={setOccurrenceEmployee}
-            data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />
+          {/* A main shift's visit gets its employee through its offer (Change employee), so no replacement is set here. */}
+          {!occurrenceShift?.isBranchMain && <Select label="Replacement employee (optional)" clearable searchable value={occurrenceEmployee} onChange={setOccurrenceEmployee}
+            data={employees.filter(e => e.isActive).map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }))} />}
           <TextInput label="Reason" required maxLength={500} value={occurrenceReason} onChange={e => setOccurrenceReason(e.target.value)} />
+          <Textarea label="Notes for the employee (optional)" description="Shown to the employee for this visit only." maxLength={4000} autosize minRows={2} value={occurrenceNotes} onChange={e => setOccurrenceNotes(e.target.value)} />
           {occurrenceEditError && <Text role="alert" c="red">{occurrenceEditError}</Text>}
-          <Group justify="flex-end"><Button variant="default" disabled={occurrenceSaving} onClick={() => setEditingOccurrence(null)}>Cancel</Button><Button loading={occurrenceSaving} onClick={saveOccurrence}>Save occurrence</Button></Group>
+          <Group justify="flex-end"><Button variant="default" disabled={occurrenceSaving} onClick={() => setEditingOccurrence(null)}>Cancel</Button><Button loading={occurrenceSaving} onClick={saveOccurrence}>Save visit</Button></Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={Boolean(cancellingVisit)} onClose={() => { if (!occurrenceSaving) setCancellingVisit(null); }} closeButtonProps={{ disabled: occurrenceSaving }} title="Cancel visit">
+        <Stack>
+          <Text size="sm">{cancellingVisit && (visitLabel(cancellingVisit, timeZoneId) || new Date(cancellingVisit.startUtc).toLocaleString(undefined, { timeZone: timeZoneId }))}</Text>
+          <Text size="sm" c="dimmed">The visit leaves the employee's schedule and is not invoiced. It stays in this list so you can restore it.</Text>
+          <Select label="Cancelled by" allowDeselect={false} value={cancelVisitStatus} onChange={value => setCancelVisitStatus(value ?? '3')}
+            data={[{ value: '2', label: 'Customer cancelled' }, { value: '3', label: 'Company cancelled' }]} />
+          <TextInput label="Reason" required maxLength={500} value={cancelVisitReason} onChange={e => setCancelVisitReason(e.target.value)} />
+          {cancelVisitError && <Text role="alert" c="red">{cancelVisitError}</Text>}
+          <Group justify="flex-end"><Button variant="default" disabled={occurrenceSaving} onClick={() => setCancellingVisit(null)}>Keep visit</Button><Button color="orange" loading={occurrenceSaving} onClick={() => { void confirmCancelVisit(); }}>Cancel visit</Button></Group>
         </Stack>
       </Modal>
 
@@ -1045,6 +1099,13 @@ export default function ShiftsAdminPage() {
           </Group>}
           {!editingShift && (branches.find(b => b.id === branchId)?.priceVersions?.length ?? 0) > 1 && <Select label="Price version" description="The property price this shift is billed at. Defaults to the price in force today." allowDeselect={false} value={priceFrom && (branches.find(b => b.id === branchId)?.priceVersions ?? []).some(v => v.effectiveFrom === priceFrom) ? priceFrom : defaultPriceVersion(branches.find(b => b.id === branchId)?.priceVersions)} onChange={setPriceFrom}
             data={(branches.find(b => b.id === branchId)?.priceVersions ?? []).map(v => ({ value: v.effectiveFrom, label: `From ${v.effectiveFrom} · €${v.priceNet.toFixed(2)} excl. VAT` }))} />}
+          <Select label="Price for this shift" description="Property price uses the property's price. A shift price applies to this shift only." allowDeselect={false} value={pricingChoice}
+            onChange={value => setPricingChoice((value ?? 'branch') as 'branch' | 'Monthly' | 'PerVisit')}
+            data={[{ value: 'branch', label: 'Property price' }, { value: 'Monthly', label: 'Monthly fee' }, { value: 'PerVisit', label: 'Price per completed visit' }]} />
+          {pricingChoice !== 'branch' && <Group grow>
+            <TextInput label={pricingChoice === 'Monthly' ? 'Monthly fee excl. VAT (€)' : 'Price per visit excl. VAT (€)'} type="number" min={0} step="0.01" value={contractRate} onChange={e => setContractRate(e.target.value)} />
+            <TextInput label="VAT (%)" type="number" min={0} max={100} step="0.1" value={contractVat} onChange={e => setContractVat(e.target.value)} />
+          </Group>}
           {scheduleType !== '6' && <Group grow>
             <TextInput label="Start date" type="date" required={!editingShift || Boolean(editingShift.validFrom)} value={validFrom} onChange={e => setValidFrom(e.target.value)} />
             <TextInput label="End date (optional)" type="date" min={validFrom || undefined} value={validUntil} onChange={e => setValidUntil(e.target.value)} />

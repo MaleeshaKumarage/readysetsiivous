@@ -9,6 +9,8 @@ import { myKeyRequestApi, type KeyRequest } from '@/lib/partnerApi';
 // the reason an upload or completion was refused.
 export function KeyRequestsSection() {
   const [items, setItems] = useState<KeyRequest[] | null>(null);
+  const [fromDate, setFromDate] = useState(''), [toDate, setToDate] = useState('');
+  const visible = (items ?? []).filter(item => (!fromDate || item.date >= fromDate) && (!toDate || item.date <= toDate));
   const [loadError, setLoadError] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -34,8 +36,12 @@ export function KeyRequestsSection() {
     {error && <p role="alert" className="text-red-600">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {items && items.length === 0 && <p>No key requests are assigned to you.</p>}
+    <div role="group" aria-label="Request dates" className="flex flex-wrap items-end gap-3 text-sm font-semibold">
+      <label className="flex flex-col gap-1">From<input type="date" aria-label="From date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="min-h-11 rounded-lg border border-gray-300 px-2 dark:border-gray-600 dark:bg-gray-800" /></label>
+      <label className="flex flex-col gap-1">To<input type="date" aria-label="To date" value={toDate} onChange={e => setToDate(e.target.value)} className="min-h-11 rounded-lg border border-gray-300 px-2 dark:border-gray-600 dark:bg-gray-800" /></label>
+    </div>
     <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {(items ?? []).map(item => <li key={item.id} className="h-full space-y-3 rounded-2xl border border-l-4 border-l-brand-400 bg-white p-5 shadow-sm dark:bg-gray-900">
+      {visible.map(item => <li key={item.id} className="h-full space-y-3 rounded-2xl border border-l-4 border-l-brand-400 bg-white p-5 shadow-sm dark:bg-gray-900">
         <p className="font-medium">{item.branchName} · {item.kind === 'Handover' ? 'Key handover' : 'Key pickup'} · {item.date}</p>
         <p className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === 'Completed' ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-800'}`}>{item.status === 'Completed' ? 'Completed' : 'To do'}</p>
         {item.notes && <p className="text-sm">{item.notes}</p>}

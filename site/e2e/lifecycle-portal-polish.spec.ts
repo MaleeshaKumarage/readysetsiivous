@@ -131,7 +131,7 @@ test('employee evidence is touch-friendly and preserves required photos, optiona
   await page.setViewportSize({width:390,height:667});
   await page.goto('/me/shifts/');
   await expect(page.getByRole('region',{name:'Visit instructions'})).toContainText('Cleaning: Prepare fresh linen.');
-  await page.getByRole('button',{name:'Record activities & end',exact:true}).click();
+  await page.getByRole('button',{name:'Add shift photos',exact:true}).click();
   const addPhoto = page.locator('.employee-photo-add');
   await touchTarget(addPhoto);
   await page.getByLabel('Add shift photos',{exact:true}).focus();

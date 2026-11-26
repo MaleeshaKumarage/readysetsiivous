@@ -20,6 +20,11 @@ export default function ShiftCalendarPage() {
   const [start, setStart] = useState(''); const [end, setEnd] = useState(''); const [reason, setReason] = useState('');
   const [saveError, setSaveError] = useState(''); const [saving, setSaving] = useState(false); const [message, setMessage] = useState('');
   const errorSummary = useRef<HTMLDivElement>(null);
+  // A link from the employee schedule opens the visit's day.
+  useEffect(() => {
+    const linked = new URLSearchParams(window.location.search).get('date');
+    if (linked && /^\d{4}-\d{2}-\d{2}$/.test(linked) && Number.isFinite(Date.parse(linked))) setDay(linked);
+  }, []);
   useEffect(() => { if (saveError) errorSummary.current?.focus(); }, [saveError]);
   const load = useCallback(async () => {
     const id = ++sequence.current; setLoading(true); setError('');

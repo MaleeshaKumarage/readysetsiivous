@@ -98,6 +98,7 @@ export function OffersSection({ autoAcceptWork, preferenceError, onRetryPreferen
         <p role="status" className="text-sm text-gray-600 dark:text-gray-300">Checking cleaning offer preferences...</p>
       ) : null}
       {/* Offers stay visible until automatic acceptance is confirmed, so a failed preference check never hides a pending offer. */}
+      {autoAcceptWork === false && <p role="status" className="rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">Automatic acceptance is off. You review each offer yourself.</p>}
       {autoAcceptWork === true ? (
         <Card variant="elevated" padding="lg" className="text-center text-gray-600 dark:text-gray-300">
           Automatic acceptance is on, so offers are assigned to you directly. You can change this in Settings.

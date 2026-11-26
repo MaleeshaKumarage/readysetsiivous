@@ -579,6 +579,10 @@ export interface Shift {
   validFrom?: string | null;
   validUntil?: string | null;
   qualityCycleTemplateId?: string | null;
+  /** The shift's own contract price: 0 = monthly fee, 1 = price per completed visit. Null: the branch price applies. */
+  pricingMode?: number | null;
+  rateNet?: number | null;
+  vatRatePercent?: number | null;
   /** One-time visit whose checklist has been submitted. */
   isCompleted?: boolean;
   /** A property's main visit shift: visits are added with Add visit and numbered. */
@@ -601,7 +605,26 @@ export interface VisitAssigneesInput {
   mode: number; employeeIds: string[]; reason: string; rosterVersion: string;
   assignmentVersion: string | null; fromThisDate: boolean; preview: boolean;
 }
-export interface ScheduleVisit { shiftId: string; shiftName: string; startUtc: string; endUtc: string }
+export interface ScheduleVisit {
+  shiftId: string; shiftName: string; startUtc: string; endUtc: string;
+  // Set on the employee schedule only; the overlap audit sends the four fields above.
+  exceptionId?: string | null; companyName?: string | null; branchName?: string | null; address?: string | null;
+  /** Completed, InProgress, Scheduled or NeedsAction, as in the shift's Visits list. */
+  workStatus?: string | null;
+  visitNotes?: string | null; visitNumber?: number | null;
+  /** This employee's checklist for the visit: ticked items and all items. Null before a checklist exists. */
+  checklistDone?: number | null; checklistTotal?: number | null;
+  // Identity and versions for moving or reassigning the visit from the calendar.
+  originalStartUtc?: string | null; extraExceptionId?: string | null;
+  /** 1 moved, 4 manual (extra) visit; null for an unchanged scheduled visit. */
+  status?: number | null;
+  /** The employee stored on the visit's change record; a move sends it back unchanged. */
+  visitEmployeeId?: string | null;
+  assigneeIds?: string[]; rosterVersion?: string; assignmentVersion?: string | null;
+  isBranchMain?: boolean; isPartnerBooking?: boolean;
+  /** Why the calendar cannot move or reassign this visit; null when it can. */
+  moveLockReason?: string | null;
+}
 export interface EmployeeDaySchedule { employeeId: string; localDay: string; visits: ScheduleVisit[] }
 export interface OverlapFinding { employeeId: string; earlier: ScheduleVisit; later: ScheduleVisit }
 export interface VisitAssignmentResult { employeeIds: string[]; message: string; preview: boolean }
@@ -619,6 +642,8 @@ export interface ShiftOccurrence {
   // Set for visits of a property's main visit shift only.
   visitNumber?: number | null; visitSource?: string | null; visitNotes?: string | null; visitCleaningType?: string | null;
   offeredEmployeeId?: string | null; offerRevision?: number | null; isPartnerBooking?: boolean;
+  /** A manually created visit that was cancelled; it can be restored. */
+  isCancelledManualVisit?: boolean;
   // Work state from the visit's quality forms: Completed, InProgress, Scheduled or NeedsAction. Null when cancelled.
   workStatus?: string | null;
 }
@@ -642,6 +667,8 @@ export interface ShiftOccurrenceExceptionInput {
   status: number;
   reason: string;
   employeeId?: string | null;
+  /** Instructions for this visit only. Omitted keeps them; an empty value clears them. */
+  notes?: string | null;
 }
 
 export interface ShiftConflictDetail { shiftId: string; shiftName: string; startUtc: string; endUtc: string; recurrence?: string; openEnded?: boolean }
@@ -651,12 +678,12 @@ export class VisitConflictError extends Error {
   constructor(message: string, public readonly conflicts: ShiftConflictDetail[]) { super(message); this.name = 'VisitConflictError'; }
 }
 
-async function occurrenceRequest<T>(path: string, method: 'PUT' | 'DELETE', body?: unknown): Promise<T> {
+async function occurrenceRequest<T>(path: string, method: 'PUT' | 'DELETE' | 'POST', body?: unknown): Promise<T> {
   const response = await authorizedFetch(path, { method, cache: 'no-store',
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   if (!response.ok) {
     const problem = await response.json().catch(() => null);
-    const message = problemText(problem, 'Could not update this occurrence. Please retry.');
+    const message = problemText(problem, 'Could not update this visit. Please retry.');
     const conflicts = Array.isArray(problem?.conflicts) ? problem.conflicts as ShiftConflictDetail[] : [];
     if (response.status === 409 && conflicts.length > 0) throw new VisitConflictError(message, conflicts);
     throw new Error(message);
@@ -759,6 +786,11 @@ export const adminShifts = {
     occurrenceRequest<ShiftOccurrence>(`/api/v1/admin/shifts/${id}/occurrence-exceptions`, 'PUT', fields),
   deleteOccurrenceException: (id: string, exceptionId: string) =>
     occurrenceRequest<void>(`/api/v1/admin/shifts/${id}/occurrence-exceptions/${exceptionId}`, 'DELETE'),
+  /** Cancels a manually created visit. Status 2 = customer cancelled, 3 = company cancelled. It can be restored. */
+  cancelVisit: (id: string, visitId: string, body: { status: number; reason: string }) =>
+    occurrenceRequest<ShiftOccurrence>(`/api/v1/admin/shifts/${id}/visits/${visitId}/cancel`, 'POST', body),
+  restoreVisit: (id: string, visitId: string) =>
+    occurrenceRequest<ShiftOccurrence>(`/api/v1/admin/shifts/${id}/visits/${visitId}/restore`, 'POST'),
 };
 
 export const adminBranchVisits = {

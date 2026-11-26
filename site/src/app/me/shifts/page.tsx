@@ -335,7 +335,7 @@ export default function MyShiftsPage() {
                     {status === 'in-progress' && !o.isDeleted && (
                       <Button variant="outline" size="sm" disabled={photoReading || submitting} onClick={() => openForm(o)} className="min-h-11 w-full gap-1.5 sm:w-auto">
                         {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        Record activities & end
+                        Add shift photos
                       </Button>
                     )}
 
@@ -526,7 +526,7 @@ export default function MyShiftsPage() {
             )}
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className={view === 'today' ? 'grid grid-cols-1 gap-4 lg:grid-cols-2' : 'space-y-4'}>
             {view === 'today' ? occurrences.map(renderOccurrence) : <ShiftCalendar key={view} view={view} occurrences={occurrences} renderShift={renderOccurrence} disabled={busy || photoReading || submitting} onCloseForm={closeForm} />}
           </div>
         )}

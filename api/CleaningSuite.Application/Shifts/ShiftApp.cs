@@ -33,6 +33,10 @@ public record ShiftDto(
     public bool IsBranchMain { get; init; }
     /// <summary>On a main visit shift: the employee each new visit is offered to.</summary>
     public Guid? DefaultEmployeeId { get; init; }
+    /// <summary>The shift's own contract price. Null: the shift bills at the branch price.</summary>
+    public ShiftPricingMode? PricingMode { get; init; }
+    public decimal? RateNet { get; init; }
+    public decimal? VatRatePercent { get; init; }
 }
 
 public record ShiftAssignmentDto(
@@ -67,13 +71,20 @@ public record ShiftOccurrenceDto(DateTime StartUtc, DateTime EndUtc,
     public Guid? OfferedEmployeeId { get; init; }
     public int? OfferRevision { get; init; }
     public bool IsPartnerBooking { get; init; }
+    /// <summary>A manually created visit that was cancelled. It can be restored; it is not part of the shift's work.</summary>
+    public bool IsCancelledManualVisit { get; init; }
 }
 
 public record SaveShiftOccurrenceExceptionCommand(Guid ShiftId, Guid? Id,
     DateTime? OriginalStartUtc, DateTime StartUtc, DateTime EndUtc,
-    ShiftOccurrenceExceptionStatus Status, string Reason, Guid? EmployeeId = null)
+    ShiftOccurrenceExceptionStatus Status, string Reason, Guid? EmployeeId = null,
+    // Instructions for this visit only. Null keeps the visit's notes; an empty value clears them.
+    string? Notes = null)
     : IRequest<ShiftOccurrenceDto>;
 public record DeleteShiftOccurrenceExceptionCommand(Guid ShiftId, Guid Id) : IRequest;
+/// <summary>Cancels a manually created visit. Scheduled visits are cancelled through SaveShiftOccurrenceExceptionCommand.</summary>
+public record CancelManualVisitCommand(Guid ShiftId, Guid VisitId, ShiftOccurrenceExceptionStatus Status, string Reason) : IRequest<ShiftOccurrenceDto>;
+public record RestoreManualVisitCommand(Guid ShiftId, Guid VisitId) : IRequest<ShiftOccurrenceDto>;
 
 public sealed record ShiftRosterInputs(IReadOnlyDictionary<Guid, IReadOnlyList<ShiftOccurrenceException>> Exceptions,
     IReadOnlyDictionary<Guid, IReadOnlyList<ShiftAssignment>> History, IReadOnlyDictionary<Guid, IReadOnlyList<ShiftOccurrenceAssignment>> Overrides);
@@ -124,6 +135,13 @@ public interface IShiftRepository
     Task<IReadOnlyList<ShiftOccurrenceException>> ListOccurrenceExceptionsByEmployeeAsync(Guid employeeId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
     Task SaveOccurrenceExceptionAsync(ShiftOccurrenceException exception, CancellationToken ct = default);
     Task DeleteOccurrenceExceptionAsync(Guid id, CancellationToken ct = default);
+    /// <summary>A cancelled manual visit, by the visit's id.</summary>
+    Task<CancelledVisit?> GetCancelledVisitAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<CancelledVisit>> ListCancelledVisitsAsync(Guid shiftId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
+    /// <summary>Removes the visit from the shift and keeps the cancelled copy, in one save.</summary>
+    Task CancelManualVisitAsync(CancelledVisit cancelled, CancellationToken ct = default);
+    /// <summary>Puts the visit back on the shift and removes the cancelled copy, in one save.</summary>
+    Task RestoreManualVisitAsync(CancelledVisit cancelled, CancellationToken ct = default);
 }
 
 public record ShiftConflictDetail(Guid ShiftId, string ShiftName, DateTime StartUtc, DateTime EndUtc,
@@ -146,7 +164,11 @@ public record CreateShiftCommand(
     DateTime? ValidUntil = null,
     Guid? QualityCycleTemplateId = null,
     // The branch price version to bill at. Omitted: the version in force today (or the only version).
-    DateOnly? PriceEffectiveFrom = null) : IRequest<ShiftDto>;
+    DateOnly? PriceEffectiveFrom = null,
+    // The shift's own contract price. Omitted: the shift bills at the branch price.
+    ShiftPricingMode? PricingMode = null,
+    decimal? RateNet = null,
+    decimal? VatRatePercent = null) : IRequest<ShiftDto>;
 
 public record UpdateShiftCommand(
     Guid Id,
@@ -158,7 +180,12 @@ public record UpdateShiftCommand(
     bool IsActive = true,
     DateTime? ValidFrom = null,
     DateTime? ValidUntil = null,
-    Guid? QualityCycleTemplateId = null) : IRequest<ShiftDto>;
+    Guid? QualityCycleTemplateId = null,
+    // Only when ChangePrice is true does the update touch the shift's price; then all three values set it, or none clears it.
+    bool ChangePrice = false,
+    ShiftPricingMode? PricingMode = null,
+    decimal? RateNet = null,
+    decimal? VatRatePercent = null) : IRequest<ShiftDto>;
 
 public record DeactivateShiftCommand(Guid Id) : IRequest;
 public record ReactivateShiftCommand(Guid Id) : IRequest<ShiftDto>;
@@ -251,6 +278,7 @@ public class ShiftHandlers
                 request.ValidUntil,
                 request.QualityCycleTemplateId);
             shift.EnsureQualityCycleHistory();
+            shift.SetContractPrice(request.PricingMode, request.RateNet, request.VatRatePercent);
             await _repository.SaveAsync(shift, ct);
             if (priceVersion is not null && _billing is not null)
                 await _billing.SaveAsync(new ShiftBillingProfile { Id = shift.Id, ShiftId = shift.Id, BranchPriceEffectiveFrom = priceVersion.EffectiveFrom }, ct);
@@ -294,6 +322,7 @@ public class ShiftHandlers
             var (_, zone) = await TenantTimeZone.LoadAsync(_profiles, _tenant, ct);
             EnsureOneTimeTimesExist(request.Schedule, zone);
             shift.EnsureQualityCycleHistory();
+            if (request.ChangePrice) shift.SetContractPrice(request.PricingMode, request.RateNet, request.VatRatePercent);
             shift.Update(
                 request.CompanyId,
                 request.BranchId,
@@ -519,10 +548,13 @@ public class ShiftHandlers
             var saved = _forms is null ? [] : await _forms.ListFormsAsync(shift.Id, null, null, ct) ?? [];
             var nowUtc = _clock.GetUtcNow().UtcDateTime;
             var today = TenantTimeZone.LocalDate(nowUtc, zone);
-            var mainVisits = !shift.IsBranchMain ? new Dictionary<Guid, ShiftOccurrenceException>()
-                : (await _repository.ListOccurrenceExceptionsAsync(shift.Id, TenantTimeZone.StartOfLocalDay(localFrom, zone),
-                    TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone), ct) ?? []).ToDictionary(x => x.Id);
-            return roster.Select(entry => {
+            var windowFrom = TenantTimeZone.StartOfLocalDay(localFrom, zone);
+            var windowTo = TenantTimeZone.StartOfLocalDay(localTo.AddDays(1), zone);
+            // Every changed or manual visit in the window: a main shift's visits carry their number and offer; any visit can carry notes.
+            var visitRecords = (await _repository.ListOccurrenceExceptionsAsync(shift.Id, windowFrom, windowTo, ct) ?? [])
+                .GroupBy(x => x.Id).ToDictionary(x => x.Key, x => x.First());
+            var cancelledVisits = await _repository.ListCancelledVisitsAsync(shift.Id, windowFrom, windowTo, ct) ?? [];
+            var visits = roster.Select(entry => {
                 var reason = entry.IsCancelled ? "Restore the cancelled visit before assigning employees."
                     : TenantTimeZone.LocalDate(entry.Occurrence.StartUtc, zone) < today ? "Past visits cannot be reassigned."
                     : saved.Any(f => (f.IsSubmitted || f.StartedAtUtc.HasValue)
@@ -532,11 +564,13 @@ public class ShiftHandlers
                     && (f.ShiftOccurrenceUtc == entry.Occurrence.StartUtc || f.ShiftOccurrenceUtc == entry.OriginalStartUtc)).ToArray();
                 var workStatus = WorkQueueRules.OccurrenceWorkStatus(entry, occurrenceForms, nowUtc);
                 var dto = ShiftRosterReader.ToDto(entry) with { CanAssign = reason is null, AssignmentLockReason = reason, WorkStatus = workStatus };
-                return entry.ExtraExceptionId is { } visitId && mainVisits.TryGetValue(visitId, out var visit)
-                    ? dto with { VisitNumber = visit.Sequence, VisitSource = visit.Source, VisitNotes = visit.Notes, VisitCleaningType = visit.CleaningType ?? CleaningTypes.Normal,
-                        OfferedEmployeeId = visit.OfferedEmployeeId, OfferRevision = visit.OfferRevision, IsPartnerBooking = visit.PartnerRequestId.HasValue }
-                    : dto;
-            }).ToList();
+                if (shift.IsBranchMain && entry.ExtraExceptionId is { } visitId && visitRecords.TryGetValue(visitId, out var visit))
+                    return dto with { VisitNumber = visit.Sequence, VisitSource = visit.Source, VisitNotes = visit.Notes, VisitCleaningType = visit.CleaningType ?? CleaningTypes.Normal,
+                        OfferedEmployeeId = visit.OfferedEmployeeId, OfferRevision = visit.OfferRevision, IsPartnerBooking = visit.PartnerRequestId.HasValue };
+                return dto.ExceptionId is { } changeId && visitRecords.TryGetValue(changeId, out var change) && change.Notes is not null
+                    ? dto with { VisitNotes = change.Notes } : dto;
+            });
+            return visits.Concat(cancelledVisits.Select(MapCancelled)).OrderBy(x => x.StartUtc).ToList();
         }
     }
 
@@ -606,6 +640,7 @@ public class ShiftHandlers
                 // On a main shift the employee is set through the visit's offer, so a time change keeps whoever holds it.
                 item.Update(shift.Id, original, start, end, request.Status, request.Reason, shift.IsBranchMain ? item.EmployeeId : request.EmployeeId);
             }
+            if (request.Notes is not null) item.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
             var (rangeFrom, rangeTo) = TenantTimeZone.LocalDatesForUtcRange(start, end, zone);
             var changes = (await shifts.ListOccurrenceExceptionsAsync(shift.Id,
                 TenantTimeZone.StartOfLocalDay(rangeFrom, zone), TenantTimeZone.StartOfLocalDay(rangeTo.AddDays(1), zone), ct) ?? [])
@@ -655,6 +690,71 @@ public class ShiftHandlers
                 await VisitAssignmentSafety.CheckConflicts(shifts, shift, restored, zone, ct);
             }
             await shifts.DeleteOccurrenceExceptionAsync(item.Id, ct);
+        }
+    }
+
+    public sealed class CancelManualVisitCommandHandler(IShiftRepository shifts, IQualityCycleRepository? forms = null,
+        IInvoiceRepository? invoices = null, IShiftWorkReservation? reservation = null, TimeProvider? clock = null)
+        : IRequestHandler<CancelManualVisitCommand, ShiftOccurrenceDto>
+    {
+        public async Task<ShiftOccurrenceDto> Handle(CancelManualVisitCommand request, CancellationToken ct)
+        {
+            await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
+            var shift = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
+            var visit = await shifts.GetOccurrenceExceptionAsync(request.VisitId, ct);
+            if (visit is null || visit.ShiftId != shift.Id) throw new NotFoundException("Visit", request.VisitId);
+            if (visit.Status != ShiftOccurrenceExceptionStatus.Extra)
+                throw new ShiftConflictException("This is a scheduled visit. Cancel it with Change visit.");
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(visit);
+            // A visit with started work or on an invoice is the record of that work, so it stays.
+            var lockReason = BranchMainShifts.VisitLockReason(
+                forms is null ? Array.Empty<QualityCycleForm>() : await forms.ListFormsAsync(shift.Id, null, null, ct) ?? Array.Empty<QualityCycleForm>(),
+                invoices is null ? Array.Empty<Invoice>() : await invoices.ListAsync(null, null, ct) ?? Array.Empty<Invoice>(),
+                shift.Id, visit.StartUtc);
+            if (lockReason is not null) throw new ShiftConflictException($"{lockReason}, so it cannot be cancelled.");
+            var cancelled = CancelledVisit.From(visit, request.Status, request.Reason, (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime);
+            await shifts.CancelManualVisitAsync(cancelled, ct);
+            return MapCancelled(cancelled);
+        }
+    }
+
+    public sealed class RestoreManualVisitCommandHandler(IShiftRepository shifts, ITenantProfileRepository? profiles = null,
+        ITenantContext? tenant = null, IQualityCycleDispatcher? dispatcher = null, IShiftWorkReservation? reservation = null)
+        : IRequestHandler<RestoreManualVisitCommand, ShiftOccurrenceDto>
+    {
+        public async Task<ShiftOccurrenceDto> Handle(RestoreManualVisitCommand request, CancellationToken ct)
+        {
+            await using var lease = reservation is null ? null : await reservation.AcquireAsync(ct);
+            var shift = await shifts.GetAsync(request.ShiftId, ct) ?? throw new NotFoundException("Shift", request.ShiftId);
+            CleaningSuite.Application.Partners.PartnerShiftGuard.EnsureOrdinary(shift);
+            if (!shift.IsActive) throw new ShiftConflictException("Activate the shift before restoring its visits.");
+            var cancelled = await shifts.GetCancelledVisitAsync(request.VisitId, ct);
+            if (cancelled is null || cancelled.ShiftId != shift.Id) throw new NotFoundException("Visit", request.VisitId);
+            var visit = cancelled.Visit;
+            if (await shifts.GetOccurrenceExceptionAsync(visit.Id, ct) is not null)
+                throw new ShiftConflictException("This visit is already on the shift. Reload the visits.");
+            // Two visits of a main shift never share a start: work records and invoice lines find a visit by it.
+            if (shift.IsBranchMain && (await shifts.ListOccurrenceExceptionsAsync(shift.Id, visit.StartUtc, visit.StartUtc.AddSeconds(1), ct) ?? [])
+                .Any(x => x.StartUtc == visit.StartUtc))
+                throw new ShiftConflictException("Another visit on this shift starts at the same time. Move that visit first.");
+            var (_, zone) = await TenantTimeZone.LoadAsync(profiles, tenant, ct);
+            var (rangeFrom, rangeTo) = TenantTimeZone.LocalDatesForUtcRange(visit.StartUtc, visit.EndUtc, zone);
+            var changes = (await shifts.ListOccurrenceExceptionsAsync(shift.Id,
+                TenantTimeZone.StartOfLocalDay(rangeFrom, zone), TenantTimeZone.StartOfLocalDay(rangeTo.AddDays(1), zone), ct) ?? [])
+                .Where(x => x.Id != visit.Id).Append(visit);
+            var history = await shifts.ListAssignmentHistoryAsync(shift.Id, ct) ?? [];
+            var overrides = await shifts.ListOccurrenceAssignmentsAsync(shift.Id, ct) ?? [];
+            var candidate = ShiftVisitRoster.Resolve(shift.Id, ShiftScheduleCalculator.GenerateOccurrences(shift, rangeFrom, rangeTo, zone), changes, history, overrides,
+                legacyStartUtc: shift.ValidFrom.HasValue ? TenantTimeZone.StartOfLocalDay(shift.ValidFrom.Value.Date, zone) : null)
+                .Where(x => x.Occurrence.ExceptionId == visit.Id).ToList();
+            await VisitAssignmentSafety.CheckConflicts(shifts, shift, candidate, zone, ct);
+            // The visit row was deleted when it was cancelled, so it is stored as a new row with its original id.
+            visit.Version = Guid.Empty;
+            visit.UpdatedUtc = DateTime.UtcNow;
+            await shifts.RestoreManualVisitAsync(cancelled, ct);
+            if (dispatcher is not null) await dispatcher.EnsureUpcomingAsync(shift.Id, ct);
+            return MapOccurrence(visit);
         }
     }
 
@@ -835,10 +935,19 @@ public class ShiftHandlers
 
     private static ShiftDto MapShift(Shift shift) =>
         new(shift.Id, shift.CompanyId, shift.BranchId, shift.Name, shift.Schedule, shift.Notes, shift.IsActive, shift.ValidFrom, shift.ValidUntil, shift.QualityCycleTemplateId)
-            { IsBranchMain = shift.IsBranchMain, DefaultEmployeeId = shift.DefaultEmployeeId };
+            { IsBranchMain = shift.IsBranchMain, DefaultEmployeeId = shift.DefaultEmployeeId, PricingMode = shift.PricingMode, RateNet = shift.RateNet, VatRatePercent = shift.VatRatePercent };
 
     private static ShiftAssignmentDto MapAssignment(ShiftAssignment assignment) =>
         new(assignment.Id, assignment.ShiftId, assignment.EmployeeId, assignment.AssignedAtUtc, assignment.IsActive, assignment.Note);
+
+    private static ShiftOccurrenceDto MapCancelled(CancelledVisit cancelled) =>
+        new ShiftOccurrenceDto(NormalizeUtc(cancelled.Visit.StartUtc), NormalizeUtc(cancelled.Visit.EndUtc), cancelled.Id, null,
+            cancelled.CancelStatus, cancelled.Reason, cancelled.Visit.EmployeeId)
+        {
+            IsCancelledManualVisit = true, CanAssign = false, AssignmentLockReason = "Restore the cancelled visit before assigning employees.",
+            VisitNumber = cancelled.Visit.Sequence, VisitSource = cancelled.Visit.Source, VisitNotes = cancelled.Visit.Notes,
+            VisitCleaningType = cancelled.Visit.CleaningType ?? CleaningTypes.Normal, IsPartnerBooking = cancelled.Visit.PartnerRequestId.HasValue,
+        };
 
     private static ShiftOccurrenceDto MapOccurrence(ShiftOccurrenceException item) =>
         new(NormalizeUtc(item.StartUtc), NormalizeUtc(item.EndUtc), item.Id,
@@ -917,6 +1026,18 @@ public class ShiftValidators
         }
     }
 
+    public class CancelManualVisitCommandValidator : AbstractValidator<CancelManualVisitCommand>
+    {
+        public CancelManualVisitCommandValidator()
+        {
+            RuleFor(x => x.ShiftId).NotEqual(Guid.Empty);
+            RuleFor(x => x.VisitId).NotEqual(Guid.Empty);
+            RuleFor(x => x.Status).Must(x => x is ShiftOccurrenceExceptionStatus.CustomerCancelled or ShiftOccurrenceExceptionStatus.CompanyCancelled)
+                .WithMessage("Choose customer cancelled or company cancelled.");
+            RuleFor(x => x.Reason).NotEmpty().MaximumLength(500);
+        }
+    }
+
     public class SaveShiftOccurrenceExceptionCommandValidator : AbstractValidator<SaveShiftOccurrenceExceptionCommand>
     {
         public SaveShiftOccurrenceExceptionCommandValidator()
@@ -924,6 +1045,7 @@ public class ShiftValidators
             RuleFor(x => x.ShiftId).NotEqual(Guid.Empty);
             RuleFor(x => x.Status).IsInEnum();
             RuleFor(x => x.Reason).NotEmpty().MaximumLength(500);
+            RuleFor(x => x.Notes).MaximumLength(4000);
             RuleFor(x => x.EndUtc).GreaterThan(x => x.StartUtc).WithMessage("End time must be after start time.");
             RuleFor(x => x.OriginalStartUtc).NotNull()
                 .When(x => x.Status != ShiftOccurrenceExceptionStatus.Extra)

@@ -49,8 +49,8 @@ async function setup(page: Page, clashHolders: string[] = ['employee'], options:
 }
 
 async function openAssignForMorningVisit(page: Page, reason: string) {
-  await shiftAction(page, 'Morning clean', 'Occurrences');
-  const list = page.getByRole('dialog', { name: /Occurrences/ });
+  await shiftAction(page, 'Morning clean', 'Visits');
+  const list = page.getByRole('dialog', { name: /^Visits/ });
   await list.getByRole('button', { name: 'Assign', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Assign visit', exact: true });
   await editor.getByRole('textbox', { name: /^Employees/ }).click();
@@ -171,7 +171,7 @@ test('overlap refusal links to the clashing shift, whose visit list opens with t
   await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
   // The assignment dialog closes and the clashing shift's visits open in its place.
   await expect(editor).toHaveCount(0);
-  const list = page.getByRole('dialog', { name: 'Occurrences — Evening deep clean', exact: true });
+  const list = page.getByRole('dialog', { name: 'Visits — Evening deep clean', exact: true });
   await expect(list).toBeVisible();
   await expect(list.getByText('Showing Evening deep clean. The overlapping visit is marked below.')).toBeVisible();
   // The requested range always includes the overlapping visit, even when it falls outside the default 31-day window.
@@ -205,7 +205,7 @@ test('the clashing-shift link is also offered when the save itself is refused fo
   await expect(editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
   await expect(editor).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'Occurrences — Evening deep clean', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Visits — Evening deep clean', exact: true })).toBeVisible();
 });
 
 test('when the clashing shift cannot be loaded, the assignment stays open with the employee and reason kept', async ({ page }) => {
@@ -220,5 +220,5 @@ test('when the clashing shift cannot be loaded, the assignment stays open with t
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' })).toBeVisible();
   await expect(editor.getByLabel('Assignment reason')).toHaveValue('Cover the morning visit');
-  await expect(page.getByRole('dialog', { name: /Occurrences — Evening deep clean/ })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: /Visits — Evening deep clean/ })).toHaveCount(0);
 });

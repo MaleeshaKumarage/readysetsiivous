@@ -91,7 +91,7 @@ test('Today is default; past weeks show daily counts while folded, with only one
   await expect(page.getByRole('region', { name: /^Shifts on / })).toHaveCount(1);
   await expect(page.getByText('In progress', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Record activities & end' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add shift photos' })).toHaveCount(0);
   await older.getByRole('button', { name: /Week of/ }).click();
   await expect(page.getByRole('region', { name: /^Shifts on / })).toHaveCount(0);
   await expect(older.getByRole('button', { name: /08\/10\/2026 Thursday.*1 shift/ })).toBeVisible();
