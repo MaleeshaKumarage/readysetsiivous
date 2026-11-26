@@ -97,8 +97,10 @@ public sealed record EmployeeScheduleVisit(Guid ShiftId, string ShiftName, DateT
     /// <summary>A property main shift's visit: its employee changes through the offer flow, not reassignment.</summary>
     public bool IsBranchMain { get; init; }
     public bool IsPartnerBooking { get; init; }
-    /// <summary>Why the visit cannot be moved or reassigned from the calendar; null when it can.</summary>
+    /// <summary>Why the visit cannot be moved from the calendar; null when it can. A not-started visit on a past day can still be moved.</summary>
     public string? MoveLockReason { get; init; }
+    /// <summary>Why the visit cannot be given to another employee (also past visits); null when it can.</summary>
+    public string? ReassignLockReason { get; init; }
 }
 
 public sealed record EmployeeDaySchedule(Guid EmployeeId, DateTime LocalDay, IReadOnlyList<EmployeeScheduleVisit> Visits);
@@ -196,11 +198,14 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
                 .OrderByDescending(f => f.IsSubmitted).ThenByDescending(f => f.UpdatedUtc).FirstOrDefault());
             var record = (entry.ExtraExceptionId ?? entry.Occurrence.ExceptionId) is { } changeId && records.TryGetValue(changeId, out var found) ? found : null;
             var partnerBooking = shift.PartnerRequestId.HasValue || record?.PartnerRequestId is not null;
-            // The same rules the visit endpoints enforce, so the calendar never offers a move the server refuses.
+            // The same rules the visit endpoints enforce, so the calendar never offers a change the server refuses.
+            // Scheduled work that has not started can be moved, even on a past day (rescheduling a missed visit);
+            // only reassignment refuses past visits.
             var moveLock = partnerBooking ? "Manage this visit through Partner requests."
-                : TenantTimeZone.LocalDate(entry.Occurrence.StartUtc, zone) < today ? "Past visits cannot be moved or reassigned."
                 : occurrenceForms.Any(f => f.IsSubmitted || f.StartedAtUtc.HasValue) ? "Started or completed work cannot be moved or reassigned."
                 : null;
+            var reassignLock = moveLock
+                ?? (TenantTimeZone.LocalDate(entry.Occurrence.StartUtc, zone) < today ? "Past visits cannot be reassigned." : null);
             visits.Add((employeeId, new EmployeeScheduleVisit(shift.Id, shift.Name, entry.Occurrence.StartUtc, entry.Occurrence.EndUtc)
             {
                 ExceptionId = entry.Occurrence.ExceptionId,
@@ -222,6 +227,7 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
                 IsBranchMain = shift.IsBranchMain,
                 IsPartnerBooking = partnerBooking,
                 MoveLockReason = moveLock,
+                ReassignLockReason = reassignLock,
             }));
         }
         return ScheduleVisits.GroupByDay(visits, zone);
