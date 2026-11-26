@@ -22,6 +22,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Employees | `/admin/employees/` | Inventoried |
 | Invoices | `/admin/invoices/` | Inventoried |
 | Services | `/admin/services/` | Inventoried |
+| Inventory | `/admin/inventory/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -808,3 +809,43 @@ Route: `/admin/services/`. Source: `site/src/app/admin/services/page.tsx`, `site
 - **Price (€)** excl. VAT (not negative), **VAT %** and **Duration (min)**.
 - The category is always cleaning. Editing keeps the fields the form does not show: other translations, image, icon, extra information, sort order and the featured flag.
 - **Cancel** and **Create service** or **Save changes**.
+
+## Inventory
+
+Route: `/admin/inventory/`. Source: `site/src/app/admin/inventory/page.tsx`, `site/src/components/AdminSupplyRequests.tsx`, `site/src/components/AdminInventoryAcknowledgmentRequest.tsx`. Employees record what they take in their own portal (`InventoryPanel`); the office page reviews it. The page has four tabs: **Take log**, **Locations**, **Items** and **Supply requests**.
+
+### Take log
+
+- Filters: **Employee** (searchable, inactive employees marked), **From** and **To** dates, and **Apply**. The end date must not be before the start date.
+- **Export CSV** with the applied filters.
+- Table: select, taken (date and time), employee, location, item, quantity and unit, note, photos (**View n**, or "Deleted" after the retention period), and acknowledgment status (Not requested, Awaiting acknowledgment, Acknowledged or Issue reported).
+- 100 entries at a time, with **Load more**.
+- **Request acknowledgment (n)**: select up to 50 entries that have photos and no request yet, then ask the partner to confirm them. **Clear selection**. Responses do not change the log.
+- Photo viewer: the entry's photos, or "No photos were attached", "Photos could not be loaded".
+- Partner acknowledgment viewer (click a status): item and company, status, when requested, the message, who responded and when, and their response note.
+- States: loading, "No entries match these filters.", and an acknowledgment status error with **Reload log**.
+
+### Request acknowledgment (dialog)
+
+- **Partner company**: search active partner companies (up to 25 shown), with **Retry partner search**.
+- **Message to partner (optional)**.
+- The partner sees the item, quantity, location, date, notes and photos, but not employee names. Photos follow the three-month retention policy.
+- **Cancel** and **Send acknowledgment request**.
+
+### Locations
+
+- **Add location**.
+- Table: name, Active or Inactive, and **Edit**.
+- Location dialog: **Name** (2–80 characters), **Active** (when editing), **Cancel** and **Save**.
+
+### Items
+
+- **Add item**.
+- Table: name, unit, Active or Inactive, a **Needs review** badge for items added by employees, **Verify** (for those) and **Edit**.
+- Item dialog: **Name** (2–80 characters), **Unit** (for example pcs, up to 20 characters), **Active** (when editing), **Cancel** and **Save**.
+
+### Supply requests
+
+- Status filter: **Requested** (default), **Approved**, **Fulfilled**, **Declined** or **All**.
+- Table: employee, requested items (quantity, unit and item), note, status, and actions: **Approve** and **Decline** (requested), **Mark fulfilled** (approved).
+- "No supply requests for this status."
