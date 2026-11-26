@@ -21,6 +21,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Agreements | `/admin/agreements/` | Inventoried |
 | Employees | `/admin/employees/` | Inventoried |
 | Invoices | `/admin/invoices/` | Inventoried |
+| Services | `/admin/services/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -784,3 +785,26 @@ Route: `/admin/invoices/`. Source: `site/src/app/admin/invoices/page.tsx`, `Manu
 - **Scheduled visits not started yet**: one checkbox per visit (shift, start time, hours). Ticking or unticking refreshes the preview.
 - Net, VAT and total.
 - **Issue invoice** (saves an invoice that cannot be changed), or **Retry issuing invoice** when the last result was not confirmed. The dialog cannot be closed while an issue is in progress or unconfirmed.
+
+## Services
+
+Route: `/admin/services/`. Source: `site/src/app/admin/services/page.tsx`, `site/src/lib/serviceFields.ts`. Services are the cleaning services offered on the public site and in bookings.
+
+### Service list
+
+- **Add service**.
+- **Active** and **Inactive** tabs with counts.
+- Table: name (Finnish, or English when there is no Finnish name), price excl. VAT with the VAT rate, duration in minutes, status, and actions:
+  - **Edit**.
+  - **Deactivate** or **Reactivate**.
+  - **Delete** (inactive only, after a confirmation; services used by bookings are kept).
+- States: loading, "No services yet.", "No (status) services.", and action errors.
+
+### Add or edit service (dialog)
+
+- **Slug** (required; the service's web address name).
+- **Name** in Finnish (required), English and Swedish.
+- **Description** in Finnish, English and Swedish.
+- **Price (€)** excl. VAT (not negative), **VAT %** and **Duration (min)**.
+- The category is always cleaning. Editing keeps the fields the form does not show: other translations, image, icon, extra information, sort order and the featured flag.
+- **Cancel** and **Create service** or **Save changes**.
