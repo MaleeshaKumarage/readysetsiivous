@@ -9,14 +9,14 @@ const meta: Meta<typeof Badge> = {
     docs: {
       description: {
         component:
-          'Small pill label. `subtle` is the soft gold wash for inline use on white surfaces; `gold`/`navy`/`green` are solid, `outline` is the hairline variant.',
+          'Small pill label. `subtle` is the soft gold wash for inline use on white surfaces; `gold`/`navy`/`green` are solid, `outline` is the hairline variant; `danger` marks work that needs action.',
       },
     },
   },
   argTypes: {
     variant: {
       control: 'select',
-      options: ['gold', 'navy', 'green', 'outline', 'subtle'],
+      options: ['gold', 'navy', 'green', 'outline', 'subtle', 'danger'],
     },
     size: { control: 'select', options: ['sm', 'md'] },
     children: { control: 'text' },
@@ -53,3 +53,5 @@ export const Sizes: Story = {
     </div>
   ),
 };
+
+export const Danger: Story = { args: { variant: 'danger', children: 'Needs action' } };
