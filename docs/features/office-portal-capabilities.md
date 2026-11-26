@@ -20,6 +20,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Customer workspace | `/admin/companies/customer/` | Inventoried |
 | Agreements | `/admin/agreements/` | Inventoried |
 | Employees | `/admin/employees/` | Inventoried |
+| Invoices | `/admin/invoices/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -730,3 +731,56 @@ Route: `/admin/employees/`. Source: `site/src/app/admin/employees/page.tsx`. Man
   - **Certifications**: name and expiry date per certification, **Add certification** and **Remove**.
   - **Default hours**: a start and end time for each day from Monday to Sunday. Both or neither must be filled, and the end must be after the start.
 - **Cancel** and **Create employee** or **Save changes**.
+
+## Invoices
+
+Route: `/admin/invoices/`. Source: `site/src/app/admin/invoices/page.tsx`, `ManualInvoiceRows.tsx`. Visit times and invoice dates use the tenant time zone (default Europe/Helsinki).
+
+### Page
+
+- **New invoice** (disabled while an issue result is unconfirmed).
+- **Company and payment details** (the invoice issuer).
+- Success and error messages, **Retry loading invoice data** when the page could not load, and a warning when an issue result could not be confirmed (retry from the preview to get the same invoice safely).
+
+### Issued invoices
+
+- Table: invoice number (with a Sample issuer details badge when sample data was used), customer, issued and due dates, total, status, and actions:
+  - **PDF**: downloads the invoice.
+  - **Mark paid** (issued invoices).
+  - **Void** (issued invoices, after a confirmation).
+- "No invoices yet."
+
+### Invoice issuer (dialog)
+
+- Saved into each issued invoice; later edits don't change existing invoices.
+- **Issuer company name**, **Business ID**, **Issuer email**, **Issuer phone**, **IBAN** and **BIC**.
+- Issuer street, postal code, city and country.
+- **Sample issuer details** (marks the details as sample data).
+- **Payment terms (days)** (0–365) and **Default VAT (%)**.
+- **Save company details**. Closing without saving drops the edits.
+
+### Create invoice (dialog)
+
+- **Invoice type**: Shift invoice or Manual invoice.
+- **Company** (searchable). Choosing a partner company turns on the completed cleaning month option.
+- Shift invoice:
+  - **Completed cleaning month** on: **Completion month** (from the current month back to the company's first shift, at least 36 months). It bills every completed, unbilled cleaning visit finished in that month. Nothing is emailed automatically.
+  - Otherwise: **Invoice shifts** (one or more, inactive ones marked), **Invoice from** and **Invoice to (inclusive)**.
+  - How charges are worked out: monthly fees are charged per completed visit (the monthly rate × completed visits ÷ scheduled visits in that month); hourly charges use scheduled hours; on-call visits are charged when completed. Scheduled visits that have not started are billed only when ticked in the preview.
+  - **Override a monthly subtotal** (expandable): **Override shift**, **Override month**, **Monthly subtotal before VAT (€)**, **Monthly override reason** (up to 500 characters), **Apply monthly override**. Applied overrides are listed with **Remove override**. An override replaces that shift's whole net subtotal for the month.
+- Manual invoice rows:
+  - Each row: description (up to 1,000 characters), quantity in pieces (0.01–10,000) and unit price before VAT (€).
+  - **Add row** (up to 100) and **Remove row** (not the last one).
+  - VAT is added at the saved default rate.
+- **PDF language**: English, Finnish or Swedish.
+- **Customer billing address**: street, postal code, city and country (all required).
+- **Preview invoice**. Any change after a preview discards it.
+
+### Invoice preview (dialog)
+
+- Issuer name, business ID, address, IBAN and BIC (with a Sample issuer details badge when relevant); customer and period.
+- Shift invoice lines grouped by property: shift, completion date, override reason, period, scheduled hours, visits, pricing basis and quantity, net, VAT (with rate) and total.
+- Manual invoice lines: description, quantity, unit price, net, VAT and total.
+- **Scheduled visits not started yet**: one checkbox per visit (shift, start time, hours). Ticking or unticking refreshes the preview.
+- Net, VAT and total.
+- **Issue invoice** (saves an invoice that cannot be changed), or **Retry issuing invoice** when the last result was not confirmed. The dialog cannot be closed while an issue is in progress or unconfirmed.
