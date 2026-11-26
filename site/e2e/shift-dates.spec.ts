@@ -53,7 +53,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await expect(dialog.getByText('End date must be on or after the start date.')).toBeVisible(); expect(writes).toHaveLength(0);
   await dialog.getByLabel('End date (optional)', { exact: true }).fill('');
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: DATED_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: DATED_NAME })).toBeVisible();
   expect(writes[0].validFrom).toBe('2026-11-01'); expect(writes[0].validUntil).toBeUndefined();
   await shiftAction(page, DATED_NAME, 'Edit schedule');
   const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
@@ -134,11 +134,13 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await expect(create.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await create.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(shiftWrites).toHaveLength(0);
-  await expect(page.getByRole('cell', { name: 'One-time cleaning', exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'One-time cleaning' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'One-time cleaning' })).toContainText('On-call');
+  // The list also loads each row's visit progress; count only the visit requests the Add visit action makes.
+  const queriesBeforeAdd = occurrenceQueries.length;
   delayNextLoad = true;
   await shiftAction(page, 'One-time cleaning', 'Add visit');
-  await expect.poll(() => occurrenceQueries.length).toBe(1);
+  await expect.poll(() => occurrenceQueries.length).toBe(queriesBeforeAdd + 1);
   const editor = page.getByRole('dialog', { name: 'Change visit', exact: true });
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('textbox', { name: /^Start \(Europe\/Helsinki\)/ })).toHaveValue('');

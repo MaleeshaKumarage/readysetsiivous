@@ -45,13 +45,14 @@ test("the shift board shows visits in progress now and today's scheduled visits 
   await expect(today.getByText('Scheduled hours today').locator('xpath=..').getByText('6.0', { exact: true })).toBeVisible();
 });
 
-test('the Employees column names each assigned employee', async ({ page }) => {
+test('the list shows Property, Visits and Actions; assignees are not a list column', async ({ page }) => {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\/shifts\/page/, route => route.fulfill({ headers, json: { items: [
     { id: 'shift-named', companyId: '11111111-1111-4111-8111-111111111111', branchId: '33333333-3333-4333-8333-333333333333', name: 'Lake apartment', isActive: true, schedule: { type: 0, dailyStart: '08:00', dailyEnd: '10:00' } },
   ], total: 1, counts: { active: 1, completed: 0, inactive: 0 } } }));
   await page.route(/\/api\/v1\/admin\/shifts\/assignee-names/, route => route.fulfill({ headers, json: { 'shift-named': ['Ann Adams', 'Ben Bell'] } }));
   await page.goto('/admin/shifts/');
-  const row = page.getByRole('row').filter({ hasText: 'Lake apartment' });
-  await expect(row.getByRole('cell', { name: 'Ann Adams, Ben Bell', exact: true })).toBeVisible();
+  // The list has no Employees column: assignees are managed from the row's Assign employees action and each visit's cleaner.
+  const headers = page.getByRole('region', { name: 'Work orders table' }).getByRole('columnheader');
+  await expect(headers).toHaveText(['Property', 'Visits', 'Actions']);
 });

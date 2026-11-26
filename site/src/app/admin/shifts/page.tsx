@@ -319,13 +319,34 @@ export default function ShiftsAdminPage() {
   const loadAssignmentCounts = () => adminShifts.assignmentCounts()
     .then(counts => { setAssignmentCounts(counts); setCountError(''); })
     .catch(() => { setAssignmentCounts(null); });
+  // Visit progress for the list: one occurrence request per visible work order, for the current month.
+  type VisitProgress = { total: number; completed: number; ongoing: number; scheduled: number; cancelled: number };
+  const [progressById, setProgressById] = useState<Record<string, VisitProgress>>({});
+  const progressSeq = useRef(0);
+  const loadProgress = (items: Shift[]) => {
+    const seq = ++progressSeq.current;
+    const now = new Date();
+    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
+    void Promise.all(items.map(s => adminShifts.occurrences(s.id, from, to).then(list => {
+      const visits = list ?? [];
+      const live = visits.filter(v => !v.isCancelledManualVisit);
+      const cancelled = visits.length - live.length;
+      const completed = live.filter(v => v.workStatus === 'Completed').length;
+      const ongoing = live.filter(v => v.workStatus === 'InProgress').length;
+      return [s.id, { total: live.length, completed, ongoing, scheduled: live.length - completed - ongoing, cancelled }] as const;
+    }).catch(() => [s.id, null] as const))).then(pairs => {
+      if (seq !== progressSeq.current) return;
+      setProgressById(Object.fromEntries(pairs.filter((p): p is readonly [string, VisitProgress] => p[1] !== null)));
+    });
+  };
   // Only the newest tab/page request may update the list, so a slow earlier response cannot show the wrong tab.
   const loadSeq = useRef(0);
   const load = () => { const seq = ++loadSeq.current; setLoading(true); return adminShifts.page({ tab: lifecycle, skip: (shiftPage - 1) * PAGE_SIZE, take: PAGE_SIZE, companyId: filterCompany, scheduleType: filterType }).then((r) => {
     if (seq !== loadSeq.current) return;
     // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
     if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
-    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts(); void loadAssigneeNames(r.items.map(s => s.id));
+    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts(); void loadAssigneeNames(r.items.map(s => s.id)); loadProgress(r.items);
     setLoading(false);
   }).catch((failure: Error) => { if (seq !== loadSeq.current) return; setListError(failure.message); setLoading(false); }); };
   // Reload the current tab and page whenever either changes, and once on mount.
@@ -754,7 +775,7 @@ export default function ShiftsAdminPage() {
   return (
     <>
       <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2} component="h1">Shifts</Title>
+        <Title order={2} component="h1">Work orders</Title>
         <Group gap="xs" wrap="wrap">
           <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>Add shift</Button>
         </Group>
@@ -776,10 +797,10 @@ export default function ShiftsAdminPage() {
         <Text c="dimmed">{(tabCounts?.active ?? 0) + (tabCounts?.completed ?? 0) + (tabCounts?.inactive ?? 0) === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
       ) : (<>
         <Text size="xs" c="dimmed" hiddenFrom="sm" mb={6}>Scroll sideways to see all columns.</Text>
-        <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Shifts table">
+        <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Work orders table">
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead className="bg-brand-500 text-accent-950">
-              <Table.Tr className="!bg-brand-500 !text-accent-950"><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Name</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Schedule</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Employee names</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Status</Table.Th><Table.Th w={200} fw={700} className="!bg-brand-500 !text-accent-950">Actions</Table.Th></Table.Tr>
+              <Table.Tr className="!bg-brand-500 !text-accent-950"><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Property</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Visits</Table.Th><Table.Th w={200} fw={700} className="!bg-brand-500 !text-accent-950">Actions</Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {pageRows.map((s) => (
@@ -804,14 +825,37 @@ export default function ShiftsAdminPage() {
                           <Stack gap={4}>
                             <p className="text-sm font-semibold text-accent-950">{address || s.name}</p>
                             {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="subtle">{c}</Badge>)}</Group>}
+                            <Group gap={6}>
+                              <Badge variant="subtle">{scheduleLabel(s)}</Badge>
+                              {assignmentCounts && assignmentCounts[s.id] === 0 && <Badge variant="gold">Missing cleaner</Badge>}
+                              {!s.qualityCycleTemplateId && <Badge variant="gold">Missing Quality Cycle</Badge>}
+                              {!branch?.pricingReady && s.isBranchMain !== false && <Badge variant="gold">Missing price</Badge>}
+                            </Group>
                             {address && <span className="sr-only">{s.name}</span>}
                           </Stack>
                         );
                       })()}
                     </Table.Td>
-                    <Table.Td>{scheduleLabel(s)}</Table.Td>
-                    <Table.Td>{assigneeNames[s.id] ? (assigneeNames[s.id].length === 0 ? 'None' : assigneeNames[s.id].join(', ')) : assignmentCounts ? `${assignmentCounts[s.id] ?? 0} assigned` : '—'}</Table.Td>
-                    <Table.Td><Text size="sm">{shiftView(s) === 'inactive' ? 'Inactive' : shiftView(s) === 'completed' ? 'Completed' : s.schedule.type === 6 && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < new Date().toLocaleDateString('en-CA', { timeZone: timeZoneId }) ? 'Past visit · check completion' : 'Active'}</Text></Table.Td>
+                    <Table.Td>
+                      {(() => {
+                        const pr = progressById[s.id];
+                        if (!pr) return <Text size="sm" c="dimmed">—</Text>;
+                        const doneDeg = pr.total ? Math.round(pr.completed / pr.total * 360) : 0;
+                        const ongoingDeg = pr.total ? Math.round((pr.completed + pr.ongoing) / pr.total * 360) : 0;
+                        const label = `${pr.completed} of ${pr.total} visits completed, ${pr.ongoing} ongoing, ${pr.scheduled} scheduled${pr.cancelled ? `, ${pr.cancelled} cancelled` : ''}`;
+                        return (
+                          <Group gap="xs" wrap="nowrap" className="group relative" tabIndex={0} role="img" aria-label={label}>
+                            <div style={{ width: 44, height: 44, borderRadius: 999, background: pr.total ? `conic-gradient(var(--mantine-color-accent-9, #0a1741) 0 ${doneDeg}deg, #c9a340 ${doneDeg}deg ${ongoingDeg}deg, #c6cee3 ${ongoingDeg}deg 360deg)` : '#e4e8f2', position: 'relative', flex: '0 0 44px' }}>
+                              <div style={{ position: 'absolute', inset: 8, borderRadius: 999, background: 'white' }} />
+                            </div>
+                            <div className="hidden group-hover:block group-focus:block absolute bottom-full left-0 z-10 mb-2 rounded-lg bg-accent-950 px-3 py-2 text-sm text-white shadow-lg whitespace-nowrap">
+                              <strong>{pr.completed} of {pr.total} completed</strong>
+                              <div>{pr.ongoing} ongoing · {pr.scheduled} scheduled{pr.cancelled ? ` · ${pr.cancelled} cancelled` : ''}</div>
+                            </div>
+                          </Group>
+                        );
+                      })()}
+                    </Table.Td>
                     <Table.Td onClick={(e) => e.stopPropagation()}>
                       <Group gap={6} wrap="nowrap">
                         <Menu shadow="md" width={230} position="bottom-end" withinPortal>
@@ -836,64 +880,81 @@ export default function ShiftsAdminPage() {
                       </Group>
                     </Table.Td>
                   </Table.Tr>
-                  {expandedId === s.id && (
-                    <Table.Tr>
-                      <Table.Td colSpan={5} data-testid="row-visits">
-                        <DsCard padding="sm">
-                          <div className="flex flex-wrap items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
-                            <DsButton variant="ghost" aria-expanded={visitsOpen} onClick={() => setVisitsOpen(open => !open)}>
-                              {visitsOpen ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
-                              <CalendarDays size={16} aria-hidden />
-                              Visits
-                              {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}
-                            </DsButton>
-                            <select aria-label="Month" value={expandedMonth} onChange={(e) => changeExpandedMonth(e.currentTarget.value)}
-                              className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
-                              {monthChoices().map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
-                            </select>
-                          </div>
-                          {expandedLoading && <p className="mt-3 text-sm text-gray-500">Loading visits…</p>}
-                          {expandedError && <p role="alert" className="mt-3 text-sm text-red-600">{expandedError}</p>}
-                          {!expandedLoading && !expandedError && expandedVisits.length === 0 && <p className="mt-3 text-sm text-gray-500">No visits in this month.</p>}
-                          {visitsOpen && expandedVisits.length > 0 && (
-                            <div className="mt-3 overflow-x-auto rounded-xl border border-accent-100">
-                              <table className="w-full text-left text-sm text-gray-900">
-                                <thead className="bg-brand-500 text-accent-950">
-                                  <tr>
-                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><ListChecks size={14} aria-hidden />Visit</span></th>
-                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Clock size={14} aria-hidden />Starts</span></th>
-                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><Sparkles size={14} aria-hidden />Type</span></th>
-                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><UserRound size={14} aria-hidden />Employee</span></th>
-                                    <th className="px-3 py-2 font-bold"><span className="inline-flex items-center gap-1.5"><CircleCheck size={14} aria-hidden />Status</span></th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {expandedVisits.map((item) => (
-                                    <tr key={item.exceptionId ?? item.startUtc} className="border-t border-accent-100 align-top">
-                                      <td className="px-3 py-2">{visitLabel(item, timeZoneId) || s.name}</td>
-                                      <td className="px-3 py-2">{new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</td>
-                                      <td className="px-3 py-2">{item.visitNumber ? <Badge variant={item.visitCleaningType === 'Deep' ? 'navy' : 'subtle'}>{`${item.visitCleaningType ?? 'Normal'} cleaning`}</Badge> : '—'}</td>
-                                      <td className="px-3 py-2">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</td>
-                                      <td className="px-3 py-2"><Badge variant="outline">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Badge></td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </DsCard>
-                      </Table.Td>
-                    </Table.Tr>
-                  )}
                 </Fragment>
               ))}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
-        <ListPager label="Shifts" total={pageTotal} page={shiftPage} pageCount={shiftPageCount} onPage={setShiftPage} /></>
+        <ListPager label="Work orders" total={pageTotal} page={shiftPage} pageCount={shiftPageCount} onPage={setShiftPage} /></>
       )}
       </LifecycleTabs>
 
+      {(() => {
+        const drawerShift = expandedId ? pageRows.find(r => r.id === expandedId) ?? null : null;
+        if (!drawerShift) return null;
+        const title = propertyById[drawerShift.branchId] ? [propertyById[drawerShift.branchId].street?.trim(), [propertyById[drawerShift.branchId].postalCode?.trim(), propertyById[drawerShift.branchId].city?.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') || drawerShift.name : drawerShift.name;
+        return (
+          <>
+            <div className="fixed inset-0 z-[399] bg-accent-950/40" aria-hidden onClick={() => void toggleExpanded(drawerShift)} />
+            <aside role="dialog" aria-modal="true" aria-label={`Visits of ${drawerShift.name}`} data-testid="row-visits" className="fixed inset-y-0 right-0 z-[400] flex w-full max-w-[560px] flex-col gap-4 overflow-y-auto bg-white p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-bold text-accent-950">{title}</h2>
+                  <p className="text-sm text-gray-600">{drawerShift.name}</p>
+                </div>
+                <DsButton variant="ghost" aria-label="Close visits" onClick={() => void toggleExpanded(drawerShift)}>×</DsButton>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 font-semibold text-accent-950">Visits {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}</span>
+                <select aria-label="Month" value={expandedMonth} onChange={(e) => changeExpandedMonth(e.currentTarget.value)}
+                  className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                  {monthChoices().map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+                </select>
+              </div>
+              {expandedLoading && <p className="text-sm text-gray-500">Loading visits…</p>}
+              {expandedError && <p role="alert" className="text-sm text-red-600">{expandedError}</p>}
+              {!expandedLoading && !expandedError && expandedVisits.length === 0 && <p className="text-sm text-gray-500">No visits in this month.</p>}
+              {expandedVisits.length > 0 && (
+                <div className="overflow-x-auto rounded-xl border border-accent-100">
+                  <table className="w-full text-left text-sm text-gray-900">
+                    <thead className="bg-brand-500 text-accent-950">
+                      <tr>
+                        <th className="px-3 py-2 font-bold">Date and time</th>
+                        <th className="px-3 py-2 font-bold">Cleaner</th>
+                        <th className="px-3 py-2 font-bold">Type</th>
+                        <th className="px-3 py-2 font-bold"><span className="sr-only">Actions</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expandedVisits.map((item) => (
+                        <tr key={item.exceptionId ?? item.startUtc} className="border-t border-accent-100 align-top">
+                          <td className="px-3 py-2"><span className="block font-semibold">{new Date(item.startUtc).toLocaleDateString(undefined, { timeZone: timeZoneId, day: 'numeric', month: 'short' })}</span><span className="block text-gray-600">{new Date(item.startUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })} to {new Date(item.endUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })}</span></td>
+                          <td className="px-3 py-2">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</td>
+                          <td className="px-3 py-2 text-sm text-gray-600">{item.visitCleaningType ?? 'Normal'}</td>
+                          <td className="px-3 py-2">
+                            <Menu shadow="md" width={230} position="bottom-end" withinPortal>
+                              <Menu.Target>
+                                <ActionIcon variant="light" size="md" aria-label={`Actions for visit ${item.visitNumber ?? ''}`}><MoreHorizontal size={16} /></ActionIcon>
+                              </Menu.Target>
+                              <Menu.Dropdown>
+                                <Menu.Item disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Assign employees</Menu.Item>
+                                <Menu.Item onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Menu.Item>
+                                <Menu.Item onClick={() => openOccurrenceEditor(item, '1', drawerShift)}>Change time</Menu.Item>
+                                {!item.isCancelledManualVisit && <Menu.Item color="red" onClick={() => openCancelVisit(item)}>Cancel visit</Menu.Item>}
+                                {item.isCancelledManualVisit && <Menu.Item onClick={() => void restoreManualVisit(item)}>Restore visit</Menu.Item>}
+                              </Menu.Dropdown>
+                            </Menu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </aside>
+          </>
+        );
+      })()}
       {workspaceShift && <ShiftWorkspace shift={workspaceShift}
         employeeCount={assignmentCounts ? (assignmentCounts[workspaceShift.id] ?? 0) : assignments[workspaceShift.id] ? assignments[workspaceShift.id].filter(a => a.isActive).length : undefined}
         templateName={templates.find(t => t.id === workspaceShift.qualityCycleTemplateId)?.title ?? null}

@@ -28,7 +28,7 @@ import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL, AccessVerificationError, verif
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Shifts', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'shifts/employee-schedule', label: 'Employee schedule', icon: Users }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
+  { label: 'Operations', items: [{ href: 'shifts', label: 'Work orders', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'shifts/employee-schedule', label: 'Employee schedule', icon: Users }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
   { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },

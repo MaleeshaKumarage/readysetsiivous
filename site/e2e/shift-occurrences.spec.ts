@@ -122,10 +122,13 @@ test('admin reloads occurrences for a selected date range', async ({ page }) => 
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
   const list = page.getByRole('dialog', { name: /^Visits/ });
+  await expect(list.getByLabel('From')).toBeVisible();
+  // The list also loads each row's visit progress; count only the requests the Load button makes.
+  const before = state.occurrenceQueries.length;
   await list.getByLabel('From').fill('2026-12-01');
   await list.getByLabel('To').fill('2026-12-31');
   await list.getByRole('button', { name: 'Load' }).click();
-  await expect.poll(() => state.occurrenceQueries.length).toBe(2);
+  await expect.poll(() => state.occurrenceQueries.length).toBe(before + 1);
   expect(state.occurrenceQueries.at(-1)?.get('from')).toBe('2026-11-30T22:00:00.000Z');
   expect(state.occurrenceQueries.at(-1)?.get('to')).toBe('2026-12-31T21:59:59.999Z');
 });
@@ -255,9 +258,9 @@ test('occurrences open on tenant-local today, not the browser UTC date', async (
   await page.clock.setFixedTime(new Date('2026-11-04T23:30:00Z'));
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  await expect.poll(() => state.occurrenceQueries.length).toBeGreaterThan(0);
-  const first = state.occurrenceQueries[0];
-  expect(first.get('from')).toBe('2026-11-04T22:00:00.000Z');
+  // The row's visit progress also loads for the current month, so find the drawer's own request by its start.
+  await expect.poll(() => state.occurrenceQueries.some(q => q.get('from') === '2026-11-04T22:00:00.000Z')).toBe(true);
+  const first = state.occurrenceQueries.find(q => q.get('from') === '2026-11-04T22:00:00.000Z')!;
   expect(first.get('to')).toBe('2026-12-06T21:59:59.999Z');
   const list = page.getByRole('dialog', { name: /^Visits/ });
   await expect(list.getByLabel('From')).toHaveValue('2026-11-05');
