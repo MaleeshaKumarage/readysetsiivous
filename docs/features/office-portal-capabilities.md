@@ -2,7 +2,7 @@
 
 What an office user (tenant admin, or manager where noted) can do on each page of the office portal at `/admin/`. This is an inventory of the current application, taken from the code on `main` (commit `cac82a9b`). It is the reference for the office portal redesign: every capability listed here must have a place in the new design.
 
-Pages are documented one at a time. A page not listed yet has not been inventoried.
+Every page under `site/src/app/admin/` is covered: the 16 routes below plus the shell shared by all of them.
 
 | Page | Route | Status |
 | --- | --- | --- |
