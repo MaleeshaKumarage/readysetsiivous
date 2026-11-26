@@ -19,6 +19,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Companies | `/admin/companies/` | Inventoried |
 | Customer workspace | `/admin/companies/customer/` | Inventoried |
 | Agreements | `/admin/agreements/` | Inventoried |
+| Employees | `/admin/employees/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -697,3 +698,35 @@ Shown only while there are older unsigned agreements without a company.
 - While the agreement is a draft or partly signed: **Add signer** (name and email), and **Cancel agreement** (after a confirmation; signers can no longer open or sign it, and signed copies stay on record).
 - Otherwise: "Signers cannot be changed on a (status) agreement."
 - Errors for loading, adding, removing and refreshing.
+
+## Employees
+
+Route: `/admin/employees/`. Source: `site/src/app/admin/employees/page.tsx`. Managers can see the list; every change needs an admin.
+
+### Employee list
+
+- **Add employee** (admins).
+- **Active** and **Inactive** tabs with counts.
+- Table: name, email, role (admin, manager, employee or partner; partners also show their company), status (Active or Inactive), registration (Invited or Not invited), and actions (admins):
+  - **Edit**.
+  - **Invite** (not yet invited) or **Resend setup email**: sends an account setup email. If one was sent recently, it says so instead.
+  - **Enable shift calendar** or **Disable shift calendar** (active admins only): controls whether that admin sees the shift calendar.
+  - **Deactivate** (active). It is refused, with the reason, when the employee still has active work.
+  - **Reactivate** (inactive): keeps the existing account and history. If reactivation fails or is only half done, **Retry reactivation** appears.
+  - **Delete** (inactive; after a confirmation). Profiles with a login or work history are kept.
+- Paged on the page, 25 per page: "Showing 1–25 of n employees", **Previous page**, "Page x of y", **Next page**.
+- Success and error messages above the list. States: loading, a load error, "No employees yet.", "No (status) employees. Check the (other) tab."
+
+### Add or edit employee (dialog)
+
+- **Email** (required). It is locked once the profile is linked to a sign-in account.
+- **First name** and **Last name** (required), **Phone**.
+- **Role**: admin, manager, employee or partner.
+- **Partner company** (partners only, required): only active companies with partner access are offered.
+- When editing, also:
+  - **Skills** and **Service areas** (tags).
+  - **Colour** (a hex value such as #1a2b3c; used on the calendars).
+  - **Pay rate** (zero or more) and **Notes**.
+  - **Certifications**: name and expiry date per certification, **Add certification** and **Remove**.
+  - **Default hours**: a start and end time for each day from Monday to Sunday. Both or neither must be filled, and the end must be after the start.
+- **Cancel** and **Create employee** or **Save changes**.
