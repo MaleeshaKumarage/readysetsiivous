@@ -18,6 +18,7 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Leads | `/admin/leads/` | Inventoried |
 | Companies | `/admin/companies/` | Inventoried |
 | Customer workspace | `/admin/companies/customer/` | Inventoried |
+| Agreements | `/admin/agreements/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -649,3 +650,50 @@ Route: `/admin/companies/customer/?id=<company>&section=<tab>`. Source: `site/sr
   - **Invoices**: invoice number, issue date, due date, status and total. **Open invoices** goes to the invoices page.
 - Each tab loads when opened and has its own error and **Retry** button and empty text.
 - "Customer not found" for an unknown or unavailable company; "Customer could not be loaded." with **Retry customer**.
+
+## Agreements
+
+Route: `/admin/agreements/`. Source: `site/src/app/admin/agreements/page.tsx`, `site/src/components/AgreementEmailCopyButton.tsx`, `site/src/components/admin/CompanyPicker.tsx`. Agreements are PDF contracts that customer contacts sign online through a personal signing link.
+
+### Agreement list
+
+- **New agreement**. `?company=<id>` (from the customer workspace) opens the form with that company already chosen.
+- **Active** and **Inactive** tabs with counts.
+- Table: title, customer, code, signers (signed / total), status badge (Draft, PartiallySigned, Completed or Cancelled), and actions:
+  - **Signers** (opens the signers dialog).
+  - **PDF** (downloads the document).
+  - **Deactivate** or **Reactivate**. A cancelled agreement cannot be reactivated, and says so.
+  - **Delete** (inactive only). Deleting an agreement that has signatures warns that its signing and download links will stop working. Both cases ask for confirmation and cannot be undone.
+- States: loading, "No agreements yet.", "No (status) agreements. Check the (other) tab.", and action errors.
+
+### Legacy agreements needing a company link
+
+Shown only while there are older unsigned agreements without a company.
+
+- Table: agreement, status, a searchable **Company** choice (inactive companies are marked), and **Apply reviewed link**.
+- Signed agreements are excluded.
+- States: loading, an error, and "No eligible legacy agreements need repair."
+
+### New agreement (dialog)
+
+- **Company** (required; searchable by name or business ID).
+- **Title** (required).
+- **PDF document** (required, one PDF file).
+- **Signers**: name and email per signer, **Add signer**, and a remove button per signer. At least one complete signer is required.
+- **Cancel** and **Create**.
+
+### Agreement created (dialog)
+
+- Confirms the agreement was created and lists each signer with their signing actions (below), and **Close**.
+
+### Signers (dialog)
+
+- Code and status.
+- Signers (n/m signed). Each signer has a name, email and a Signed or Pending badge. A pending signer can be removed while the agreement is open, after a confirmation (their link stops working).
+- Signing actions per signer:
+  - **Copy link**: copies the signing link.
+  - **Copy email**: copies a formatted email with the link.
+  - **Open mail app**: opens a plain-text email in the mail app.
+- While the agreement is a draft or partly signed: **Add signer** (name and email), and **Cancel agreement** (after a confirmation; signers can no longer open or sign it, and signed copies stay on record).
+- Otherwise: "Signers cannot be changed on a (status) agreement."
+- Errors for loading, adding, removing and refreshing.
