@@ -69,6 +69,15 @@ function Donut({ done, total }: { done: number; total: number }) {
   </svg>;
 }
 
+/** A labelled checkbox in the DS field style, with a 44 px touch target. */
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-gray-700">
+    <input type="checkbox" checked={checked} onChange={event => onChange(event.currentTarget.checked)}
+      className="h-4 w-4 accent-accent-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500" />
+    {label}
+  </label>;
+}
+
 /** Desktop visit details: slides in from the right over the calendar, below the admin header. No backdrop, so other visits stay clickable. */
 function SlideOver({ children }: { children: ReactNode }) {
   const [shown, setShown] = useState(false);
@@ -95,6 +104,9 @@ export default function EmployeeSchedulePage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [canUseCalendar, setCanUseCalendar] = useState(false);
+  // Working hours and working days by default; the full day and the weekend are opt-in.
+  const [showFullDay, setShowFullDay] = useState(false);
+  const [showWeekends, setShowWeekends] = useState(false);
   // The link's date and employee are read before the first load, so a deep link does not load this week first.
   const [ready, setReady] = useState(false);
   const wide = useMediaQuery('(min-width: 48em)', true);
@@ -180,7 +192,7 @@ export default function EmployeeSchedulePage() {
     });
 
   const columns: Column[] = !timeZone ? [] : view === 'week'
-    ? (oneEmployee ? Array.from({ length: DAYS }, (_, index) => {
+    ? (oneEmployee ? Array.from({ length: showWeekends ? DAYS : 5 }, (_, index) => {
       const day = addDays(weekStart, index);
       const label = new Date(`${day}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
       return { key: day, label, title: label, hours: hoursFor(oneEmployee, day, true), employeeId: oneEmployee.id, day, visits: placedFor(oneEmployee.id, day) };
@@ -192,14 +204,18 @@ export default function EmployeeSchedulePage() {
   const allPlaced = columns.flatMap(column => column.visits);
   const selected = allPlaced.find(item => item.key === selectedKey) ?? null;
 
-  // The grid spans the working day, widened to fit any earlier or later visit.
-  const firstHour = Math.max(0, Math.min(6, ...allPlaced.map(item => Math.floor(item.start / 60))));
-  const lastHour = Math.min(24, Math.max(18, ...allPlaced.map(item => Math.ceil(item.end / 60))));
+  // Weekend visits of the week's employee while Mon–Fri is shown, so they are never missed.
+  const weekendVisits = view === 'week' && !showWeekends && oneEmployee
+    ? [5, 6].reduce((count, index) => count + placedFor(oneEmployee.id, addDays(weekStart, index)).length, 0) : 0;
+
+  // 08:00–17:00 by default, widened to fit any earlier or later visit; Show 24 h shows the whole day.
+  const firstHour = showFullDay ? 0 : Math.max(0, Math.min(8, ...allPlaced.map(item => Math.floor(item.start / 60))));
+  const lastHour = showFullDay ? 24 : Math.min(24, Math.max(17, ...allPlaced.map(item => Math.ceil(item.end / 60))));
   const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, index) => firstHour + index);
 
   const needAction = allPlaced.filter(item => item.visit.workStatus === 'NeedsAction').length;
   const summary = view === 'week'
-    ? `${allPlaced.length} ${allPlaced.length === 1 ? 'visit' : 'visits'} this week · ${nameOf(oneEmployee)}`
+    ? `${allPlaced.length + weekendVisits} ${allPlaced.length + weekendVisits === 1 ? 'visit' : 'visits'} this week · ${nameOf(oneEmployee)}`
     : `${allPlaced.length} ${allPlaced.length === 1 ? 'visit' : 'visits'} · ${columns.length} ${columns.length === 1 ? 'employee' : 'employees'} · ${needAction} ${needAction === 1 ? 'needs' : 'need'} action`;
   const heading = view === 'week'
     ? `Week of ${new Date(`${weekStart}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
@@ -326,12 +342,19 @@ export default function EmployeeSchedulePage() {
         {view === 'week' && staff.length > 0 && <div className="flex items-end">
           <Button variant="ghost" size="sm" onClick={showAll}>Show all employees</Button>
         </div>}
+        {(wide || view === 'week') && <div className="flex flex-wrap items-center gap-x-6 sm:col-span-full" role="group" aria-label="Show more">
+          {wide && <Toggle label="Show 24 h" checked={showFullDay} onChange={setShowFullDay} />}
+          {view === 'week' && <Toggle label="Show weekends" checked={showWeekends} onChange={setShowWeekends} />}
+        </div>}
       </div>
 
       {loading && <Loader aria-label="Loading schedule" />}
       {error && <Alert color="red" title="Schedule unavailable"><div className="space-y-2"><p>{error}</p><Button size="sm" variant="outline" onClick={() => setReloadKey(key => key + 1)}>Retry</Button></div></Alert>}
       {!loading && !error && schedule && staff.length === 0 && <p className="text-gray-700">No active employees yet. Add employees, then their visits appear here.</p>}
       {!loading && !error && schedule && staff.length > 0 && schedule.length === 0 && <p className="text-gray-700">No visits this week. Choose another week or check the shift schedules.</p>}
+      {!loading && !error && schedule && weekendVisits > 0 && <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-gray-700">
+        {weekendVisits} weekend {weekendVisits === 1 ? 'visit' : 'visits'} — tick Show weekends to see {weekendVisits === 1 ? 'it' : 'them'}.
+      </p>}
       {!loading && !error && schedule && staff.length > 0 && view === 'day' && columns.length === 0 && <p className="text-gray-700">Choose at least one employee to see their visits.</p>}
 
       {!loading && !error && schedule && columns.length > 0 && (

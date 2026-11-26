@@ -6,6 +6,7 @@ import { setupAdminMocks } from './admin-helpers';
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const MONDAY = '2030-01-14';
 const TUESDAY = '2030-01-15';
+const SATURDAY = '2030-01-19';
 
 async function setup(page: Page, options: { calendarAccess?: boolean } = {}) {
   await setupAdminMocks(page);
@@ -24,6 +25,9 @@ async function setup(page: Page, options: { calendarAccess?: boolean } = {}) {
       ] },
       { employeeId: 'aiden', localDay: `${MONDAY}T00:00:00`, visits: [
         { shiftId: 'lawn', shiftName: 'Lawn service', startUtc: `${MONDAY}T06:00:00Z`, endUtc: `${MONDAY}T08:00:00Z`, workStatus: 'Completed', visitNumber: 12 },
+      ] },
+      { employeeId: 'neil', localDay: `${SATURDAY}T00:00:00`, visits: [
+        { shiftId: 'weekend', shiftName: 'Saturday deep clean', startUtc: `${SATURDAY}T08:00:00Z`, endUtc: `${SATURDAY}T10:00:00Z`, workStatus: 'Scheduled' },
       ] },
       { employeeId: 'neil', localDay: `${TUESDAY}T00:00:00`, visits: [
         { shiftId: 'carpet', shiftName: 'Carpet clean', startUtc: `${TUESDAY}T07:00:00Z`, endUtc: `${TUESDAY}T08:00:00Z`, workStatus: 'Scheduled' },
@@ -109,7 +113,8 @@ test('week view shows one employee across the week, picked from a single-choice 
   await expect(page.getByRole('group', { name: `Neil Park, ${MONDAY}` })).toBeVisible();
   await expect(page.getByRole('group', { name: `Neil Park, ${TUESDAY}` }).getByRole('button', { name: /^Carpet clean, 09:00–10:00, Scheduled$/ })).toBeVisible();
   await expect(page.getByRole('group', { name: /^Aiden Grey/ })).toHaveCount(0);
-  await expect(page.getByText('3 visits this week · Neil Park')).toBeVisible();
+  // The week count includes the hidden weekend visit.
+  await expect(page.getByText('4 visits this week · Neil Park')).toBeVisible();
 });
 
 test('the shift calendar link is offered only to admins who can use the calendar, and opens the visit day', async ({ page }) => {
@@ -167,4 +172,40 @@ test('on desktop, Escape closes the panel and returns focus to the visit', async
   await page.keyboard.press('Escape');
   await expect(details(page)).toHaveCount(0);
   await expect(card).toBeFocused();
+});
+
+test('on desktop, the grid shows 08:00–17:00, widened for earlier visits, and Show 24 h shows the whole day', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Phones list visits instead of an hour grid.');
+  await setup(page);
+  const gutter = page.getByRole('region', { name: 'Visits' });
+  // The earliest visit starts at 07:00, so the day starts there instead of 08:00; it ends at 17:00.
+  await expect(gutter.getByText('07:00', { exact: true })).toBeVisible();
+  await expect(gutter.getByText('17:00', { exact: true })).toBeVisible();
+  await expect(gutter.getByText('06:00', { exact: true })).toHaveCount(0);
+  await expect(gutter.getByText('18:00', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Show 24 h').check();
+  await expect(gutter.getByText('00:00', { exact: true })).toBeVisible();
+  await expect(gutter.getByText('23:00', { exact: true })).toBeVisible();
+  await page.getByLabel('Show 24 h').uncheck();
+  await expect(gutter.getByText('00:00', { exact: true })).toHaveCount(0);
+});
+
+test('week view shows Monday to Friday, with a notice and a tick box for weekend visits', async ({ page }) => {
+  await setup(page);
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
+  await page.getByRole('button', { name: /^Employee Aiden Grey$/ }).click();
+  await page.getByRole('listbox', { name: 'Employee' }).getByRole('option', { name: 'Neil Park' }).click();
+  await expect(page.getByRole('group', { name: 'Neil Park, 2030-01-18' })).toBeVisible();
+  await expect(page.getByRole('group', { name: `Neil Park, ${SATURDAY}` })).toHaveCount(0);
+  const notice = page.getByText('1 weekend visit — tick Show weekends to see it.');
+  await expect(notice).toBeVisible();
+  await page.getByLabel('Show weekends').check();
+  await expect(page.getByRole('group', { name: `Neil Park, ${SATURDAY}` }).getByRole('button', { name: /^Saturday deep clean, 10:00–12:00, Scheduled$/ })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Neil Park, 2030-01-20' })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+});
+
+test('day view has no weekend tick box', async ({ page }) => {
+  await setup(page);
+  await expect(page.getByLabel('Show weekends')).toHaveCount(0);
 });

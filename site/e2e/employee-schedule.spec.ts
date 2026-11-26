@@ -187,7 +187,9 @@ test('conflict deep link opens the selected employee and week, with a way back t
   await expect.poll(() => state.requests.at(-1)).toBe(MONDAY);
   // Week view: one column per day for the linked employee only.
   await expect(page.getByRole('group', { name: `Test Employee, ${MONDAY}` })).toBeVisible();
-  await expect(page.getByRole('group', { name: `Test Employee, ${addDay(MONDAY, 6)}` })).toBeVisible();
+  // Monday to Friday by default; the weekend appears only when Show weekends is ticked.
+  await expect(page.getByRole('group', { name: `Test Employee, ${addDay(MONDAY, 4)}` })).toBeVisible();
+  await expect(page.getByRole('group', { name: `Test Employee, ${addDay(MONDAY, 6)}` })).toHaveCount(0);
   await expect(page.getByRole('group', { name: /^Second Employee/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Show all employees', exact: true }).click();
   await expect(page.getByRole('group', { name: `Second Employee, 2030-01-15` })).toBeVisible();
