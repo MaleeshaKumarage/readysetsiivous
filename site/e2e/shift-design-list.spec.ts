@@ -28,7 +28,7 @@ test('the Shifts list shows Property, Visits and Actions with the visit progress
 
   const table = page.getByRole('region', { name: 'Work orders table' }).getByRole('table');
   const headerRow = table.getByRole('row').first();
-  await expect(headerRow.getByRole('columnheader')).toHaveText(['Property', 'Visits', 'Actions']);
+  await expect(headerRow.getByRole('columnheader')).toHaveText(['Property', '', 'Visits', 'Actions']);
 
   const progress = page.getByRole('img', { name: '2 of 4 visits completed, 1 ongoing, 1 scheduled, 1 cancelled' });
   await expect(progress).toBeVisible();
@@ -39,13 +39,13 @@ test('the Shifts list shows Property, Visits and Actions with the visit progress
   await expect(page.getByText('Missing Quality Cycle')).toBeVisible();
   // The list's actions stay reachable while the progress tooltip is open.
   await progress.hover();
-  await expect(page.getByRole('button', { name: /More actions for/ }).first()).toBeVisible();
-  await page.getByRole('button', { name: /More actions for/ }).first().click();
+  await expect(page.getByRole('button', { name: /^Actions for/ }).first()).toBeVisible();
+  await page.getByRole('button', { name: /^Actions for/ }).first().click();
   await expect(page.getByRole('menuitem', { name: 'Visits' })).toBeVisible();
   await page.keyboard.press('Escape');
 
-  // A row click opens the visits in a side drawer, and each visit has a ⋯ menu.
-  await page.getByRole('cell', { name: /Lakeside 4/ }).first().click();
+  // The Visits button opens the visits in a side panel, and each visit has a ⋯ menu.
+  await page.getByRole('button', { name: 'Visits', exact: true }).first().click();
   const drawer = page.getByRole('dialog', { name: /Visits of Cleaning - Lakeside/ });
   await expect(drawer).toBeVisible();
   if (process.env.SHIFT_SHOTS) await page.screenshot({ path: `${process.env.SHIFT_SHOTS}/drawer-${test.info().project.name}.png`, fullPage: false });

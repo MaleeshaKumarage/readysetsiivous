@@ -55,7 +55,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
 
     await page.goto('/admin/shifts/');
-    await expect(page.getByRole('heading', { name: 'Shifts' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Work orders' })).toBeVisible();
   });
 
   test('sign-out completes when removing the push device stalls', async ({ page, isMobile }) => {
@@ -825,7 +825,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.keyboard.press('Escape');
     // Deactivate shift
     await shiftAction(page, AAMUVUORO_NAME, 'Deactivate'); await confirmShiftPopup(page, 'Deactivate');
-    await expect(page.getByRole('button', { name: `More actions for ${AAMUVUORO_NAME}`, exact: true })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: `Actions for ${AAMUVUORO_NAME}`, exact: true })).not.toBeVisible();
   });
 
   test('worst path: required fields missing & specific days validation', async ({ page }) => {

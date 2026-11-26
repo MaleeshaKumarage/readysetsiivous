@@ -67,7 +67,7 @@ async function setup(page: Page, options: { addFailures?: number; cleanerConflic
     return route.fulfill({ status: 200, headers, json });
   });
   await page.goto('/admin/shifts/');
-  await expect(page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: `Actions for ${MAIN}`, exact: true })).toBeVisible();
   return state;
 }
 
@@ -250,14 +250,14 @@ test('an employee change refused by the server shows why and leaves the visit as
 
 test('a main shift assigns a default employee from its row; other shifts keep whole-shift assignment', async ({ page }) => {
   await setup(page);
-  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('button', { name: `Actions for ${MAIN}`, exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   // The first menu must be gone before the next one opens, or its closing layer swallows the click.
   await expect(page.getByRole('menu')).toHaveCount(0);
-  await page.getByRole('button', { name: 'More actions for Morning clean', exact: true }).click();
+  await page.getByRole('button', { name: 'Actions for Morning clean', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
 });
@@ -274,7 +274,7 @@ test('a new shift no longer offers One-time: single visits are added with Add vi
 
 test('the details of a main shift explain visits, and its row menu has no whole-shift assignment or separate price', async ({ page }) => {
   const state = await setup(page);
-  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('button', { name: `Actions for ${MAIN}`, exact: true }).click();
   await page.getByRole('menuitem', { name: 'View details', exact: true }).click();
   const workspace = page.getByRole('dialog', { name: `Manage — ${MAIN}`, exact: true });
   await expect(workspace.getByRole('status')).toHaveText('Next step: Admin: add a visit. It is offered to the default employee, or to the employee you choose.');
@@ -282,7 +282,7 @@ test('the details of a main shift explain visits, and its row menu has no whole-
   await expect(workspace).toContainText('Each visit uses the property price in force on its date.');
   await page.keyboard.press('Escape');
   await expect(workspace).toHaveCount(0);
-  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('button', { name: `Actions for ${MAIN}`, exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toHaveCount(0);
   await page.getByRole('menuitem', { name: 'Add visit', exact: true }).click();
@@ -296,7 +296,7 @@ test('the details of a main shift explain visits, and its row menu has no whole-
 
 test('an ordinary shift keeps its assignment and pricing actions in its row menu', async ({ page }) => {
   await setup(page);
-  await page.getByRole('button', { name: 'More actions for Morning clean', exact: true }).click();
+  await page.getByRole('button', { name: 'Actions for Morning clean', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Pricing', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
@@ -415,7 +415,7 @@ test('admin changes the cleaning type of a finished visit it added', async ({ pa
 
 test('assign employees on a main shift saves the default employee that new visits are offered to', async ({ page }) => {
   const state = await setup(page);
-  await page.getByRole('button', { name: `More actions for ${MAIN}`, exact: true }).click();
+  await page.getByRole('button', { name: `Actions for ${MAIN}`, exact: true }).click();
   await page.getByRole('menuitem', { name: 'Assign employees', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: `Assign employees — ${MAIN}`, exact: true });
   await dialog.getByLabel('Default employee', { exact: true }).click();

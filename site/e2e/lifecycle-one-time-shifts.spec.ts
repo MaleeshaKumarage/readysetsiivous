@@ -99,10 +99,10 @@ test('one-time is retired for new shifts, on-call stays, and existing on-call sh
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 
   await shiftAction(page, 'Legacy on-call', 'Edit schedule');
-  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await edit.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(edit).toHaveCount(0);
-  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^Actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
 test('admin adds a past visit from one form without a second visit popup', async ({ page }) => {
@@ -148,7 +148,7 @@ test('edit restores the one-time date and times and saves a changed end time', a
   const mock = await mockAdmin(page, [visitShift]);
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Past visit', 'Edit schedule');
-  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('One-time');
   await expect(edit.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
   await expect(edit.getByRole('textbox', { name: 'Start time', exact: true })).toHaveValue('09:00');

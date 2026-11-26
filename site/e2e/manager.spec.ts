@@ -72,7 +72,7 @@ test('tenant manager sees both branches and creates, edits, assigns, removes and
   await page.getByRole('button', { name: 'Save shift' }).click();
   const card = page.getByRole('article', { name: 'New branch2 shift' }); await expect(card).toBeVisible();
   await expect(page.getByRole('tab', { name: /^Active/ })).toHaveAttribute('aria-selected', 'true');
-  await card.getByRole('button', { name: 'Edit shift' }).click(); await expect(page.getByLabel('Company', { exact: true })).toBeDisabled();
+  await card.getByRole('button', { name: 'Edit schedule' }).click(); await expect(page.getByLabel('Company', { exact: true })).toBeDisabled();
   await page.getByLabel('Shift name', { exact: true }).fill('Edited branch2 shift'); await page.getByRole('button', { name: 'Save shift' }).click();
   const edited = page.getByRole('article', { name: 'Edited branch2 shift' }); await edited.getByRole('button', { name: 'Employees' }).click();
   await edited.getByLabel('Employee', { exact: true }).selectOption(cleaner); await edited.getByRole('button', { name: 'Assign employee' }).click();
@@ -128,7 +128,7 @@ test('verification and operational failures are visible and retry preserves ente
   await expect(page.getByRole('link', { name: 'My shifts', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Retry verification', exact: true }).click(); await expect(page.getByRole('main').getByRole('alert')).toContainText('load failed');
   state.recoverLoad(); await page.getByRole('button', { name: 'Refresh operations' }).click();
-  const card = page.getByRole('article', { name: 'AAA1 weekdays' }); await card.getByRole('button', { name: 'Edit shift' }).click();
+  const card = page.getByRole('article', { name: 'AAA1 weekdays' }); await card.getByRole('button', { name: 'Edit schedule' }).click();
   await page.getByLabel('Shift name', { exact: true }).fill('Retained name'); await page.getByRole('button', { name: 'Save shift' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('save failed'); await expect(page.getByLabel('Shift name', { exact: true })).toHaveValue('Retained name');
   await page.getByRole('button', { name: 'Save shift' }).click(); const retained = page.getByRole('article', { name: 'Retained name' });
@@ -227,7 +227,7 @@ test('manager requires a start date and supports optional end dates', async ({ p
   await expect(page.getByRole('article', { name: 'Dated shift', exact: true })).toBeVisible();
   expect(state.writes[0].validFrom).toBe('2026-11-01'); expect(state.writes[0].validUntil).toBeNull();
   const card = page.getByRole('article', { name: 'Dated shift', exact: true });
-  await card.getByRole('button', { name: 'Edit shift' }).click();
+  await card.getByRole('button', { name: 'Edit schedule' }).click();
   await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-11-01');
   await page.getByLabel('Start date', { exact: true }).fill('');
   await page.getByRole('button', { name: 'Save shift' }).click();
@@ -244,7 +244,7 @@ test('manager requires a start date and supports optional end dates', async ({ p
   await page.getByRole('button', { name: 'Save shift' }).click();
   await expect(page.getByLabel('Start date', { exact: true })).toHaveCount(0);
   expect(state.writes[1].validUntil).toBe('2026-11-30');
-  await card.getByRole('button', { name: 'Edit shift' }).click();
+  await card.getByRole('button', { name: 'Edit schedule' }).click();
   await expect(page.getByLabel('Start date', { exact: true })).toHaveValue('2026-11-01');
   await expect(end).toHaveValue('2026-11-30');
   await end.fill('');
@@ -316,8 +316,8 @@ test('late manager assignment response cannot reopen or populate a hidden lifecy
 test('the shift dialog closes on Escape and on a backdrop click without saving, and focus returns to the opener', async ({ page }) => {
   const state = await setup(page); await page.goto('/manager/');
   const card = page.getByRole('article', { name: 'AAA1 weekdays' });
-  const edit = card.getByRole('button', { name: 'Edit shift', exact: true });
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = card.getByRole('button', { name: 'Edit schedule', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await edit.click(); await expect(dialog).toBeVisible();
   await dialog.getByLabel('Shift name', { exact: true }).fill('Escaped edit');
   await page.keyboard.press('Escape');

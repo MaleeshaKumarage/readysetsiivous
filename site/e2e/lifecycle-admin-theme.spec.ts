@@ -277,5 +277,5 @@ test('populated shifts table shows address, size, rooms and beds readably at 375
   await expect(row.getByText('2 rooms', { exact: true })).toBeVisible();
   await expect(row.getByText('2 beds', { exact: true })).toBeVisible();
   await expectGridLaidOut(page, testInfo, 'shifts-375px');
-  await expect(row.getByRole('button', { name: /^More actions for / })).toBeVisible();
+  await expect(row.getByRole('button', { name: /^Actions for / })).toBeVisible();
 });

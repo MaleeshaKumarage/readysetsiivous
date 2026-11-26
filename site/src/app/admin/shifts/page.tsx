@@ -18,7 +18,6 @@ import { CompanyPicker } from '@/components/admin/CompanyPicker';
 import { AddVisitDialog } from '@/components/admin/AddVisitDialog';
 import { visitLabel } from '@/lib/visitLabel';
 import { LifecycleTabs, type LifecycleStatus } from '@/components/LifecycleTabs';
-import { LazyTodayKpis as TodayKpis } from '@/components/LazySections';
 import { ListPager, PAGE_SIZE } from '@/components/ListPager';
 import { ShiftWorkspace, scheduleLabel } from '@/components/admin/ShiftWorkspace';
 import { autoShiftName } from '@/lib/shiftName';
@@ -34,6 +33,19 @@ const defaultPriceVersion = (versions?: { effectiveFrom: string }[] | null) => {
 };
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/** The Show visits filter of a work order's visits panel. */
+type VisitFilter = 'all' | 'scheduled' | 'ongoing' | 'completed' | 'cancelled' | 'noclean';
+const VISIT_FILTERS: [VisitFilter, string][] = [['all', 'All'], ['scheduled', 'Scheduled'], ['ongoing', 'Ongoing'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['noclean', 'No cleaner']];
+const visitStatusOf = (v: ShiftOccurrence): 'scheduled' | 'ongoing' | 'completed' | 'cancelled' =>
+  v.isCancelledManualVisit ? 'cancelled' : v.workStatus === 'Completed' ? 'completed' : v.workStatus === 'InProgress' ? 'ongoing' : 'scheduled';
+const visitMatchesFilter = (v: ShiftOccurrence, filter: VisitFilter) =>
+  filter === 'all' ? true : filter === 'noclean' ? visitStatusOf(v) === 'scheduled' && (v.assigneeIds ?? []).length === 0 : visitStatusOf(v) === filter;
+const VISIT_NOTES: Record<string, string> = {
+  ongoing: 'Ongoing: the time can’t change and it can’t be cancelled.',
+  completed: 'Completed: only the cleaning type and price can change.',
+  cancelled: 'Cancelled: restore it to change employees or time.',
+};
+
 const SCHEDULE_TYPES = [
   { value: '0', label: 'Daily' },
   { value: '1', label: 'Varied times by weekday' },
@@ -140,6 +152,8 @@ export default function ShiftsAdminPage() {
   const [pageTotal, setPageTotal] = useState(0);
   // Property details for the rows on this page, keyed by branch id. A failed load leaves the row on its shift name.
   const [propertyById, setPropertyById] = useState<Record<string, Branch>>({});
+  const [propertySearch, setPropertySearch] = useState('');
+  const [expandedFilter, setExpandedFilter] = useState<VisitFilter>('all');
   useEffect(() => {
     let live = true;
     for (const companyId of new Set(pageRows.map(s => s.companyId))) {
@@ -153,29 +167,8 @@ export default function ShiftsAdminPage() {
   }, [pageRows]);
   // The visits shown under an expanded row, for one calendar month in tenant time. Separate from the visits popup.
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedVisits, setExpandedVisits] = useState<ShiftOccurrence[]>([]);
-  const [expandedLoading, setExpandedLoading] = useState(false);
-  const [visitsOpen, setVisitsOpen] = useState(true);
   const [expandedMonth, setExpandedMonth] = useState('');
-  const [expandedError, setExpandedError] = useState('');
-  const expandGeneration = useRef(0);
-  const expandedShift = useRef<Shift | null>(null);
-  // Loads the visits of one shift for a date range (tenant-local dates, both inclusive).
-  const loadExpandedVisits = async (shift: Shift, from: string, to: string) => {
-    const version = ++expandGeneration.current;
-    setExpandedLoading(true); setExpandedError('');
-    try {
-      const fromUtc = tenantLocalToUtc(`${from}T00:00`, timeZoneId);
-      const nextDayUtc = tenantLocalToUtc(`${addCalendarDays(to, 1)}T00:00`, timeZoneId);
-      const result = await adminShifts.occurrences(shift.id, fromUtc, new Date(Date.parse(nextDayUtc) - 1).toISOString());
-      if (!result) throw new Error('The visits could not be loaded. Change the dates to retry.');
-      if (version === expandGeneration.current) setExpandedVisits(result);
-    } catch (failure) {
-      if (version === expandGeneration.current) setExpandedError(failure instanceof Error ? failure.message : 'The visits could not be loaded.');
-    } finally {
-      if (version === expandGeneration.current) setExpandedLoading(false);
-    }
-  };
+  const panelMonth = useRef<{ shiftId: string; month: string } | null>(null);
   // First and last day of a month (YYYY-MM), as tenant-local dates.
   const monthRange = (ym: string): [string, string] => {
     const [year, month] = ym.split('-').map(Number);
@@ -190,22 +183,30 @@ export default function ShiftsAdminPage() {
       return { value: date.toISOString().slice(0, 7), label: date.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
     });
   };
-  const toggleExpanded = async (shift: Shift) => {
-    if (expandedId === shift.id) { setExpandedId(null); expandGeneration.current++; return; }
-    const month = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7);
-    const [from, to] = monthRange(month);
-    setExpandedId(shift.id); setExpandedVisits([]); setVisitsOpen(true);
-    setExpandedMonth(month);
-    expandedShift.current = shift;
-    await loadExpandedVisits(shift, from, to);
+  // The visits panel of one work order opens and closes from its Visits button or menu item.
+  // The label of a YYYY-MM month, as the month list shows it.
+  const monthLabelOf = (ym: string) => {
+    const [year, month] = ym.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   };
+  // The month list offers the window around today, and also the open month when it lies outside that window.
+  const panelMonthChoices = () => {
+    const choices = monthChoices();
+    if (expandedMonth && !choices.some(choice => choice.value === expandedMonth)) choices.push({ value: expandedMonth, label: monthLabelOf(expandedMonth) });
+    return choices;
+  };
+  const toggleExpanded = async (shift: Shift) => {
+    if (expandedId === shift.id) { occurrenceGeneration.current++; setExpandedId(null); setOccurrenceShift(null); setOccurrences([]); return; }
+    await openOccurrences(shift);
+  };
+  // Changing the month of the visits panel reloads its visits for that month.
   const changeExpandedMonth = (month: string | null) => {
-    if (!month) return;
+    if (!month || !occurrenceShift) return;
     setExpandedMonth(month);
-    const shift = expandedShift.current;
-    if (!shift) return;
+    panelMonth.current = { shiftId: occurrenceShift.id, month };
     const [from, to] = monthRange(month);
-    void loadExpandedVisits(shift, from, to);
+    setOccurrenceFrom(from); setOccurrenceTo(to);
+    void loadOccurrences(occurrenceShift, from, to);
   };
   const [tabCounts, setTabCounts] = useState<{ active: number; completed: number; inactive: number } | null>(null);
   const [workspaceFetched, setWorkspaceFetched] = useState<Shift | null>(null);
@@ -269,7 +270,6 @@ export default function ShiftsAdminPage() {
   const occurrenceGeneration = useRef(0);
   const [occurrenceError, setOccurrenceError] = useState('');
   const [occurrenceEditError, setOccurrenceEditError] = useState('');
-  const occurrenceRangeShift = useRef<string | null>(null);
   const [highlightUtc, setHighlightUtc] = useState<string | null>(null);
   const [occurrenceFrom, setOccurrenceFrom] = useState(new Date().toISOString().slice(0, 10));
   const [occurrenceTo, setOccurrenceTo] = useState(new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10));
@@ -628,22 +628,17 @@ export default function ShiftsAdminPage() {
   };
 
   // `highlightUtc` marks one visit (the overlapping visit from a refusal) and makes sure the range lists it.
-  const openOccurrences = async (shift: Shift, notice = '', highlightUtc: string | null = null) => {
+  const openOccurrences = async (shift: Shift, notice = '', highlight: string | null = null) => {
     setShiftNotice(notice);
-    setHighlightUtc(highlightUtc);
+    setHighlightUtc(highlight);
+    // A work order reopens on the month last chosen for it; another work order starts on the current month.
+    const month = highlight ? localInputValue(highlight, timeZoneId).slice(0, 7)
+      : panelMonth.current?.shiftId === shift.id ? panelMonth.current.month : localInputValue(new Date().toISOString(), timeZoneId).slice(0, 7);
+    panelMonth.current = { shiftId: shift.id, month };
+    setExpandedId(shift.id); setExpandedMonth(month); setExpandedFilter('all');
     setOccurrenceShift(shift); setOccurrences([]); setOccurrenceError('');
-    // A new shift starts from tenant-local today onward, the day the calendar opens on (the browser's UTC date can be a day behind near midnight).
-    // Reopening the same shift keeps the range the admin chose.
-    if (occurrenceRangeShift.current !== shift.id) {
-      occurrenceRangeShift.current = shift.id;
-      const today = localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10);
-      const [from, to] = rangeIncluding(today, addCalendarDays(today, 31), highlightUtc);
-      setOccurrenceFrom(from); setOccurrenceTo(to);
-      await loadOccurrences(shift, from, to);
-      return;
-    }
-    const [from, to] = rangeIncluding(occurrenceFrom, occurrenceTo, highlightUtc);
-    if (from !== occurrenceFrom || to !== occurrenceTo) { setOccurrenceFrom(from); setOccurrenceTo(to); }
+    const [from, to] = monthRange(month);
+    setOccurrenceFrom(from); setOccurrenceTo(to);
     await loadOccurrences(shift, from, to);
   };
 
@@ -689,9 +684,13 @@ export default function ShiftsAdminPage() {
       setShiftNotice(status === 4 ? 'One-time visit scheduled. It appears in the shift calendar; assigned employees see it in My shifts.' : 'Visit updated.');
       // Keep a newly scheduled date visible even when it is outside the old list window.
       const savedDay = occurrenceStart.slice(0, 10);
-      if (savedDay < occurrenceFrom || savedDay > occurrenceTo) {
-        setOccurrenceFrom(savedDay); setOccurrenceTo(savedDay);
-        await loadOccurrences(occurrenceShift, savedDay, savedDay);
+      // The panel shows the saved visit's month, so the new visit is listed.
+      const savedMonth = savedDay.slice(0, 7);
+      if (savedMonth !== expandedMonth) {
+        setExpandedMonth(savedMonth); panelMonth.current = { shiftId: occurrenceShift.id, month: savedMonth };
+        const [from, to] = monthRange(savedMonth);
+        setOccurrenceFrom(from); setOccurrenceTo(to);
+        await loadOccurrences(occurrenceShift, from, to);
       } else await loadOccurrences();
     } catch (failure) { setOccurrenceEditError(failure instanceof Error ? failure.message : 'Could not update this visit.'); }
     finally { setOccurrenceSaving(false); }
@@ -772,27 +771,41 @@ export default function ShiftsAdminPage() {
     action(workspaceShift);
   };
 
+  const visibleRows = pageRows.filter(s => {
+    const q = propertySearch.trim().toLowerCase();
+    if (!q) return true;
+    const branch = propertyById[s.branchId];
+    return [s.name, branch?.street, branch?.city].some(v => (v ?? '').toLowerCase().includes(q));
+  });
+  const shownVisits = occurrences.filter(v => visitMatchesFilter(v, expandedFilter));
   return (
     <>
-      <Group justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
-        <Title order={2} component="h1">Work orders</Title>
+      <Group justify="space-between" align="flex-start" mb="md" wrap="wrap" gap="sm">
+        <div>
+          <Title order={2} component="h1">Work orders</Title>
+          <Text c="dimmed">One work order per property. Its visits are the cleanings. {pageRows.length} of {pageTotal} shown.</Text>
+        </div>
         <Group gap="xs" wrap="wrap">
-          <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>Add shift</Button>
+          <Button variant="subtle" onClick={() => setShiftNotice('Export is not connected in this prototype. Nothing was exported.')}>Export</Button>
+          <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>New work order</Button>
         </Group>
       </Group>
 
+      {shiftNotice && <Text role="status" aria-live="polite" mb="md">{shiftNotice}</Text>}
       {listError && <Text role="alert" c="red" mb="md">{listError}</Text>}
       {countError && <Text role="alert" c="red" mb="md">{countError}</Text>}
 
-      <TodayKpis />
       <Group grow align="flex-end" mb="sm">
         <Select label="Filter by company" placeholder="All companies" clearable searchable data={companyChoices} value={filterCompany}
           onChange={(value) => { setFilterCompany(value); setShiftPage(1); }} />
-        <Select label="Filter by shift type" placeholder="All types" clearable data={SCHEDULE_TYPES} value={filterType}
+        <Select label="Filter by type" placeholder="All types" clearable data={SCHEDULE_TYPES} value={filterType}
           onChange={(value) => { setFilterType(value); setShiftPage(1); }} />
       </Group>
-      <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Shift activity" disabled={assignBusy || templateSaving}
+      <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Work order activity" disabled={assignBusy || templateSaving}
         showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
+      <TextInput placeholder="Search property" aria-label="Search work orders" mb="sm" value={propertySearch}
+        onChange={(e) => setPropertySearch(e.currentTarget.value)} />
+      {!loading && pageTotal > 0 && visibleRows.length === 0 && <Text c="dimmed" mb="sm">No work orders match this view.</Text>}
       {loading ? <Loader /> : pageTotal === 0 ? (
         <Text c="dimmed">{(tabCounts?.active ?? 0) + (tabCounts?.completed ?? 0) + (tabCounts?.inactive ?? 0) === 0 ? 'No shifts yet.' : `No ${lifecycle} shifts. Check the ${lifecycle === 'active' ? 'Inactive' : 'Active'} tab.`}</Text>
       ) : (<>
@@ -800,40 +813,43 @@ export default function ShiftsAdminPage() {
         <Table.ScrollContainer minWidth={600} tabIndex={0} role="region" aria-label="Work orders table">
           <Table striped highlightOnHover withTableBorder>
             <Table.Thead className="bg-brand-500 text-accent-950">
-              <Table.Tr className="!bg-brand-500 !text-accent-950"><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Property</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Visits</Table.Th><Table.Th w={200} fw={700} className="!bg-brand-500 !text-accent-950">Actions</Table.Th></Table.Tr>
+              <Table.Tr className="!bg-brand-500 !text-accent-950"><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Property</Table.Th><Table.Th fw={700} className="!bg-brand-500 !text-accent-950" aria-label="Missing details" /><Table.Th fw={700} className="!bg-brand-500 !text-accent-950">Visits</Table.Th><Table.Th w={200} fw={700} className="!bg-brand-500 !text-accent-950"><span className="sr-only">Actions</span></Table.Th></Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {pageRows.map((s) => (
+              {visibleRows.map((s) => (
                 <Fragment key={s.id}>
-                  <Table.Tr
-                    tabIndex={0}
-                    aria-expanded={expandedId === s.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => void toggleExpanded(s)}
-                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); void toggleExpanded(s); } }}
-                  >
+                  <Table.Tr>
                     <Table.Td>
                       {(() => {
                         const branch = propertyById[s.branchId];
                         const address = branch ? [branch.street?.trim(), [branch.postalCode?.trim(), branch.city?.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
-                        const chips = branch ? [
-                          branch.sizeM2 != null ? `${branch.sizeM2} m²` : null,
-                          branch.roomCount != null ? `${branch.roomCount} ${branch.roomCount === 1 ? 'room' : 'rooms'}` : null,
-                          branch.bedCount != null ? `${branch.bedCount} ${branch.bedCount === 1 ? 'bed' : 'beds'}` : null,
-                        ].filter((c): c is string => !!c) : [];
+                        const size = branch?.sizeM2 != null ? `${branch.sizeM2} m²` : null;
+                        const company = companyChoices.find(c => c.value === s.companyId)?.label;
+                        const time = s.schedule.dailyStart && s.schedule.dailyEnd ? `${s.schedule.dailyStart} to ${s.schedule.dailyEnd}` : null;
+                        const checklist = templates.find(t => t.id === s.qualityCycleTemplateId)?.title;
                         return (
                           <Stack gap={4}>
-                            <p className="text-sm font-semibold text-accent-950">{address || s.name}</p>
-                            {chips.length > 0 && <Group gap={6}>{chips.map(c => <Badge key={c} variant="subtle">{c}</Badge>)}</Group>}
+                            <strong className="text-accent-950">{address || s.name}</strong>
+                            {size && <Text size="sm" c="dimmed">{size}</Text>}
+                            {company && <Text size="sm" c="dimmed">{company}</Text>}
                             <Group gap={6}>
                               <Badge variant="subtle">{scheduleLabel(s)}</Badge>
-                              {assignmentCounts && assignmentCounts[s.id] === 0 && <Badge variant="gold">Missing cleaner</Badge>}
-                              {!s.qualityCycleTemplateId && <Badge variant="gold">Missing Quality Cycle</Badge>}
-                              {!branch?.pricingReady && s.isBranchMain !== false && <Badge variant="gold">Missing price</Badge>}
+                              {time && <Badge variant="subtle">{time}</Badge>}
                             </Group>
-                            {address && <span className="sr-only">{s.name}</span>}
+                            <Text size="sm" c="dimmed">{checklist ? `Checklist template: ${checklist}` : 'Checklist template: none'}</Text>
                           </Stack>
                         );
+                      })()}
+                    </Table.Td>
+                    <Table.Td>
+                      {(() => {
+                        const branch = propertyById[s.branchId];
+                        const missing = [
+                          assignmentCounts && assignmentCounts[s.id] === 0 ? 'Missing cleaner' : null,
+                          !s.qualityCycleTemplateId ? 'Missing Quality Cycle' : null,
+                          !branch?.pricingReady && s.isBranchMain !== false ? 'Missing price' : null,
+                        ].filter((m): m is string => !!m);
+                        return <Group gap={6}>{missing.map(m => <Badge key={m} variant="gold">{m}</Badge>)}</Group>;
                       })()}
                     </Table.Td>
                     <Table.Td>
@@ -856,11 +872,12 @@ export default function ShiftsAdminPage() {
                         );
                       })()}
                     </Table.Td>
-                    <Table.Td onClick={(e) => e.stopPropagation()}>
+                    <Table.Td>
                       <Group gap={6} wrap="nowrap">
+                        <Button variant="light" size="xs" aria-expanded={expandedId === s.id} onClick={() => void toggleExpanded(s)}>Visits</Button>
                         <Menu shadow="md" width={230} position="bottom-end" withinPortal>
                           <Menu.Target>
-                            <ActionIcon variant="light" size="md" aria-label={`More actions for ${s.name}`}><MoreHorizontal size={16} /></ActionIcon>
+                            <ActionIcon variant="light" size="md" aria-label={`Actions for ${s.name}`}><MoreHorizontal size={16} /></ActionIcon>
                           </Menu.Target>
                           <Menu.Dropdown>
                             <Menu.Item leftSection={<Eye size={13} />} onClick={() => setWorkspaceId(s.id)}>View details</Menu.Item>
@@ -868,7 +885,7 @@ export default function ShiftsAdminPage() {
                             {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit schedule</Menu.Item>}
                             {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} leftSection={<UserPlus size={13} />} onClick={() => openAssign(s.id)}>Assign employees</Menu.Item>}
                             {s.isActive && s.isBranchMain && <Menu.Item leftSection={<UserPlus size={13} />} onClick={() => { setDefaultCleanerError(''); setDefaultCleanerPick(s.defaultEmployeeId ?? null); setDefaultCleanerFor(s); }}>Assign employees</Menu.Item>}
-                            {s.isActive && <Menu.Item leftSection={<CalendarDays size={13} />} onClick={() => openOccurrences(s)}>Visits</Menu.Item>}
+                            {s.isActive && <Menu.Item leftSection={<CalendarDays size={13} />} onClick={() => void openOccurrences(s)}>Visits</Menu.Item>}
                             {s.isActive && s.isBranchMain && <Menu.Item leftSection={<Plus size={13} />} onClick={() => setVisitDialog({ preset: { companyId: s.companyId, branchId: s.branchId, propertyName: s.name } })}>Add visit</Menu.Item>}
                             {s.isActive && !s.isBranchMain && s.schedule.type === 4 && <Menu.Item leftSection={<CalendarPlus size={13} />} onClick={() => { void openOccurrences(s); openOccurrenceEditor(undefined, '4', s); }}>Add visit</Menu.Item>}
                             {isAdmin() && s.isActive && <Menu.Item leftSection={<ListChecks size={13} />} onClick={() => { setTemplateShift(s); setAssignedTemplate(s.qualityCycleTemplateId ?? null); setTemplateError(''); }}>Checklist template</Menu.Item>}
@@ -895,26 +912,35 @@ export default function ShiftsAdminPage() {
         const title = propertyById[drawerShift.branchId] ? [propertyById[drawerShift.branchId].street?.trim(), [propertyById[drawerShift.branchId].postalCode?.trim(), propertyById[drawerShift.branchId].city?.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') || drawerShift.name : drawerShift.name;
         return (
           <>
-            <div className="fixed inset-0 z-[399] bg-accent-950/40" aria-hidden onClick={() => void toggleExpanded(drawerShift)} />
-            <aside role="dialog" aria-modal="true" aria-label={`Visits of ${drawerShift.name}`} data-testid="row-visits" className="fixed inset-y-0 right-0 z-[400] flex w-full max-w-[560px] flex-col gap-4 overflow-y-auto bg-white p-6 shadow-2xl">
+            <div className="fixed inset-0 z-[190] bg-accent-950/40" aria-hidden onClick={() => void toggleExpanded(drawerShift)} />
+            <aside role="dialog" aria-modal="true" aria-label={`Visits of ${drawerShift.name}`} data-testid="row-visits" className="fixed inset-y-0 right-0 z-[191] flex w-full max-w-[560px] flex-col gap-4 overflow-y-auto bg-white p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-bold text-accent-950">{title}</h2>
-                  <p className="text-sm text-gray-600">{drawerShift.name}</p>
+                  <p className="text-sm text-gray-600">{companyChoices.find(c => c.value === drawerShift.companyId)?.label ?? ''}</p>
+                  <p className="text-sm text-gray-600">{scheduleLabel(drawerShift)}</p>
                 </div>
-                <DsButton variant="ghost" aria-label="Close visits" onClick={() => void toggleExpanded(drawerShift)}>×</DsButton>
+                <div className="flex items-center gap-2">
+                  {drawerShift.isActive && <Button onClick={() => { if (drawerShift.isBranchMain) setVisitDialog({ preset: { companyId: drawerShift.companyId, branchId: drawerShift.branchId, propertyName: drawerShift.name } }); else { void openOccurrences(drawerShift); openOccurrenceEditor(undefined, '4', drawerShift); } }}>Add visit</Button>}
+                  <DsButton variant="ghost" aria-label="Close visits" disabled={occurrenceSaving} onClick={() => { if (!occurrenceSaving) void toggleExpanded(drawerShift); }}>×</DsButton>
+                </div>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2 font-semibold text-accent-950">Visits {!expandedLoading && <Badge variant="subtle">{expandedVisits.length}</Badge>}</span>
+                <strong className="text-accent-950">{monthLabelOf(expandedMonth)}</strong>
                 <select aria-label="Month" value={expandedMonth} onChange={(e) => changeExpandedMonth(e.currentTarget.value)}
                   className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
-                  {monthChoices().map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+                  {panelMonthChoices().map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
                 </select>
               </div>
-              {expandedLoading && <p className="text-sm text-gray-500">Loading visits…</p>}
-              {expandedError && <p role="alert" className="text-sm text-red-600">{expandedError}</p>}
-              {!expandedLoading && !expandedError && expandedVisits.length === 0 && <p className="text-sm text-gray-500">No visits in this month.</p>}
-              {expandedVisits.length > 0 && (
+              <div role="group" aria-label="Show visits" className="flex flex-wrap gap-2">
+                {VISIT_FILTERS.map(([key, label]) => (
+                  <Button key={key} size="xs" variant={expandedFilter === key ? 'filled' : 'light'} aria-pressed={expandedFilter === key} onClick={() => setExpandedFilter(key)}>{label}</Button>
+                ))}
+              </div>
+              {occurrenceLoading && <p className="text-sm text-gray-500">Loading visits…</p>}
+              {occurrenceError && <p role="alert" className="text-sm text-red-600">{occurrenceError}</p>}
+              {!occurrenceLoading && !occurrenceError && shownVisits.length === 0 && <p className="text-sm text-gray-500">No visits match. Pick another month or status, or add a visit.</p>}
+              {shownVisits.length > 0 && (
                 <div className="overflow-x-auto rounded-xl border border-accent-100">
                   <table className="w-full text-left text-sm text-gray-900">
                     <thead className="bg-brand-500 text-accent-950">
@@ -926,10 +952,10 @@ export default function ShiftsAdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {expandedVisits.map((item) => (
+                      {shownVisits.map((item) => (
                         <tr key={item.exceptionId ?? item.startUtc} className="border-t border-accent-100 align-top">
-                          <td className="px-3 py-2"><span className="block font-semibold">{new Date(item.startUtc).toLocaleDateString(undefined, { timeZone: timeZoneId, day: 'numeric', month: 'short' })}</span><span className="block text-gray-600">{new Date(item.startUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })} to {new Date(item.endUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })}</span></td>
-                          <td className="px-3 py-2">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</td>
+                          <td className="px-3 py-2"><span className="block font-semibold">{new Date(item.startUtc).toLocaleDateString(undefined, { timeZone: timeZoneId, day: 'numeric', month: 'short' })}</span><span className="block text-gray-600">{new Date(item.startUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })} to {new Date(item.endUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })}</span>{highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <span className="block text-xs font-semibold text-orange-700">Overlapping visit</span>}</td>
+                          <td className="px-3 py-2">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Not assigned')}</td>
                           <td className="px-3 py-2 text-sm text-gray-600">{item.visitCleaningType ?? 'Normal'}</td>
                           <td className="px-3 py-2">
                             <Menu shadow="md" width={230} position="bottom-end" withinPortal>
@@ -937,11 +963,15 @@ export default function ShiftsAdminPage() {
                                 <ActionIcon variant="light" size="md" aria-label={`Actions for visit ${item.visitNumber ?? ''}`}><MoreHorizontal size={16} /></ActionIcon>
                               </Menu.Target>
                               <Menu.Dropdown>
-                                <Menu.Item disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Assign employees</Menu.Item>
+                                <Menu.Item disabled={item.canAssign === false || visitStatusOf(item) === 'completed' || visitStatusOf(item) === 'cancelled'} onClick={() => setAssigningVisit(item)}>Assign employees</Menu.Item>
+                                <Menu.Item disabled={visitStatusOf(item) !== 'scheduled'} onClick={() => openOccurrenceEditor(item, '1', drawerShift)}>Change time</Menu.Item>
                                 <Menu.Item onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Menu.Item>
-                                <Menu.Item onClick={() => openOccurrenceEditor(item, '1', drawerShift)}>Change time</Menu.Item>
-                                {!item.isCancelledManualVisit && <Menu.Item color="red" onClick={() => openCancelVisit(item)}>Cancel visit</Menu.Item>}
+                                <Menu.Item onClick={() => { setPricingShift(drawerShift); setPricingOccurrence(item); }}>Visit price</Menu.Item>
+                                {!item.isCancelledManualVisit && <Menu.Item color="red" disabled={visitStatusOf(item) === 'completed' || visitStatusOf(item) === 'ongoing'} onClick={() => { if (item.exceptionId) { openCancelVisit(item); return; } openOccurrenceEditor(item, '3', drawerShift); setOccurrenceStatus('3'); }}>Cancel visit</Menu.Item>}
                                 {item.isCancelledManualVisit && <Menu.Item onClick={() => void restoreManualVisit(item)}>Restore visit</Menu.Item>}
+                                {item.exceptionId && item.status === 4 && <Menu.Item color="red" onClick={() => void restoreOccurrence(item)}>Delete visit</Menu.Item>}
+                                {item.exceptionId && item.status !== 4 && !item.isCancelledManualVisit && <Menu.Item onClick={() => void restoreOccurrence(item)}>Restore original time</Menu.Item>}
+                                {visitStatusOf(item) !== 'scheduled' && <span className="block px-3 py-2 text-xs text-gray-500">{VISIT_NOTES[visitStatusOf(item)]}</span>}
                               </Menu.Dropdown>
                             </Menu>
                           </td>
@@ -1030,70 +1060,9 @@ export default function ShiftsAdminPage() {
         </Stack>
       </Modal>
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
-      <Modal opened={Boolean(occurrenceShift)} onClose={() => { if (occurrenceSaving) return; occurrenceGeneration.current++; setOccurrenceShift(null); setEditingOccurrence(null); }} closeButtonProps={{ disabled: occurrenceSaving }} closeOnEscape={!occurrenceSaving} closeOnClickOutside={!occurrenceSaving} title={`Visits${occurrenceShift ? ` — ${occurrenceShift.name}` : ''}`} size="xl">
-        <Stack>
-          <Text size="sm" c="dimmed">Times use the tenant time zone: {timeZoneId}. Changes apply only to the selected visit.</Text>
-          {occurrenceShift?.schedule.type === 4 && <Text size="sm">On-call shifts have no automatic visits. Schedule each visit with a date and time. Choose an employee below or assign employees to this shift.</Text>}
-          {shiftNotice && <Text role="status">{shiftNotice}</Text>}
-          <Group align="flex-end" wrap="wrap">
-            <TextInput label="From" type="date" value={occurrenceFrom} onChange={e => setOccurrenceFrom(e.target.value)} />
-            <TextInput label="To" type="date" value={occurrenceTo} onChange={e => setOccurrenceTo(e.target.value)} />
-            <Button variant="default" loading={occurrenceLoading} onClick={() => loadOccurrences()}>Load</Button>
-            {occurrenceShift?.isBranchMain
-              ? <Button onClick={() => setVisitDialog({ preset: { companyId: occurrenceShift.companyId, branchId: occurrenceShift.branchId, propertyName: occurrenceShift.name } })}>Add visit</Button>
-              : <Button onClick={() => openOccurrenceEditor(undefined, '4')}>Add visit</Button>}
-          </Group>
-          {occurrenceShift?.isBranchMain && <>
-            <Select label="Default employee" description="Each new visit is offered to this employee. Visits already added keep their employee." placeholder="None: new visits start unassigned"
-              clearable searchable value={occurrenceShift.defaultEmployeeId ?? null} onChange={value => { void saveDefaultCleaner(value); }}
-              data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
-            {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
-          </>}
-          {occurrenceError && <Text role="alert" c="red">{occurrenceError}</Text>}
-          {occurrenceLoading ? <Loader /> : occurrences.length === 0 ? <Text c="dimmed">No visits in this period.</Text> : (
-            <Table.ScrollContainer minWidth={820}><Table striped withTableBorder>
-              <Table.Thead><Table.Tr><Table.Th>Start</Table.Th><Table.Th>End</Table.Th><Table.Th>Status</Table.Th><Table.Th>Assignees</Table.Th><Table.Th>Reason</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
-              <Table.Tbody>{occurrences.map((item) => <Table.Tr key={item.exceptionId ?? item.startUtc}>
-                <Table.Td>{visitLabel(item, timeZoneId) && <Text size="sm" fw={600} data-testid="visit-name">{visitLabel(item, timeZoneId)}</Text>}
-                  {new Date(item.startUtc).toLocaleString(undefined, { timeZone: timeZoneId })}
-                  {highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <Text component="span" size="xs" c="orange" fw={600} ml={6}>Overlapping visit</Text>}</Table.Td>
-                <Table.Td>{new Date(item.endUtc).toLocaleString(undefined, { timeZone: timeZoneId })}</Table.Td>
-                <Table.Td data-testid="occurrence-status">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</Table.Td>
-                <Table.Td><Text size="sm">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Unassigned')}</Text>
-                  <Text size="xs" c="dimmed">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the employee to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No employee yet') : item.assignmentSource ?? 'Recurring'}</Text>{item.visitNumber ? <Text size="xs" c="dimmed">{item.visitCleaningType ?? 'Normal'} cleaning</Text> : null}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() ? <Text size="xs" c="orange" data-testid="past-offer-note">This visit has already ended. The employee can still accept the offer. To change the employee, delete this visit and add it again.</Text> : null}{item.assignmentLockReason && <Text size="xs" c="dimmed">{item.assignmentLockReason}</Text>}</Table.Td>
-                <Table.Td>{item.reason ?? '—'}</Table.Td>
-                <Table.Td><Group gap={4} wrap="nowrap">
-                  {item.isCancelledManualVisit ? <Button size="xs" variant="light" loading={occurrenceSaving} onClick={() => { void restoreManualVisit(item); }}>Restore</Button>
-                  : item.isPartnerBooking ? <><Text size="xs" c="dimmed">Managed under Partner requests</Text><Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button></> : <>
-                  {isAdmin() && occurrenceShift?.pricingMode !== 0 && (occurrenceShift?.pricingMode === 1 || occurrenceShift?.schedule.type === 4 || occurrenceShift?.schedule.type === 6) && <Button size="xs" variant="light" onClick={() => { setPricingShift(occurrenceShift); setPricingOccurrence(item); }}>Visit price</Button>}
-                  {occurrenceShift?.isBranchMain
-                    ? <Button size="xs" variant="light" disabled={item.canAssign === false} onClick={() => { setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change employee</Button>
-                    : <Button size="xs" variant="light" disabled={item.canAssign === false || item.status === 2 || item.status === 3} onClick={() => setAssigningVisit(item)}>Assign</Button>}
-                  {occurrenceShift?.isBranchMain && item.exceptionId && <Button size="xs" variant="light" onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Button>}
-                  <Button size="xs" variant="subtle" onClick={() => openOccurrenceEditor(item)}>Change</Button>
-                  {!item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openOccurrenceEditor(item, '2')}>Cancel</Button>}
-                  {item.status === 4 && item.exceptionId && <Button size="xs" variant="subtle" color="orange" onClick={() => openCancelVisit(item)}>Cancel</Button>}
-                  {item.exceptionId && <Button size="xs" variant="subtle" color="red" loading={occurrenceSaving} onClick={() => restoreOccurrence(item)}>{item.status === 4 ? 'Delete visit' : 'Restore'}</Button>}
-                  </>}
-                </Group></Table.Td>
-              </Table.Tr>)}</Table.Tbody>
-            </Table></Table.ScrollContainer>
-          )}
-        </Stack>
-      </Modal>
-
-      <AddVisitDialog opened={Boolean(visitDialog)} preset={visitDialog?.preset ?? null} employees={employees} timeZoneId={timeZoneId}
-        onClose={() => setVisitDialog(null)} onAdded={(visit, propertyName) => { void visitAdded(visit, propertyName); }} />
-      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title={cleanerVisit?.isPartnerBooking ? 'Cleaning type' : 'Change employee'}>
+      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title="Cleaning type">
         <Stack>
           <Text size="sm">{cleanerVisit && visitLabel(cleanerVisit, timeZoneId)}</Text>
-          {!cleanerVisit?.isPartnerBooking && <>
-          <Select label="Employee" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
-            description="The employee gets an offer and holds the visit once accepted. An employee who already holds it is released."
-            data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
-          {cleanerError && <Text role="alert" c="red">{cleanerError}</Text>}
-          <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save employee</Button></Group>
-          </>}
           <Select label="Cleaning type" allowDeselect={false} value={cleaningTypeChoice ?? cleanerVisit?.visitCleaningType ?? 'Normal'} onChange={setCleaningTypeChoice}
             description={cleaningTypeChoice === 'Deep' || (!cleaningTypeChoice && cleanerVisit?.visitCleaningType === 'Deep') ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it at any time, including after the cleaning is done.'}
             data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />
@@ -1150,7 +1119,7 @@ export default function ShiftsAdminPage() {
           }}>Save template assignment</Button>
         </Stack>
       </Modal>
-      <Modal opened={modalOpen} onClose={closeModal} title={editingShift ? 'Edit shift' : 'Add shift'} size="lg" radius="md">
+      <Modal opened={modalOpen} onClose={closeModal} title={editingShift ? 'Edit schedule' : 'New work order'} size="lg" radius="md">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">Schedule times use the tenant time zone: {timeZoneId}.</Text>
           <CompanyPicker allowInactive={false} allowedInactiveCompanyId={editingShift?.companyId} value={companyId} onChange={(v) => { setBranches([]); setCompanyId(v); setBranchId(null); setQualityCycleTemplateId(null); }} />

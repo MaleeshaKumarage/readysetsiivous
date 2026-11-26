@@ -49,7 +49,7 @@ for (const width of [1280, 390]) test(`admin shift lifecycle tabs filter without
   const loads = state.loads;
   await active.focus(); await active.press('End'); await expect(inactive).toBeFocused();
   await expect(page.getByRole('cell', { name: 'Inactive shift', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'More actions for Active shift', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Actions for Active shift', exact: true })).toHaveCount(0);
   await inactive.press('Home');
   await expect(page.getByRole('textbox', { name: 'Assign employees', exact: true })).toHaveCount(0);
   expect(state.loads).toBe(loads);
@@ -67,7 +67,7 @@ test('admin creating from Inactive returns to Active and deactivation moves the 
   const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: CREATED_NAME, exact: true }) });
   await expect(row).toBeVisible(); await shiftAction(page, CREATED_NAME, 'Deactivate'); await confirmShiftPopup(page, 'Deactivate');
   await expect(row).toHaveCount(0); await page.getByRole('tab', { name: 'Inactive (2)', exact: true }).click();
-  await expect(row).toBeVisible(); await row.getByRole('button', { name: `More actions for ${CREATED_NAME}`, exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(row).toBeVisible(); await row.getByRole('button', { name: `Actions for ${CREATED_NAME}`, exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
 test('late admin assignment response is discarded when lifecycle tabs change', async ({ page }) => {

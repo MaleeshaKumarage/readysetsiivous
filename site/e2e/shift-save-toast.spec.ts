@@ -16,8 +16,8 @@ test('a refused shift save explains the fix as a toast and in the dialog, and ke
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await selectDailyScheduleIfEmpty(page);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
@@ -41,8 +41,8 @@ test('a field validation failure names the field problem instead of a generic ti
       : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await selectDailyScheduleIfEmpty(page);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
@@ -67,9 +67,9 @@ test('a refused shift update says it was not updated, keeps the edited values an
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'More actions for Morning clean' }).click();
+  await page.getByRole('button', { name: 'Actions for Morning clean' }).click();
   await page.getByRole('menuitem', { name: 'Edit schedule', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   // Edit a real field before saving, so the refused save carries a change.
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-12-01');
   await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -93,8 +93,8 @@ for (const [status, expected] of [
         : path.endsWith('/companies/company') ? { company: { id: 'company', name: 'AAA', isActive: true }, branches: [{ id: 'branch', companyId: 'company', name: 'AAA1', isActive: true }] }
         : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
     });
-    await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+    await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
     await selectDailyScheduleIfEmpty(page);
     await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
     await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();

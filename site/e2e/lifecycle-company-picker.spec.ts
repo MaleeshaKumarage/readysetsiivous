@@ -135,7 +135,7 @@ test('editing an inactive shift hydrates its current company outside the first p
   const { queries } = await setup(page, { inactiveEdit: true });
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, 'Old shift', 'Edit schedule');
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Company 125 (inactive)');
   expect(queries.filter(query => query.take === 50)).toHaveLength(0);
   await expect(dialog.getByLabel('Branch', { exact: true })).toHaveValue('Property (inactive)');
@@ -145,7 +145,7 @@ test('editing a shift can return to its original inactive company after selectin
   const { writes } = await setup(page, { inactiveEdit: true });
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, 'Old shift', 'Edit schedule');
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
   const branch = dialog.getByLabel('Branch', { exact: true });
   await expect(company).toHaveValue('Company 125 (inactive)');
@@ -201,7 +201,7 @@ test('selected-company load failure retains the edit identity and can be retried
   const { state } = await setup(page, { inactiveEdit: true }); state.failSelection = true;
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, 'Old shift', 'Edit schedule');
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(dialog.getByRole('alert').filter({ hasText: 'Your selection is kept' })).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Selected company (unavailable)');
   state.failSelection = false; await dialog.getByRole('button', { name: 'Retry selected company', exact: true }).click();

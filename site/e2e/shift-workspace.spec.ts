@@ -50,7 +50,7 @@ test('each shift row exposes one More actions menu, with details first and no se
   const row = page.getByRole('row').filter({ hasText: 'Workspace shift' }).first();
   await expect(row.getByRole('button', { name: 'Manage', exact: true })).toHaveCount(0);
   await expect(row).toBeVisible();
-  await row.getByRole('button', { name: 'More actions for Workspace shift', exact: true }).click();
+  await row.getByRole('button', { name: 'Actions for Workspace shift', exact: true }).click();
   for (const label of ['Pricing', 'Edit schedule', 'Assign employees', 'Visits', 'Checklist template', 'Deactivate']) {
     await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
   }
@@ -89,7 +89,7 @@ test('workspace Edit schedule opens the existing Edit shift dialog for that shif
   await setup(page); await page.goto('/admin/shifts/');
   await shiftAction(page, 'Workspace shift', 'Edit schedule');
   await expect(page.getByRole('dialog', { name: 'Manage — Workspace shift', exact: true })).toHaveCount(0);
-  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(edit).toBeVisible();
   // Shift names are generated from the property, so a shift opened for editing shows its name read-only.
   await expect(edit.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Workspace shift');
@@ -114,7 +114,7 @@ test('workspace Pricing opens the existing shift pricing dialog for that shift',
 test('workspace Occurrences opens the existing occurrences dialog for that shift', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
   await shiftAction(page, 'Workspace shift', 'Visits');
-  await expect(page.getByRole('dialog', { name: 'Visits — Workspace shift', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Visits of Workspace shift', exact: true })).toBeVisible();
 });
 
 test('on-call workspace explains dated visits and offers one-time scheduling', async ({ page }) => {
@@ -145,7 +145,7 @@ test('inactive shift workspace offers only reactivate and delete', async ({ page
   await expect(dialog.getByText('Next step: Admin: reactivate to schedule again, or delete if permanent removal is intended.', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Reactivate', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'More actions for Workspace paused', exact: true }).click();
+  await page.getByRole('button', { name: 'Actions for Workspace paused', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Reactivate', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Visits', exact: true })).toHaveCount(0);
@@ -185,7 +185,7 @@ test('phone-width workspace has no horizontal overflow and its actions stay insi
   await setup(page); await page.goto('/admin/shifts/');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
-  await page.getByRole('button', { name: 'More actions for Workspace shift', exact: true }).click();
+  await page.getByRole('button', { name: 'Actions for Workspace shift', exact: true }).click();
   const viewport = page.viewportSize();
   for (const label of ['Edit schedule', 'Assign employees', 'Visits', 'Pricing']) {
     const box = await page.getByRole('menuitem', { name: label, exact: true }).boundingBox();
@@ -206,7 +206,7 @@ test('editing a shift keeps its generated name read-only, and saving sends the n
   });
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Workspace shift', 'Edit schedule');
-  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   const nameField = edit.getByRole('textbox', { name: 'Name', exact: true });
   await expect(nameField).toHaveValue('Workspace shift');
   await expect(nameField).toHaveAttribute('readonly', '');

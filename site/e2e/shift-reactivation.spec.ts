@@ -17,7 +17,7 @@ test('inactive shift deletion removes the shift after confirmation without block
     return route.fulfill({ status: 200, headers, json: url.pathname.endsWith('/shifts') ? deleted ? [] : [shift]
       : url.pathname.endsWith('/companies') ? { items: [], total: 0 } : [] });
   });
-  await page.goto('/admin/shifts/'); await expect(page.getByRole('button', { name: 'More actions for Shift with recorded QC', exact: true })).toHaveCount(0);
+  await page.goto('/admin/shifts/'); await expect(page.getByRole('button', { name: 'Actions for Shift with recorded QC', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, shift.name, 'Delete');
   const popup = page.getByRole('dialog', { name: /^Delete “/ });
@@ -58,6 +58,6 @@ test('admin discovers deactivated shift, sees restore failure and reactivates it
   await expect(page.getByRole('row').filter({ hasText: 'Restorable shift' })).toHaveCount(0);
   await expect(page.getByText('No inactive shifts. Check the Active tab.')).toBeVisible();
   await page.getByRole('tab', { name: /^Active/ }).click(); await expect(page.getByRole('row').filter({ hasText: 'Restorable shift' })).toBeVisible();
-  await page.getByRole('button', { name: 'More actions for Restorable shift', exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Deactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Actions for Restorable shift', exact: true }).click(); await expect(page.getByRole('menuitem', { name: 'Deactivate', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
   expect(restores).toBe(2);
 });

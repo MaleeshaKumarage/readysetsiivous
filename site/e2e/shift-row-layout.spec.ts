@@ -1,13 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
-// Each shift row shows its property address, with size, rooms and beds as separate tags.
-// A click on the row expands the visits under it; the row's actions menu does not.
+// Each work order row shows its property address and size, and its Visits button opens the visits panel.
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const COMPANY = '11111111-1111-4111-8111-111111111111';
 const BRANCH = '33333333-3333-4333-8333-333333333333';
 
-test('shift rows show the address with size, rooms and beds as tags, and a row click expands its visits', async ({ page }, testInfo) => {
+test('work order rows show the address and size, and the Visits button opens the visits panel', async ({ page }, testInfo) => {
   await setupAdminMocks(page);
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   await page.route(/\/api\/v1\/admin\/shifts\/shift-layout\/occurrences/, route => route.fulfill({ headers, json: [
@@ -26,19 +25,17 @@ test('shift rows show the address with size, rooms and beds as tags, and a row c
   const row = page.getByRole('row').filter({ hasText: 'Lake apartment' }).or(page.getByRole('row').filter({ hasText: 'Lakeside 4' }));
   await expect(row.getByText('Lakeside 4, 00100 Helsinki', { exact: true })).toBeVisible();
   await expect(row.getByText('34 m²', { exact: true })).toBeVisible();
-  await expect(row.getByText('3 rooms', { exact: true })).toBeVisible();
-  await expect(row.getByText('5 beds', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('shift-rows.png'), fullPage: true });
 
   await expect(page.getByTestId('row-visits')).toHaveCount(0);
-  await row.getByText('Lakeside 4, 00100 Helsinki', { exact: true }).click();
+  await row.getByRole('button', { name: 'Visits', exact: true }).click();
   const visits = page.getByTestId('row-visits');
   await expect(visits).toBeVisible();
   await expect(visits.getByRole('cell', { name: 'Deep', exact: true })).toBeVisible();
-  await expect(visits.getByRole('row').filter({ hasText: 'Unassigned' })).toBeVisible();
+  await expect(visits.getByRole('row').filter({ hasText: 'Not assigned' })).toBeVisible();
   // The month list sits on the Visits header line and reloads the visits for the chosen month.
   const requests: string[] = [];
-  await page.route(/\/api\/v1\/admin\/shifts\/shift-layout\/occurrences/, route => { requests.push(route.request().url()); return route.continue(); });
+  await page.route(/\/api\/v1\/admin\/shifts\/shift-layout\/occurrences/, route => { requests.push(route.request().url()); return route.fallback(); });
   const month = visits.getByRole('combobox', { name: 'Month', exact: true });
   await expect(month).toBeVisible();
   const chosen = await month.locator('option').nth(5).getAttribute('value');
@@ -49,12 +46,12 @@ test('shift rows show the address with size, rooms and beds as tags, and a row c
   // The drawer closes from its × button and reopens from the property cell.
   await visits.getByRole('button', { name: 'Close visits', exact: true }).click();
   await expect(visits).toHaveCount(0);
-  await row.getByText('Lakeside 4, 00100 Helsinki', { exact: true }).click();
+  await row.getByRole('button', { name: 'Visits', exact: true }).click();
   await expect(visits.getByRole('cell', { name: 'Deep', exact: true })).toBeVisible();
   await visits.getByRole('button', { name: 'Close visits', exact: true }).click();
   await expect(visits).toHaveCount(0);
 
-  await row.getByRole('button', { name: /^More actions for / }).click();
+  await row.getByRole('button', { name: /^Actions for / }).click();
   await expect(page.getByRole('menuitem', { name: 'View details', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByTestId('row-visits')).toHaveCount(0);
@@ -78,7 +75,7 @@ test('the expanded visits stay readable when the device is in dark mode', async 
   } }));
   await page.goto('/admin/shifts/');
   const row = page.getByRole('row').filter({ hasText: 'Lake apartment' }).or(page.getByRole('row').filter({ hasText: 'Lakeside 4' }));
-  await row.getByText('Lakeside 4, 00100 Helsinki', { exact: true }).click();
+  await row.getByRole('button', { name: 'Visits', exact: true }).click();
   const visits = page.getByTestId('row-visits');
   await expect(visits.getByRole('cell', { name: 'Deep', exact: true })).toBeVisible();
 

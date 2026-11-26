@@ -59,7 +59,7 @@ test('assignee picker shows each employee email so similar names can be told apa
   const listed = page.waitForResponse(r => /\/api\/v1\/admin\/shifts(\/page)?(\?|$)/.test(r.url()) && r.request().method() === 'GET', { timeout: 150000 });
   await page.goto('/admin/shifts/');
   await listed;
-  await expect(page.getByRole('button', { name: /^More actions for / }).first()).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('button', { name: /^Actions for / }).first()).toBeVisible({ timeout: 30000 });
   await shiftActionAt(page, 'Assign employees', 0);
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await expect(page.getByRole('option', { name: 'Maleesha Kumarage (maleesha@hiava.fi)', exact: true })).toBeVisible();

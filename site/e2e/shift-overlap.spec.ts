@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
-import { shiftAction } from './shift-actions';
+import { shiftAction, visitActionAt } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const visitStart = '2026-11-02T06:00:00.000Z', visitEnd = '2026-11-02T08:00:00.000Z';
@@ -51,7 +51,7 @@ async function setup(page: Page, clashHolders: string[] = ['employee'], options:
 async function openAssignForMorningVisit(page: Page, reason: string) {
   await shiftAction(page, 'Morning clean', 'Visits');
   const list = page.getByRole('dialog', { name: /^Visits/ });
-  await list.getByRole('button', { name: 'Assign', exact: true }).click();
+  await visitActionAt(page, 'Assign employees');
   const editor = page.getByRole('dialog', { name: 'Assign visit', exact: true });
   await editor.getByRole('textbox', { name: /^Employees/ }).click();
   await page.getByRole('option', { name: 'Test Employee', exact: true }).click();
@@ -171,9 +171,9 @@ test('overlap refusal links to the clashing shift, whose visit list opens with t
   await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
   // The assignment dialog closes and the clashing shift's visits open in its place.
   await expect(editor).toHaveCount(0);
-  const list = page.getByRole('dialog', { name: 'Visits — Evening deep clean', exact: true });
+  const list = page.getByRole('dialog', { name: 'Visits of Evening deep clean', exact: true });
   await expect(list).toBeVisible();
-  await expect(list.getByText('Showing Evening deep clean. The overlapping visit is marked below.')).toBeVisible();
+  await expect(page.getByText('Showing Evening deep clean. The overlapping visit is marked below.')).toBeVisible();
   // The requested range always includes the overlapping visit, even when it falls outside the default 31-day window.
   const range = new URL((await occurrenceRequest).url()).searchParams;
   expect(Date.parse(range.get('from') ?? '')).toBeLessThanOrEqual(Date.parse(clashStart));
@@ -182,7 +182,7 @@ test('overlap refusal links to the clashing shift, whose visit list opens with t
   // Only the overlapping row is marked, and its own Assign action is the one that is reachable there.
   await expect(list.getByText('Overlapping visit', { exact: true })).toHaveCount(1);
   const clashRow = list.getByRole('row').filter({ hasText: 'Overlapping visit' });
-  await expect(clashRow.getByRole('button', { name: 'Assign', exact: true })).toBeVisible();
+  await expect(clashRow.getByRole('button', { name: /^Actions for visit/ })).toBeVisible();
 });
 
 test('the clashing-shift link is also offered when the save itself is refused for the overlap', async ({ page }) => {
@@ -205,7 +205,7 @@ test('the clashing-shift link is also offered when the save itself is refused fo
   await expect(editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: 'View Evening deep clean visits', exact: true }).click();
   await expect(editor).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: 'Visits — Evening deep clean', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Visits of Evening deep clean', exact: true })).toBeVisible();
 });
 
 test('when the clashing shift cannot be loaded, the assignment stays open with the employee and reason kept', async ({ page }) => {
@@ -220,5 +220,5 @@ test('when the clashing shift cannot be loaded, the assignment stays open with t
   await expect(editor.getByText('Overlaps Evening deep clean')).toBeVisible();
   await expect(editor.getByRole('button', { name: 'Remove from Evening deep clean and assign here' })).toBeVisible();
   await expect(editor.getByLabel('Assignment reason')).toHaveValue('Cover the morning visit');
-  await expect(page.getByRole('dialog', { name: /Visits — Evening deep clean/ })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: /Visits of Evening deep clean/ })).toHaveCount(0);
 });

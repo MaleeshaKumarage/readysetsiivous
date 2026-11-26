@@ -12,14 +12,14 @@ test('admin waits for valid scheduling settings before defaulting a new shift da
   await page.route(/\/api\/v1\/admin\//, route => route.fulfill({ headers, json: new URL(route.request().url()).pathname.endsWith('/companies') ? { items: [], total: 0 } : isShiftsRoute(new URL(route.request().url()).pathname) ? shiftsResponse([], route.request().url()) : [] }));
   await page.route('**/api/v1/admin/tenant', async route => { await gate; return route.fulfill({ headers, json: { timeZoneId: zone } }); });
   await page.goto('/admin/shifts/');
-  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New work order', exact: true })).toBeDisabled();
   release();
   await expect(page.getByText('Could not load scheduling time zone.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New work order', exact: true })).toBeDisabled();
   zone = 'Europe/Helsinki'; await page.reload();
-  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Add shift', exact: true }).getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveValue('');
+  await expect(page.getByRole('button', { name: 'New work order', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'New work order', exact: true }).getByRole('textbox', { name: 'Start date', exact: true })).not.toHaveValue('');
 });
 
 test('admin requires a start date, supports an open end date, and edits the range', async ({ page }) => {
@@ -39,8 +39,8 @@ test('admin requires a start date, supports an open end date, and edits the rang
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-10-18');
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('');
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
@@ -56,7 +56,7 @@ test('admin requires a start date, supports an open end date, and edits the rang
   await expect(page.getByRole('row').filter({ hasText: DATED_NAME })).toBeVisible();
   expect(writes[0].validFrom).toBe('2026-11-01'); expect(writes[0].validUntil).toBeUndefined();
   await shiftAction(page, DATED_NAME, 'Edit schedule');
-  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(edit.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue('2026-11-01');
   await edit.getByRole('textbox', { name: 'Start date', exact: true }).fill('');
   await edit.getByRole('button', { name: 'Save changes' }).click();
@@ -124,8 +124,8 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const create = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const create = page.getByRole('dialog', { name: 'New work order', exact: true });
   await create.getByLabel('Schedule', { exact: true }).click();
   // One-time is retired for new shifts: a single visit is added to the property's shift with Add visit.
   await expect(page.getByRole('option', { name: 'One-time', exact: true })).toHaveCount(0);
@@ -155,16 +155,16 @@ test('on-call shifts keep scheduling dated visits and remain available for new s
   await expect.poll(() => visitWrites.length).toBe(1);
   await expect(editor.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
   await expect(editor.locator('.mantine-Modal-close')).toBeDisabled();
-  await expect(page.getByRole('dialog', { name: /^Visits/, includeHidden: true }).locator('.mantine-Modal-close')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Close visits', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(editor).toBeVisible();
   releaseSave();
   await expect(editor).toBeHidden();
   expect(visitWrites).toEqual([{ originalStartUtc: null, startUtc: '2030-01-10T07:00:00.000Z', endUtc: '2030-01-10T09:00:00.000Z', status: 4, reason: 'Agreed one-time cleaning', employeeId: 'employee' }]);
-  await expect(list.getByText('One-time visit scheduled.', { exact: false })).toBeVisible();
+  await expect(page.getByText('One-time visit scheduled.', { exact: false })).toBeVisible();
   await expect(list.getByRole('cell', { name: 'Test Employee', exact: false })).toBeVisible();
-  await expect(list.getByLabel('From', { exact: true })).toHaveValue('2030-01-10');
-  expect(occurrenceQueries.at(-1)?.get('from')).toBe('2030-01-09T22:00:00.000Z');
+  await expect(list.getByRole('combobox', { name: 'Month', exact: true })).toHaveValue('2030-01');
+  expect(occurrenceQueries.at(-1)?.get('from')).toBe('2029-12-31T22:00:00.000Z');
   const staleResponse = page.waitForResponse(response => response.url().includes('/occurrences?') && !response.url().includes('2030-01-09'));
   releaseOldLoad(); await staleResponse;
   await page.waitForLoadState('networkidle');

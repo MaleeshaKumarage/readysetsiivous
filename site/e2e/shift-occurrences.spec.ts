@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
-import { shiftAction } from './shift-actions';
+import { shiftAction, visitActionAt } from './shift-actions';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
@@ -37,18 +37,18 @@ async function setup(page: Page) {
 test('admin moves one occurrence in tenant local time and can restore it', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await expect(list.getByText('11/2/2026, 8:00:00 AM')).toBeVisible();
-  await list.getByRole('button', { name: 'Change' }).click();
+  const list = page.getByRole('dialog', { name: /^Visits of/ });
+  await expect(list.getByRole('row')).toHaveCount(2);
+  await visitActionAt(page, 'Change time');
   const editor = page.getByRole('dialog', { name: 'Change visit' });
   await editor.getByLabel(/Start/).fill('2026-11-02T09:00');
   await editor.getByLabel(/End/).fill('2026-11-02T11:00');
   await editor.getByLabel('Reason').fill('Customer requested a later visit');
   await editor.getByRole('button', { name: 'Save visit' }).click();
-  await expect(list.getByText('Move / change time')).toBeVisible();
+  await expect(editor).toHaveCount(0);
   expect(state.writes[0]).toMatchObject({ originalStartUtc: '2026-11-02T06:00:00.000Z', startUtc: '2026-11-02T07:00:00.000Z', endUtc: '2026-11-02T09:00:00.000Z', status: 1 });
-  await list.getByRole('button', { name: 'Restore' }).click();
-  await expect(list.getByText('Scheduled')).toBeVisible();
+  await visitActionAt(page, 'Restore original time');
+  await expect.poll(() => state.deletes).toBe(1);
 });
 
 test('visit override choices exclude active partners and save only selected working staff', async ({ page }) => {
@@ -60,8 +60,8 @@ test('visit override choices exclude active partners and save only selected work
     return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Only this visit changes.' } });
   });
   await page.route(/\/occurrences(?:\?.*)?$/, route => route.fulfill({ headers, json: [{ startUtc: '2026-11-02T06:00:00.000Z', endUtc: '2026-11-02T08:00:00.000Z', assigneeIds: saved ? ['employee'] : [], rosterVersion: saved ? 'v2' : 'v1' }] }));
-  await shiftAction(page, 'Morning clean', 'Visits'); const list = page.getByRole('dialog', { name: /^Visits/ });
-  await list.getByRole('button', { name: 'Assign', exact: true }).click(); const editor = page.getByRole('dialog', { name: 'Assign visit', exact: true });
+  await shiftAction(page, 'Morning clean', 'Visits'); const list = page.getByRole('dialog', { name: /^Visits of/ });
+  await visitActionAt(page, 'Assign employees'); const editor = page.getByRole('dialog', { name: 'Assign visit', exact: true });
   await editor.getByRole('textbox', { name: /^Employees/ }).click(); await expect(page.getByRole('option', { name: 'Test Employee', exact: true })).toBeVisible(); await expect(page.getByRole('option', { name: 'Active Partner', exact: true })).toHaveCount(0);
   await page.getByRole('option', { name: 'Test Employee', exact: true }).click(); await page.keyboard.press('Escape'); await editor.getByLabel('Assignment reason').fill('Staff coverage for this visit');
   await editor.getByRole('button', { name: 'Preview assignment', exact: true }).click(); await expect(editor.getByText('Selected visit: Test Employee', { exact: true })).toBeVisible();
@@ -71,34 +71,33 @@ test('visit override choices exclude active partners and save only selected work
 
 test('admin cancellation requires a reason', async ({ page }) => {
   await setup(page); await shiftAction(page, 'Morning clean', 'Visits');
-  await page.getByRole('dialog', { name: /^Visits/ }).getByRole('button', { name: 'Cancel' }).click();
-  await page.getByRole('dialog', { name: 'Change visit' }).getByRole('button', { name: 'Save visit' }).click();
-  await expect(page.getByRole('dialog', { name: 'Change visit' }).getByRole('alert')).toHaveText('Start, end and reason are required.');
+  // A scheduled visit is cancelled through its change editor, which needs a reason.
+  await visitActionAt(page, 'Cancel visit');
+  const editor = page.getByRole('dialog', { name: 'Change visit' });
+  await editor.getByRole('button', { name: 'Save visit' }).click();
+  await expect(editor.getByRole('alert')).toHaveText('Start, end and reason are required.');
 });
 
 test('admin records a company-cancelled scheduled occurrence', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await list.getByRole('button', { name: 'Cancel' }).click();
-  const editor = page.getByRole('dialog', { name: 'Change visit' });
-  await editor.getByLabel('Action').click();
-  await page.getByRole('option', { name: 'Company cancelled' }).click();
-  await editor.getByLabel('Reason').fill('Employee unavailable');
-  await editor.getByRole('button', { name: 'Save visit' }).click();
-
+  await visitActionAt(page, 'Cancel visit');
+  const dialog = page.getByRole('dialog', { name: 'Change visit' });
+  // Cancelling a scheduled visit records it as cancelled by the company.
+  await expect(dialog.getByLabel('Action')).toHaveValue('Company cancelled');
+  await dialog.getByLabel('Reason').fill('Employee unavailable');
+  await dialog.getByRole('button', { name: 'Save visit' }).click();
+  await expect(dialog).toHaveCount(0);
   expect(state.writes[0]).toMatchObject({
     originalStartUtc: '2026-11-02T06:00:00.000Z',
     status: 3,
   });
-  await expect(list.getByText('Company cancelled')).toBeVisible();
 });
 
 test('admin adds an extra visit with a replacement employee and deletes it', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await list.getByRole('button', { name: 'Add visit' }).click();
+  await page.getByRole('dialog', { name: /^Visits of/ }).getByRole('button', { name: 'Add visit', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Change visit' });
   await editor.getByLabel(/Start/).fill('2026-11-03T09:00');
   await editor.getByLabel(/End/).fill('2026-11-03T11:00');
@@ -114,33 +113,31 @@ test('admin adds an extra visit with a replacement employee and deletes it', asy
     status: 4,
     employeeId: 'employee',
   });
-  await list.getByRole('button', { name: 'Delete visit' }).click();
-  expect(state.deletes).toBe(1);
+  await visitActionAt(page, 'Delete visit');
+  await expect.poll(() => state.deletes).toBe(1);
 });
 
-test('admin reloads occurrences for a selected date range', async ({ page }) => {
+test('changing the month reloads the visits of that month', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await expect(list.getByLabel('From')).toBeVisible();
-  // The list also loads each row's visit progress; count only the requests the Load button makes.
+  const list = page.getByRole('dialog', { name: /^Visits of/ });
+  const month = list.getByRole('combobox', { name: 'Month', exact: true });
+  // The list also loads each row's visit progress; count only the request the month change makes.
   const before = state.occurrenceQueries.length;
-  await list.getByLabel('From').fill('2026-12-01');
-  await list.getByLabel('To').fill('2026-12-31');
-  await list.getByRole('button', { name: 'Load' }).click();
+  await month.selectOption('2026-12');
   await expect.poll(() => state.occurrenceQueries.length).toBe(before + 1);
   expect(state.occurrenceQueries.at(-1)?.get('from')).toBe('2026-11-30T22:00:00.000Z');
   expect(state.occurrenceQueries.at(-1)?.get('to')).toBe('2026-12-31T21:59:59.999Z');
+  await expect(list.locator('strong', { hasText: 'December 2026' })).toBeVisible();
 });
 
 test('admin cancels occurrence editing without saving', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await list.getByRole('button', { name: 'Change' }).click();
+  await visitActionAt(page, 'Change time');
   const editor = page.getByRole('dialog', { name: 'Change visit' });
   await editor.getByLabel('Reason').fill('Do not save this');
-  await editor.getByRole('button', { name: 'Cancel' }).click();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(editor).toBeHidden();
   expect(state.writes).toHaveLength(0);
 });
@@ -154,9 +151,9 @@ for (const mode of ['Replace regular assignees', 'Add extra employees', 'Restore
       return route.fulfill({ status: 200, headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Other visits unchanged.' } });
     });
     await shiftAction(page, 'Morning clean', 'Visits');
-    const list = page.getByRole('dialog', { name: /^Visits/ });
-    await expect(list.getByRole('columnheader', { name: 'Assignees' })).toBeVisible();
-    await list.getByRole('button', { name: 'Assign', exact: true }).click();
+    const list = page.getByRole('dialog', { name: /^Visits of/ });
+    await expect(list.getByRole('columnheader', { name: 'Cleaner' })).toBeVisible();
+    await visitActionAt(page, 'Assign employees');
     const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
     await dialog.getByLabel('Assignment action').click(); await page.getByRole('option', { name: mode, exact: true }).click();
     if (!mode.startsWith('Restore')) {
@@ -180,7 +177,7 @@ test('handover previews and saves from the chosen date', async ({ page }) => {
   await setup(page); const calls: any[] = [];
   await page.route(/\/visit-assignees$/, route => { const body = route.request().postDataJSON(); calls.push(body); return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'One-off overrides remain.' } }); });
   await shiftAction(page, 'Morning clean', 'Visits');
-  await page.getByRole('dialog', { name: /^Visits/ }).getByRole('button', { name: 'Assign', exact: true }).click();
+  await visitActionAt(page, 'Assign employees');
   const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
   await dialog.getByLabel('Apply to').click(); await page.getByRole('option', { name: 'From this date onward' }).click();
   await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Employee', exact: true }).click(); await page.keyboard.press('Escape');
@@ -195,7 +192,7 @@ test('team assignment includes both selected employees in preview and request', 
   await setup(page); const calls: any[] = [];
   await page.route(/\/visit-assignees$/, route => { const body = route.request().postDataJSON(); calls.push(body); return route.fulfill({ headers, json: { employeeIds: body.employeeIds, preview: body.preview, message: 'Team cover.' } }); });
   await shiftAction(page, 'Morning clean', 'Visits');
-  await page.getByRole('dialog', { name: /^Visits/ }).getByRole('button', { name: 'Assign', exact: true }).click();
+  await visitActionAt(page, 'Assign employees');
   const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true });
   await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Test Employee', exact: true }).click();
   await dialog.getByLabel('Employees').click(); await page.getByRole('option', { name: 'Second Employee', exact: true }).click(); await page.keyboard.press('Escape');
@@ -214,18 +211,18 @@ test('assignee cells explain named, unassigned and locked work; Cancel sends no 
     { startUtc: '2026-11-04T06:00:00Z', endUtc: '2026-11-04T08:00:00Z', assigneeIds: ['employee'], assignmentSource: 'Recurring', canAssign: false, assignmentLockReason: 'Started work cannot be reassigned.' },
   ] }));
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ }); const rows = list.getByRole('row');
-  await expect(rows.nth(1).getByText('Test Employee', { exact: true })).toBeVisible();
-  await expect(rows.nth(1).getByText('Replacement', { exact: true })).toBeVisible();
-  await expect(rows.nth(2).getByText('Unassigned', { exact: true })).toBeVisible();
-  await expect(rows.nth(2).getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
-  await expect(rows.nth(3).getByRole('button', { name: 'Assign', exact: true })).toBeDisabled();
-  await expect(rows.nth(3).getByText('Started work cannot be reassigned.')).toBeVisible();
-  await rows.nth(1).getByRole('button', { name: 'Assign', exact: true }).click();
+  const list = page.getByRole('dialog', { name: /^Visits of/ }); const rows = list.getByRole('row');
+  await expect(rows.nth(1).getByRole('cell', { name: 'Test Employee', exact: true })).toBeVisible();
+  await expect(rows.nth(2).getByRole('cell', { name: 'Not assigned', exact: true })).toBeVisible();
+  // Locked work has no Assign employees action; a cancelled visit cannot be assigned either.
+  const locked = page.getByRole('dialog', { name: /^Visits of/ }).getByRole('button', { name: /^Actions for visit/ }).nth(2);
+  await locked.click();
+  await expect(page.locator(`[id="${await locked.getAttribute('aria-controls')}"]`).getByRole('menuitem', { name: 'Assign employees', exact: true })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await visitActionAt(page, 'Assign employees', 0);
   const dialog = page.getByRole('dialog', { name: 'Assign visit', exact: true }); await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).toHaveCount(0); expect(writes).toBe(0);
 });
-
 
 test('phone occurrence exceptions scroll internally and keep restore actions reachable', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 1000 });
@@ -235,59 +232,54 @@ test('phone occurrence exceptions scroll internally and keep restore actions rea
     { exceptionId: 'extra-visit', originalStartUtc: null, startUtc: '2026-11-03T07:00:00.000Z', endUtc: '2026-11-03T09:00:00.000Z', status: 4, reason: 'Requested deep clean', assigneeIds: ['employee'], rosterVersion: 'v1' },
   ] }));
   await shiftAction(page, 'Morning clean', 'Visits');
-  const dialog = page.getByRole('dialog', { name: /^Visits/ });
-  await expect(dialog.getByRole('cell', { name: 'Customer requested a later visit', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('cell', { name: 'Requested deep clean', exact: true })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: /^Visits of/ });
+  await expect(dialog.getByRole('row')).toHaveCount(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  // The nearest scrollable ancestor of a visit cell is the grid's horizontal scroller.
-  const cell = dialog.getByRole('cell', { name: 'Requested deep clean', exact: true });
-  expect(await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return true; p = p.parentElement; } return false; })).toBe(true);
-  await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) { p.scrollLeft = p.scrollWidth; return; } p = p.parentElement; } });
-  for (const name of ['Restore', 'Delete visit']) {
-    const action = dialog.getByRole('button', { name, exact: true });
-    await action.scrollIntoViewIfNeeded(); await expect(action).toBeInViewport();
-    await action.click({ trial: true });
-  }
-  expect(await cell.evaluate(el => { let p: HTMLElement | null = el.parentElement; while (p) { const o = getComputedStyle(p).overflowX; if ((o === 'auto' || o === 'scroll' || o === 'hidden') && p.scrollWidth > p.clientWidth) return p.scrollLeft; p = p.parentElement; } return 0; })).toBeGreaterThan(0);
+  // The moved visit restores its original time; the extra visit can be deleted. Both menus stay reachable on a phone.
+  const moved = dialog.getByRole('button', { name: /^Actions for visit/ }).nth(0);
+  await moved.scrollIntoViewIfNeeded(); await expect(moved).toBeInViewport();
+  await moved.click();
+  await expect(page.getByRole('menuitem', { name: 'Restore original time', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const extra = dialog.getByRole('button', { name: /^Actions for visit/ }).nth(1);
+  await extra.scrollIntoViewIfNeeded(); await expect(extra).toBeInViewport();
+  await extra.click();
+  await expect(page.getByRole('menuitem', { name: 'Delete visit', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(state.writes).toHaveLength(0); expect(state.deletes).toBe(0);
 });
 
-test('occurrences open on tenant-local today, not the browser UTC date', async ({ page }) => {
-  // 23:30 UTC on 4 Nov is already 5 Nov in Helsinki (UTC+2), so the default range must start 5 Nov local.
+test('occurrences open on the tenant-local current month, not the browser UTC date', async ({ page }) => {
+  // 23:30 UTC on 4 Nov is already 5 Nov in Helsinki (UTC+2), so the panel opens on November 2026 (tenant time).
   await page.clock.setFixedTime(new Date('2026-11-04T23:30:00Z'));
   const state = await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  // The row's visit progress also loads for the current month, so find the drawer's own request by its start.
-  await expect.poll(() => state.occurrenceQueries.some(q => q.get('from') === '2026-11-04T22:00:00.000Z')).toBe(true);
-  const first = state.occurrenceQueries.find(q => q.get('from') === '2026-11-04T22:00:00.000Z')!;
-  expect(first.get('to')).toBe('2026-12-06T21:59:59.999Z');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await expect(list.getByLabel('From')).toHaveValue('2026-11-05');
-  await expect(list.getByLabel('To')).toHaveValue('2026-12-06');
+  const list = page.getByRole('dialog', { name: /^Visits of/ });
+  await expect(list.getByRole('combobox', { name: 'Month', exact: true })).toHaveValue('2026-11');
+  await expect.poll(() => state.occurrenceQueries.some(q => q.get('from') === '2026-10-31T22:00:00.000Z')).toBe(true);
+  const first = state.occurrenceQueries.find(q => q.get('from') === '2026-10-31T22:00:00.000Z')!;
+  expect(first.get('to')).toBe('2026-11-30T21:59:59.999Z');
 });
 
-test('reopening occurrences for the same shift keeps the range the admin chose', async ({ page }) => {
+test('reopening occurrences for the same shift keeps the month the admin chose', async ({ page }) => {
   await setup(page);
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await list.getByLabel('From').fill('2026-12-01');
-  await list.getByLabel('To').fill('2026-12-31');
-  await list.getByRole('button', { name: 'Load' }).click();
-  await page.keyboard.press('Escape');
+  const list = page.getByRole('dialog', { name: /^Visits of/ });
+  await list.getByRole('combobox', { name: 'Month', exact: true }).selectOption('2026-12');
+  await list.getByRole('button', { name: 'Close visits', exact: true }).click();
   await expect(list).toHaveCount(0);
-  // Reopening the same shift keeps the chosen range; the default range resets only for a different shift.
+  // Reopening the same shift keeps the chosen month; a different shift starts on the current month.
   await shiftAction(page, 'Morning clean', 'Visits');
-  const reopened = page.getByRole('dialog', { name: /^Visits/ });
+  const reopened = page.getByRole('dialog', { name: /^Visits of/ });
   await expect(reopened).toBeVisible();
-  await expect(reopened.getByLabel('From')).toHaveValue('2026-12-01');
-  await expect(reopened.getByLabel('To')).toHaveValue('2026-12-31');
+  await expect(reopened.getByRole('combobox', { name: 'Month', exact: true })).toHaveValue('2026-12');
 });
 
-test('a different shift resets the occurrence range to the defaults', async ({ page }) => {
+test('a different shift starts on the current month', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-11-04T23:30:00Z'));
   await setup(page);
-  // Add a second shift to the list so the range can be compared across shifts.
+  // Add a second shift to the list so the month can be compared across shifts.
   await page.route(/\/api\/v1\/admin\/shifts(?:\/page)?(?:\?|$)/, route => {
     if (route.request().method() !== 'GET') return route.fallback();
     const second = { id: 'evening', name: 'Evening clean', companyId: 'company', branchId: 'branch', isActive: true, schedule: { type: 0, dailyStart: '16:00', dailyEnd: '18:00' } };
@@ -297,13 +289,11 @@ test('a different shift resets the occurrence range to the defaults', async ({ p
   });
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Morning clean', 'Visits');
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await list.getByLabel('From').fill('2026-12-01');
-  await list.getByRole('button', { name: 'Load' }).click();
-  await page.keyboard.press('Escape');
+  const list = page.getByRole('dialog', { name: /^Visits of/ });
+  await list.getByRole('combobox', { name: 'Month', exact: true }).selectOption('2026-12');
+  await list.getByRole('button', { name: 'Close visits', exact: true }).click();
   await expect(list).toHaveCount(0);
   await shiftAction(page, 'Evening clean', 'Visits');
-  const other = page.getByRole('dialog', { name: /^Visits/ });
-  await expect(other.getByLabel('From')).toHaveValue('2026-11-05');
-  await expect(other.getByLabel('To')).toHaveValue('2026-12-06');
+  const other = page.getByRole('dialog', { name: /^Visits of/ });
+  await expect(other.getByRole('combobox', { name: 'Month', exact: true })).toHaveValue('2026-11');
 });
