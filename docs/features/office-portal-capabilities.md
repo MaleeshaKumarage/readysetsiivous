@@ -16,6 +16,8 @@ Pages are documented one at a time. A page not listed yet has not been inventori
 | Partner operations | `/admin/partner-requests/` | Inventoried |
 | Quality Cycle | `/admin/quality-cycle/` | Inventoried |
 | Leads | `/admin/leads/` | Inventoried |
+| Companies | `/admin/companies/` | Inventoried |
+| Customer workspace | `/admin/companies/customer/` | Inventoried |
 
 ## Office shell (every page)
 
@@ -572,3 +574,78 @@ The title is the company name, or "New lead". Closing with unsaved changes, an u
 - The primary email becomes the company contact email. The other emails, the description and the images stay on the linked lead.
 - Shows the company name, business ID, the branches that will be created (read-only) and the primary email.
 - **Cancel** and **Confirm conversion**.
+
+## Companies
+
+Route: `/admin/companies/`. Source: `site/src/app/admin/companies/page.tsx`, `site/src/components/admin/BranchPriceHistory.tsx`, `site/src/components/QuoteRequests.tsx`. In the app a company's places are called branches; the customer workspace and the redesign call them properties.
+
+### Company list
+
+- **Add company**.
+- **Search companies**: name or business ID (searches on Enter).
+- **Active** and **Inactive** tabs with counts.
+- Table: name, business ID, contact, **Branches** (expands the company's branches), **Deactivate** or **Reactivate**, and actions: **Open** (customer workspace), **Edit**, and **Delete** (inactive companies only).
+- **Companies per page**: 25, 50 or 100; pagination with first, previous, next and last page.
+- Filter, page, page size and search are kept in the URL, so Back restores the list. `?company=<id>` opens that company with its branches expanded, even when it is on another page.
+- States: loading; "Companies could not be loaded." with **Refresh companies**; "No companies yet. Add one to get started."; "No companies match this search."; "No (active or inactive) companies."; and action errors.
+
+### Branches (expanded under a company)
+
+- **Add branch**.
+- **Active** and **Inactive** tabs with counts.
+- Each branch: name, city, price excl. VAT, a **Partner booking ready** badge (when priced), a **Quote requested** badge (a partner asked for a price), and an Inactive badge.
+- Per branch: **Edit**, **Deactivate** or **Reactivate**, and **Delete** (inactive only, after a confirmation; branches with shift or checklist history are kept).
+- States: loading, "Branches could not be loaded." with **Refresh branches**, "No branches yet.", "No (status) branches."
+
+### Add or edit company (dialog)
+
+- **Enable partner access**: partners linked to the company can see its properties and request cleanings.
+- When partner access is on: **Quality cycle** (every accepted partner request gets the quality cycle checklist), and then **Quality cycle template** (required; active, company-wide templates only).
+- **Business ID** and **Name** (both required), **Contact name**, **Contact email**, **Contact phone** and **Notes**.
+- **Cancel** and **Create company** or **Save changes**.
+
+### Add or edit branch (dialog)
+
+- **Name** (required), **Street**, **Postal code**, **City**, **Country**, **Contact email** and **Phone**.
+- **Rooms** and **Beds** (optional); **Size in m²** (needed before visits can be scheduled).
+- **Price effective from** (blank means today).
+- **Pricing basis**: Per completed visit, Fixed monthly fee or Per scheduled hour.
+- **Fixed cleaning price, excl. VAT (€)**: left blank until a quote is agreed. New requests use the new price; existing requests keep their agreed price.
+- **VAT (%)** (default 25.5) and **Estimated cleaning duration (minutes)**.
+- When editing: **Price history** with each period and its price.
+- **Cancel** and **Add branch** or **Save changes**.
+
+### Deactivating a company that still has work
+
+When a company cannot be deactivated because of its own shifts or branches, a dialog **Clear related shifts and places?** offers to clear them first:
+
+- It deletes the company's branches and shifts, unassigns every employee, removes its partner requests and voids its open invoices. Checklist submissions are kept. Paid invoices stop the clear (a credit note is needed first).
+- **Also delete this company's signed agreements** (off by default).
+- **Delete related shifts, unassign employees and clear all places**, or **Skip deletion**.
+
+### Remove company (dialog)
+
+Opens when deleting an inactive company is refused because it has records:
+
+- Tick what to remove; anything not ticked is kept:
+  - **Places (n)**: removing places also removes their shifts.
+  - **Shifts (n, m with completed checklists)**: unassigns employees.
+  - **Invoices (n, m paid)**.
+- Ticking all three also removes the company record and its signed agreements, checklist submissions and partner requests. Partner accounts are deactivated. Templates and leads are kept and unlinked.
+- Removing paid invoices needs the company name typed exactly.
+- **Remove selected** and **Cancel**.
+
+## Customer workspace
+
+Route: `/admin/companies/customer/?id=<company>&section=<tab>`. Source: `site/src/app/admin/companies/customer/page.tsx`. Opened with **Open** in the company list.
+
+- **Back to customers** (returns to the list with the same filter, page and search).
+- Header: company name, business ID, an Active or Inactive badge, and a Partner access badge.
+- Tabs, kept in the URL so Back and Forward work:
+  - **Overview**: contact (name, email, phone), partner access, number of active and inactive properties, and **Edit in companies list**.
+  - **Properties**: each property with city and an Inactive badge, and **Manage properties** (to the company list).
+  - **Agreements**: title, code, signed and total signers, and status. **New agreement** opens the agreements page for this company.
+  - **Work**: the customer's shifts, with **Active** and **Inactive** tabs and counts. Columns: name, property, status (Completed, Active or Inactive), valid from and valid until. **Add shift** opens the shifts page for this company.
+  - **Invoices**: invoice number, issue date, due date, status and total. **Open invoices** goes to the invoices page.
+- Each tab loads when opened and has its own error and **Retry** button and empty text.
+- "Customer not found" for an unknown or unavailable company; "Customer could not be loaded." with **Retry customer**.
