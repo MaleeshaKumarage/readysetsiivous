@@ -87,8 +87,7 @@ a{color:var(--muted)}
           <span style="font-size:14px;color:var(--muted)">{{ it.reference }} · {{ it.when }}</span>
           <span style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="{{ it.stateChip }}">{{ it.state }}</span><span class="chip chip-src">{{ it.sourceLabel }}</span></span>
         </div>
-        <sc-if value="{{ it.canAssign }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-primary" onClick="{{ it.open }}" aria-label="Assign {{ it.reference }}">Assign</button></sc-if>
-        <sc-if value="{{ it.isPartner }}" hint-placeholder-val="{{ false }}"><a class="btn btn-ghost" href="Partner-operations.dc.html" aria-label="Open {{ it.reference }} in Partner operations">Open in Partner operations</a></sc-if>
+        <button type="button" class="btn btn-primary" onClick="{{ it.open }}" aria-label="{{ it.actionLabel }}">{{ it.action }}</button>
       </div>
       </sc-for>
     </div>
@@ -101,25 +100,26 @@ a{color:var(--muted)}
 </div>
 
 <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
-<aside class="drawer" role="dialog" aria-modal="true" aria-label="Assign {{ dw.reference }}">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Assign {{ dw.reference }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDrawer }}" style="min-width:44px">×</button></div>
+<aside class="drawer" role="dialog" aria-modal="true" aria-label="{{ dw.title }}">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">{{ dw.title }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDrawer }}" style="min-width:44px">×</button></div>
   <dl style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;margin:0">
     <dt style="color:var(--muted)">Customer</dt><dd style="margin:0">{{ dw.customer }}</dd>
     <dt style="color:var(--muted)">Source</dt><dd style="margin:0">{{ dw.sourceLabel }}</dd>
-    <dt style="color:var(--muted)">Start</dt><dd style="margin:0">{{ dw.when }}</dd>
     <dt style="color:var(--muted)">Status</dt><dd style="margin:0">{{ dw.state }}</dd>
+    <sc-if value="{{ dw.isPartner }}" hint-placeholder-val="{{ false }}"><dt style="color:var(--muted)">Window</dt><dd style="margin:0">{{ dw.window }}</dd><dt style="color:var(--muted)">Start</dt><dd style="margin:0">{{ dw.exact }}</dd><dt style="color:var(--muted)">Duration</dt><dd style="margin:0">{{ dw.duration }}</dd><dt style="color:var(--muted)">Cleaning type</dt><dd style="margin:0">{{ dw.type }}</dd><dt style="color:var(--muted)">Notes</dt><dd style="margin:0">{{ dw.notes }}</dd></sc-if>
+    <sc-if value="{{ dw.notPartner }}" hint-placeholder-val="{{ true }}"><dt style="color:var(--muted)">Start</dt><dd style="margin:0">{{ dw.when }}</dd></sc-if>
     <sc-if value="{{ dw.isBooking }}" hint-placeholder-val="{{ false }}"><dt style="color:var(--muted)">Contact</dt><dd style="margin:0">{{ dw.contact }}</dd><dt style="color:var(--muted)">Service</dt><dd style="margin:0">{{ dw.service }}</dd></sc-if>
   </dl>
-  <label class="field">Assignee<select class="input" onChange="{{ onPick }}"><option value="">Choose an employee</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+  <sc-if value="{{ dw.isPartner }}" hint-placeholder-val="{{ false }}"><p style="margin:0;font-size:14px;color:var(--muted)">The employee gets an offer to accept. Once accepted, the visit moves to the Scheduler. Employees with automatic acceptance take it straight away.</p></sc-if>
+  <label class="field">{{ dw.pickLabel }}<select class="input" onChange="{{ onPick }}"><option value="">Choose an employee</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+  <sc-if value="{{ dw.needsStart }}" hint-placeholder-val="{{ false }}"><label class="field">Planned start<select class="input" onChange="{{ onStart }}"><option value="">Choose a date and time</option><option value="4 Dec 2026 09:00">4 Dec 2026 09:00</option><option value="5 Dec 2026 09:00">5 Dec 2026 09:00</option><option value="5 Dec 2026 13:00">5 Dec 2026 13:00</option></select></label></sc-if>
   <sc-if value="{{ dw.hasErr }}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin:0;color:var(--gold-ink);font-weight:600">{{ dw.err }}</p></sc-if>
-  <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ assignIt }}">Assign</button><button type="button" class="btn btn-ghost" onClick="{{ closeDrawer }}">Cancel</button></div>
-  <sc-if value="{{ dw.isBooking }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ assignIt }}">{{ dw.actionLabel }}</button><button type="button" class="btn btn-ghost" onClick="{{ closeDrawer }}">Close</button></div>
   <div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)">
     <sc-if value="{{ dw.isNew }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ confirmIt }}">Confirm booking</button></sc-if>
-    <button type="button" class="btn btn-ghost" onClick="{{ askCancel }}">Cancel booking</button>
-    <sc-if value="{{ cancelAsk }}" hint-placeholder-val="{{ false }}"><div role="alertdialog" aria-label="Cancel booking?" style="padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);display:flex;flex-direction:column;gap:8px"><strong>Cancel booking {{ dw.reference }}?</strong><div style="display:flex;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ keep }}">Keep booking</button><button type="button" class="btn btn-primary" onClick="{{ cancelIt }}">Cancel booking</button></div></div></sc-if>
+    <sc-if value="{{ dw.canCancel }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ askCancel }}">{{ dw.cancelLabel }}</button></sc-if>
+    <sc-if value="{{ cancelAsk }}" hint-placeholder-val="{{ false }}"><div role="alertdialog" aria-label="{{ dw.cancelLabel }}?" style="padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);display:flex;flex-direction:column;gap:8px"><strong>{{ dw.cancelLabel }}?</strong><sc-if value="{{ dw.isPartner }}" hint-placeholder-val="{{ false }}"><label class="field">Reason, shown to the partner<input class="input" type="text" maxlength="500" onChange="{{ onReason }}"></label></sc-if><div style="display:flex;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ keep }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ cancelIt }}">{{ dw.cancelLabel }}</button></div></div></sc-if>
   </div>
-  </sc-if>
 </aside>
 </sc-if>
 </x-dc>
@@ -131,13 +131,20 @@ const ITEMS = [
   { id: 'w3', source: 'partner', customer: 'Nordea branch, Mannerheimintie', reference: 'Partner request P-311', when: '4 Dec 2026 09:00', date: '2026-12-04', state: 'Unassigned', alert: false },
   { id: 'w4', source: 'booking', customer: 'Jonas Berg', reference: 'B-1043', when: '1 Dec 2026 10:00', date: '2026-12-01', state: 'Unassigned', alert: false },
   { id: 'w5', source: 'admin', customer: 'Aurora clinic', reference: 'Töölö, move-out, visit 2', when: '1 Dec 2026 15:00', date: '2026-12-01', state: 'Unassigned', alert: false },
-  { id: 'w6', source: 'partner', customer: 'Kesko store, Kamppi', reference: 'Partner request P-314', when: '7 Dec 2026 07:00', date: '2026-12-07', state: 'Awaiting acceptance', alert: false },
+  { id: 'w6', source: 'partner', customer: 'Kesko store, Kamppi', reference: 'Partner request P-314', when: '7 Dec 2026 07:00', date: '2026-12-07', state: 'Awaiting acceptance · offered to Ville R.', alert: false },
   { id: 'w7', source: 'admin', customer: 'Virtanen Oy', reference: 'Helsinki showroom, visit 6', when: '12 Dec 2026 09:00', date: '2026-12-12', state: 'Unassigned', alert: false },
 ];
 const BOOKINGS = {
   'B-1042': { status: 'New', contact: '040 123 4567 · eeva@example.fi', service: 'Kotisiivous, 180 min' },
   'B-1043': { status: 'Confirmed', contact: '050 987 6543 · jonas@example.fi', service: 'Toimistosiivous, 240 min' },
 };
+// Partner requests are offered to an employee, who accepts; a window of several days needs a planned start first.
+const PARTNER = {
+  'Partner request P-311': { window: '4–5 Dec 2026', exact: 'Any time in the window', duration: '3 h', type: 'Normal', notes: 'Keys at reception.', multiDay: true },
+  'Partner request P-314': { window: '7 Dec 2026', exact: '07:00', duration: '2 h', type: 'Deep clean', notes: 'Store opens at 09:00.', multiDay: false },
+};
+const AUTO_ACCEPT = { 'Anna K.': true };
+const CANCEL = { booking: 'Cancel booking', partner: 'Cancel request', admin: 'Cancel visit' };
 const SOURCE = { booking: 'Public booking', partner: 'Partner portal', admin: 'Admin' };
 const PAGE_SIZE = 5;
 
@@ -159,6 +166,7 @@ class Component extends DCLogic {
     const pageItems = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     const open = st.open ? all.find(it => it.id === st.open) : null;
     const bk = open && open.source === 'booking' ? BOOKINGS[open.reference] : null;
+    const pr = open && open.source === 'partner' ? PARTNER[open.reference] : null;
     const overdue = list.filter(it => it.alert).length;
     return {
       onSource: e => this.setState({ source: e.target.value, page: 1 }),
@@ -174,28 +182,44 @@ class Component extends DCLogic {
         customer: it.customer, reference: it.reference, when: it.when, state: it.state,
         stateChip: 'chip ' + (it.alert ? 'chip-alert' : 'chip-state'),
         sourceLabel: SOURCE[it.source],
-        canAssign: it.source !== 'partner', isPartner: it.source === 'partner',
-        open: () => this.setState({ open: it.id, pick: '', err: '', cancelAsk: false }),
+        action: it.source === 'partner' ? 'Offer' : 'Assign',
+        actionLabel: (it.source === 'partner' ? 'Offer ' : 'Assign ') + it.reference,
+        open: () => this.setState({ open: it.id, pick: '', start: '', reason: '', err: '', cancelAsk: false }),
       })),
       pageText: list.length ? 'Showing ' + ((page - 1) * PAGE_SIZE + 1) + '–' + Math.min(list.length, page * PAGE_SIZE) + ' of ' + list.length : 'Showing 0 of 0',
       page: page, pageCount: pageCount, firstPage: page <= 1, lastPage: page >= pageCount,
       prevPage: () => this.setState({ page: Math.max(1, page - 1) }),
       nextPage: () => this.setState({ page: Math.min(pageCount, page + 1) }),
       drawerOpen: !!open,
-      dw: open ? { reference: open.reference, customer: open.customer, sourceLabel: SOURCE[open.source], when: open.when, state: open.state,
+      dw: open ? { title: bk ? 'Booking ' + open.reference : open.reference, customer: open.customer, sourceLabel: SOURCE[open.source], when: open.when, state: open.state,
         isBooking: !!bk, contact: bk ? bk.contact : '', service: bk ? bk.service : '', isNew: open.state === 'New booking',
+        isPartner: !!pr, notPartner: !pr, window: pr ? pr.window : '', exact: pr ? pr.exact : '', duration: pr ? pr.duration : '', type: pr ? pr.type : '', notes: pr ? pr.notes : '',
+        needsStart: !!pr && pr.multiDay, pickLabel: pr ? 'Offer to' : 'Assignee', actionLabel: pr ? 'Send offer' : 'Assign',
+        canCancel: true, cancelLabel: CANCEL[open.source],
         hasErr: !!st.err, err: st.err || '' } : {},
+      onStart: e => this.setState({ start: e.target.value, err: '' }),
+      onReason: e => this.setState({ reason: e.target.value, err: '' }),
       onPick: e => this.setState({ pick: e.target.value, err: '' }),
       closeDrawer: () => this.setState({ open: null, cancelAsk: false, err: '' }),
       assignIt: () => {
         if (!st.pick) { this.setState({ err: 'Choose an employee.' }); return; }
+        const who = st.pick.replace(/\.$/, '');
+        if (pr) {
+          if (pr.multiDay && !st.start) { this.setState({ err: 'Choose the planned start inside the window.' }); return; }
+          if (AUTO_ACCEPT[st.pick]) { this.setState({ gone: { ...gone, [open.id]: true }, open: null, msg: who + ' accepts work automatically, so ' + open.reference + ' is accepted and now shows in the Scheduler.' }); return; }
+          this.setState({ states: { ...states, [open.id]: 'Awaiting acceptance · offered to ' + st.pick }, open: null, msg: 'Offer for ' + open.reference + ' sent to ' + who + '. It moves to the Scheduler when they accept.' });
+          return;
+        }
         this.setState({ gone: { ...gone, [open.id]: true }, open: null, msg: open.reference + ' is assigned to ' + st.pick + ' and now shows in the Scheduler.' });
       },
       confirmIt: () => this.setState({ states: { ...states, [open.id]: 'Unassigned' } }),
       askCancel: () => this.setState({ cancelAsk: true }),
       cancelAsk: !!st.cancelAsk,
       keep: () => this.setState({ cancelAsk: false }),
-      cancelIt: () => this.setState({ gone: { ...gone, [open.id]: true }, open: null, cancelAsk: false, msg: 'Booking ' + open.reference + ' is cancelled.' }),
+      cancelIt: () => {
+        if (pr && !(st.reason || '').trim()) { this.setState({ err: 'Enter a reason for the partner.' }); return; }
+        this.setState({ gone: { ...gone, [open.id]: true }, open: null, cancelAsk: false, msg: open.reference + ' is cancelled.' });
+      },
     };
   }
 }
