@@ -290,6 +290,7 @@ export default function ShiftsAdminPage() {
   // Add visit: null is closed; a preset fixes the property when opened from a shift.
   const [visitDialog, setVisitDialog] = useState<{ preset: { companyId: string; branchId: string; propertyName: string } | null } | null>(null);
   const [cleanerVisit, setCleanerVisit] = useState<ShiftOccurrence | null>(null);
+  const [cleanerMode, setCleanerMode] = useState<'employee' | 'type'>('type');
   const [cleanerChoice, setCleanerChoice] = useState<string | null>(null);
   const [cleaningTypeChoice, setCleaningTypeChoice] = useState<string | null>(null), [cleaningTypeSaving, setCleaningTypeSaving] = useState(false), [cleaningTypeError, setCleaningTypeError] = useState('');
   const [cleanerSaving, setCleanerSaving] = useState(false);
@@ -928,6 +929,12 @@ export default function ShiftsAdminPage() {
                   <DsButton variant="ghost" aria-label="Close visits" disabled={occurrenceSaving} onClick={() => { if (!occurrenceSaving) void toggleExpanded(drawerShift); }}>×</DsButton>
                 </div>
               </div>
+              {drawerShift.isBranchMain && <>
+                <Select label="Default employee" description="Each new visit is offered to this employee. Visits already added keep their employee." placeholder="None: new visits start unassigned"
+                  clearable searchable value={drawerShift.defaultEmployeeId ?? null} onChange={value => { void saveDefaultCleaner(value); }}
+                  data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
+                {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
+              </>}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <strong className="text-accent-950">{monthLabelOf(expandedMonth)}</strong>
                 <select aria-label="Month" value={expandedMonth} onChange={(e) => changeExpandedMonth(e.currentTarget.value)}
@@ -957,18 +964,18 @@ export default function ShiftsAdminPage() {
                     <tbody>
                       {shownVisits.map((item) => (
                         <tr key={item.exceptionId ?? item.startUtc} className="border-t border-accent-100 align-top">
-                          <td className="px-3 py-2"><span className="block font-semibold">{new Date(item.startUtc).toLocaleDateString(undefined, { timeZone: timeZoneId, day: 'numeric', month: 'short' })}</span><span className="block text-gray-600">{new Date(item.startUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })} to {new Date(item.endUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })}</span>{highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <span className="block text-xs font-semibold text-orange-700">Overlapping visit</span>}</td>
-                          <td className="px-3 py-2">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Not assigned')}</td>
-                          <td className="px-3 py-2 text-sm text-gray-600">{item.visitCleaningType ?? 'Normal'}</td>
+                          <td className="px-3 py-2">{visitLabel(item, timeZoneId) && <span data-testid="visit-name" className="mb-1 block text-sm font-semibold text-accent-950">{visitLabel(item, timeZoneId)}</span>}<span className="block font-semibold">{new Date(item.startUtc).toLocaleDateString(undefined, { timeZone: timeZoneId, day: 'numeric', month: 'short' })}</span><span className="block text-gray-600">{new Date(item.startUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })} to {new Date(item.endUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })}</span>{highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <span className="block text-xs font-semibold text-orange-700">Overlapping visit</span>}</td>
+                          <td className="px-3 py-2"><span className="block">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Not assigned')}</span><span className="block text-xs text-gray-500">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the employee to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No employee yet') : item.assignmentSource ?? 'Recurring'}</span>{item.isPartnerBooking && <span className="block text-xs text-gray-500">Managed under Partner requests</span>}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() && <span data-testid="past-offer-note" className="block text-xs text-orange-700">This visit has already ended. The employee can still accept the offer. To change the employee, delete this visit and add it again.</span>}</td>
+                          <td className="px-3 py-2 text-sm text-gray-600">{item.visitCleaningType ?? 'Normal'}<span data-testid="occurrence-status" className="block text-xs text-gray-500">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</span></td>
                           <td className="px-3 py-2">
                             <Menu shadow="md" width={230} position="bottom-end" withinPortal>
                               <Menu.Target>
                                 <ActionIcon variant="light" size="md" aria-label={`Actions for visit ${item.visitNumber ?? ''}`}><MoreHorizontal size={16} /></ActionIcon>
                               </Menu.Target>
                               <Menu.Dropdown>
-                                <Menu.Item disabled={item.canAssign === false || visitStatusOf(item) === 'completed' || visitStatusOf(item) === 'cancelled'} onClick={() => setAssigningVisit(item)}>Assign employees</Menu.Item>
+                                <Menu.Item disabled={item.canAssign === false || visitStatusOf(item) === 'completed' || visitStatusOf(item) === 'cancelled' || item.isPartnerBooking} onClick={() => { if (drawerShift.isBranchMain) { setCleanerMode('employee'); setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); } else setAssigningVisit(item); }}>Assign employees</Menu.Item>
                                 <Menu.Item disabled={visitStatusOf(item) !== 'scheduled'} onClick={() => openOccurrenceEditor(item, '1', drawerShift)}>Change time</Menu.Item>
-                                <Menu.Item onClick={() => { setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Menu.Item>
+                                <Menu.Item onClick={() => { setCleanerMode('type'); setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Menu.Item>
                                 <Menu.Item onClick={() => { setPricingShift(drawerShift); setPricingOccurrence(item); }}>Visit price</Menu.Item>
                                 {!item.isCancelledManualVisit && <Menu.Item color="red" disabled={visitStatusOf(item) === 'completed' || visitStatusOf(item) === 'ongoing'} onClick={() => { if (item.exceptionId) { openCancelVisit(item); return; } openOccurrenceEditor(item, '3', drawerShift); setOccurrenceStatus('3'); }}>Cancel visit</Menu.Item>}
                                 {item.isCancelledManualVisit && <Menu.Item onClick={() => void restoreManualVisit(item)}>Restore visit</Menu.Item>}
@@ -1065,9 +1072,16 @@ export default function ShiftsAdminPage() {
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
       <AddVisitDialog opened={Boolean(visitDialog)} preset={visitDialog?.preset ?? null} employees={employees} timeZoneId={timeZoneId}
         onClose={() => setVisitDialog(null)} onAdded={(visit, propertyName) => { void visitAdded(visit, propertyName); }} />
-      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title="Cleaning type">
+      <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving && !cleaningTypeSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving || cleaningTypeSaving }} title={cleanerMode === 'employee' ? 'Change employee' : 'Cleaning type'}>
         <Stack>
           <Text size="sm">{cleanerVisit && visitLabel(cleanerVisit, timeZoneId)}</Text>
+          {cleanerMode === 'employee' && !cleanerVisit?.isPartnerBooking && <>
+          <Select label="Employee" placeholder="Unassigned" clearable searchable value={cleanerChoice} onChange={setCleanerChoice}
+            description="The employee gets an offer and holds the visit once accepted. An employee who already holds it is released."
+            data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
+          {cleanerError && <Text role="alert" c="red">{cleanerError}</Text>}
+          <Group justify="flex-end"><Button variant="default" disabled={cleanerSaving} onClick={() => setCleanerVisit(null)}>Cancel</Button><Button loading={cleanerSaving} onClick={saveCleaner}>Save employee</Button></Group>
+          </>}
           <Select label="Cleaning type" allowDeselect={false} value={cleaningTypeChoice ?? cleanerVisit?.visitCleaningType ?? 'Normal'} onChange={setCleaningTypeChoice}
             description={cleaningTypeChoice === 'Deep' || (!cleaningTypeChoice && cleanerVisit?.visitCleaningType === 'Deep') ? `Deep cleaning adds €${DEEP_SURCHARGE_EUR} excl. VAT to this visit.` : 'Every visit starts as Normal. You can change it at any time, including after the cleaning is done.'}
             data={[{ value: 'Normal', label: 'Normal' }, { value: 'Deep', label: 'Deep' }]} />

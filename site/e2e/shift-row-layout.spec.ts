@@ -31,7 +31,7 @@ test('work order rows show the address and size, and the Visits button opens the
   await row.getByRole('button', { name: 'Visits', exact: true }).click();
   const visits = page.getByTestId('row-visits');
   await expect(visits).toBeVisible();
-  await expect(visits.getByRole('cell', { name: 'Deep', exact: true })).toBeVisible();
+  await expect(visits.getByRole('cell', { name: /^Deep/ })).toBeVisible();
   await expect(visits.getByRole('row').filter({ hasText: 'Not assigned' })).toBeVisible();
   // The month list sits on the Visits header line and reloads the visits for the chosen month.
   const requests: string[] = [];
@@ -47,7 +47,7 @@ test('work order rows show the address and size, and the Visits button opens the
   await visits.getByRole('button', { name: 'Close visits', exact: true }).click();
   await expect(visits).toHaveCount(0);
   await row.getByRole('button', { name: 'Visits', exact: true }).click();
-  await expect(visits.getByRole('cell', { name: 'Deep', exact: true })).toBeVisible();
+  await expect(visits.getByRole('cell', { name: /^Deep/ })).toBeVisible();
   await visits.getByRole('button', { name: 'Close visits', exact: true }).click();
   await expect(visits).toHaveCount(0);
 
@@ -77,11 +77,11 @@ test('the expanded visits stay readable when the device is in dark mode', async 
   const row = page.getByRole('row').filter({ hasText: 'Lake apartment' }).or(page.getByRole('row').filter({ hasText: 'Lakeside 4' }));
   await row.getByRole('button', { name: 'Visits', exact: true }).click();
   const visits = page.getByTestId('row-visits');
-  await expect(visits.getByRole('cell', { name: 'Deep', exact: true })).toBeVisible();
+  await expect(visits.getByRole('cell', { name: /^Deep/ })).toBeVisible();
 
   const colours = await page.evaluate(() => {
     const card = document.querySelector('[data-testid="row-visits"]') as HTMLElement;
-    const cell = [...document.querySelectorAll('[data-testid="row-visits"] td')].find(td => td.textContent?.trim() === 'Deep') as HTMLElement;
+    const cell = [...document.querySelectorAll('[data-testid="row-visits"] td')].find(td => td.textContent?.trim().startsWith('Deep')) as HTMLElement;
     const parse = (value: string) => value.match(/\d+/g)!.slice(0, 3).map(Number);
     const luminance = ([r, g, b]: number[]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
     return {

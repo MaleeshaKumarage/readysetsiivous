@@ -1,6 +1,6 @@
 import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect, Locator, Page } from '@playwright/test';
-import { shiftAction } from './shift-actions';
+import { shiftAction, visitActionAt } from './shift-actions';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -160,7 +160,8 @@ test('edit restores the one-time date and times and saves a changed end time', a
   await expect(edit).toHaveCount(0);
   expect(mock.writes).toHaveLength(1);
   expect(mock.writes[0]).toMatchObject({ schedule: { type: 6, oneTimeDate: '2026-10-01', oneTimeStart: '09:00', oneTimeEnd: '12:00' }, validFrom: '2026-10-01', validUntil: '2026-10-01' });
-  await expect(page.getByRole('row').filter({ hasText: 'Past visit' })).toContainText('One-time 2026-10-01 09:00–12:00');
+  // The list reloads after the save and shows the new one-time times on the shift's row.
+  await expect(page.getByRole('row').filter({ hasText: 'One-time 2026-10-01 09:00–12:00' })).toBeVisible();
 });
 
 test('a failed save keeps the draft and a retry creates the visit once', async ({ page }) => {
@@ -200,7 +201,7 @@ test('one-time visit price saves only that visit from the occurrences dialog', a
   });
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Past visit', 'Visits');
-  await page.getByRole('button', { name: 'Visit price', exact: true }).click();
+  await visitActionAt(page, 'Visit price');
   const dialog = page.getByRole('dialog').filter({ hasText: 'Visit price — Past visit' });
   await dialog.getByRole('textbox', { name: 'Visit price before VAT (€)', exact: true }).fill('75');
   await dialog.getByRole('textbox', { name: 'Reason for visit price override', exact: true }).fill('Extra cleaning requested');

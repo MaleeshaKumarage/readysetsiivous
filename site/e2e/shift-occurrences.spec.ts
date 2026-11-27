@@ -212,8 +212,8 @@ test('assignee cells explain named, unassigned and locked work; Cancel sends no 
   ] }));
   await shiftAction(page, 'Morning clean', 'Visits');
   const list = page.getByRole('dialog', { name: /^Visits of/ }); const rows = list.getByRole('row');
-  await expect(rows.nth(1).getByRole('cell', { name: 'Test Employee', exact: true })).toBeVisible();
-  await expect(rows.nth(2).getByRole('cell', { name: 'Not assigned', exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByRole('cell').filter({ hasText: 'Test Employee' })).toBeVisible();
+  await expect(rows.nth(2).getByRole('cell').filter({ hasText: 'Not assigned' })).toBeVisible();
   // Locked work has no Assign employees action; a cancelled visit cannot be assigned either.
   const locked = page.getByRole('dialog', { name: /^Visits of/ }).getByRole('button', { name: /^Actions for visit/ }).nth(2);
   await locked.click();
