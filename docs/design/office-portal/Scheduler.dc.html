@@ -111,8 +111,8 @@ a{color:var(--muted)}
 
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
       <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
-      <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
       <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
+      <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
       <div class="seg" role="group" aria-label="View" style="margin-left:8px">
         <button type="button" aria-pressed="{{ isDay }}" onClick="{{ showDay }}">Day</button>
         <button type="button" aria-pressed="{{ isWeek }}" onClick="{{ showWeek }}">Week</button>
