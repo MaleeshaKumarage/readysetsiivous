@@ -73,7 +73,8 @@ a{color:var(--muted)}
 .dlg-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
 .colhead{position:sticky;top:0;z-index:2}
-.blk .tag{align-self:flex-start;margin-top:4px;padding:2px 8px;border-radius:999px;background:var(--gold);color:var(--ink);font-style:normal;font-size:12px;font-weight:700}
+.blk .tag{align-self:flex-start;margin-top:4px;padding:2px 8px;border-radius:999px;background:var(--gold-wash);color:var(--gold-ink);border:1px solid var(--gold);font-style:normal;font-size:12px;font-weight:700}
+.blk .tag span{color:inherit;display:inline;font-size:inherit}
 .gutter span:first-child{transform:none}
 .blk{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
 .seg button{min-height:36px}
@@ -114,16 +115,18 @@ a{color:var(--muted)}
       <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
       <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
       <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
-      <div class="seg" role="group" aria-label="View" style="margin-left:8px">
-        <button type="button" aria-pressed="{{ isDay }}" onClick="{{ showDay }}">Day</button>
-        <button type="button" aria-pressed="{{ isWeek }}" onClick="{{ showWeek }}">Week</button>
+      <div style="margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+        <sc-if value="{{ isDay }}" hint-placeholder-val="{{ true }}">
+        <label class="field">Employees<select class="input" onChange="{{ onEmpPick }}"><option value="all">All employees</option><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
+        </sc-if>
+        <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+        <label class="field">Employee<select class="input" onChange="{{ onWeekEmployee }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
+        </sc-if>
+        <div class="seg" role="group" aria-label="View">
+          <button type="button" aria-pressed="{{ isDay }}" onClick="{{ showDay }}">Day</button>
+          <button type="button" aria-pressed="{{ isWeek }}" onClick="{{ showWeek }}">Week</button>
+        </div>
       </div>
-      <sc-if value="{{ isDay }}" hint-placeholder-val="{{ true }}">
-      <label class="field">Employees<select class="input" onChange="{{ onEmpPick }}"><option value="all">All employees</option><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
-      </sc-if>
-      <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
-      <label class="field">Employee<select class="input" onChange="{{ onWeekEmployee }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
-      </sc-if>
     </div>
 
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
