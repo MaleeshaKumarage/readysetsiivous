@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Services the cleaning company offers on its website and in bookings, with names in three languages, price and duration.">
+<title>Services</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+textarea.input{padding:8px 12px;min-height:88px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:720px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.step{display:flex;align-items:center;gap:8px}
+.step span{min-width:96px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+.dlg{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg>section{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);max-height:92%;overflow:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:960px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Shift-calendar.dc.html">Work order calendar</a>
+    <a href="Employee-schedule.dc.html">Employee schedule</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html" aria-current="page">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Services</h1><p style="margin:4px 0 0" class="sub">What customers can book on the website.</p></div>
+      <button type="button" class="btn btn-primary" onClick="{{ addService }}">Add service</button>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+    <div class="seg" role="tablist" aria-label="Service activity"><button type="button" role="tab" aria-pressed="{{ tActive }}" aria-selected="{{ tActive }}" onClick="{{ showActive }}">Active {{ nActive }}</button><button type="button" role="tab" aria-pressed="{{ tInactive }}" aria-selected="{{ tInactive }}" onClick="{{ showInactive }}">Inactive {{ nInactive }}</button></div>
+    <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">{{ emptyText }}</p></sc-if>
+    <div class="tablebox" role="region" aria-label="Services" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Name</th><th scope="col" class="num">Price excl. VAT</th><th scope="col" class="num">Duration</th><th scope="col">Status</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="s" hint-placeholder-count="4">
+          <tr><td><strong>{{ s.name }}</strong><div class="sub">{{ s.other }}</div></td><td class="num">{{ s.price }}</td><td class="num">{{ s.dur }}</td><td><span class="chip">{{ s.status }}</span></td>
+            <td><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ s.edit }}">Edit</button><button type="button" class="btn btn-ghost" onClick="{{ s.toggle }}">{{ s.toggleLabel }}</button><sc-if value="{{ s.inactive }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ s.del }}">Delete</button></sc-if></div></td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<sc-if value="{{ formOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ formTitle }}">
+  <section style="width:min(640px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ formTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeForm }}" style="min-width:44px">×</button></div>
+    <label class="field">Web address name (required)<input class="input" type="text" value="{{ f.slug }}" placeholder="for example office-cleaning" onChange="{{ onSlug }}"><span class="sub">Used in the service’s link on the website.</span></label>
+    <div class="seg" role="tablist" aria-label="Language"><sc-for list="{{ langs }}" as="l" hint-placeholder-count="3"><button type="button" role="tab" aria-pressed="{{ l.on }}" aria-selected="{{ l.on }}" onClick="{{ l.go }}">{{ l.label }}</button></sc-for></div>
+    <label class="field">Name in {{ langName }}{{ reqText }}<input class="input" type="text" value="{{ nameVal }}" onChange="{{ onName }}"></label>
+    <label class="field">Description in {{ langName }}<textarea class="input">{{ descVal }}</textarea></label>
+    <div class="grid2">
+      <div class="field"><span>Price excl. VAT</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Lower price by 5 euros" onClick="{{ priceDown }}" style="min-width:44px">−</button><span>{{ priceText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise price by 5 euros" onClick="{{ priceUp }}" style="min-width:44px">+</button></div><span class="sub">VAT is added on the invoice.</span></div>
+      <div class="field"><span>Duration</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="15 minutes less" onClick="{{ durDown }}" style="min-width:44px">−</button><span>{{ durText }}</span><button type="button" class="btn btn-ghost" aria-label="15 minutes more" onClick="{{ durUp }}" style="min-width:44px">+</button></div></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeForm }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveForm }}">{{ saveLabel }}</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Delete service" style="z-index:60">
+  <section style="width:min(440px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Delete service?</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeConfirm }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">Permanently delete the inactive service “{{ confirmName }}”? Services used by bookings are kept.</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeConfirm }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ doConfirm }}">Delete</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
+const SERVICES = [
+  { id: 's1', slug: 'toimistosiivous', fi: 'Toimistosiivous', en: 'Office cleaning', sv: 'Kontorsstädning', price: 145, dur: 180, active: true },
+  { id: 's2', slug: 'kotisiivous', fi: 'Kotisiivous', en: 'Home cleaning', sv: 'Hemstädning', price: 89, dur: 120, active: true },
+  { id: 's3', slug: 'muuttosiivous', fi: 'Muuttosiivous', en: 'Move-out cleaning', sv: 'Flyttstädning', price: 260, dur: 300, active: true },
+  { id: 's4', slug: 'ikkunanpesu', fi: 'Ikkunanpesu', en: 'Window cleaning', sv: '', price: 70, dur: 90, active: false },
+];
+const LANGS = [['fi', 'Finnish'], ['en', 'English'], ['sv', 'Swedish']];
+const mins = m => (m >= 60 ? Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min');
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  all() { return this.st().services || SERVICES; }
+  renderVals() {
+    const st = this.st();
+    const all = this.all();
+    const tab = st.tab || 'active';
+    const rows = all.filter(s => (tab === 'active' ? s.active : !s.active));
+    const f = st.form || null;
+    const lang = st.lang || 'fi';
+    const setF = ch => this.setState({ form: { ...f, ...ch } });
+    const del = st.del ? all.find(s => s.id === st.del) : null;
+    return {
+      addService: () => this.setState({ form: { id: null, slug: '', fi: '', en: '', sv: '', price: 0, dur: 120 }, lang: 'fi' }),
+      hasMsg: !!st.msg, msg: st.msg || '',
+      tActive: tab === 'active', tInactive: tab === 'inactive',
+      nActive: all.filter(s => s.active).length, nInactive: all.filter(s => !s.active).length,
+      showActive: () => this.setState({ tab: 'active' }), showInactive: () => this.setState({ tab: 'inactive' }),
+      listEmpty: rows.length === 0, emptyText: all.length ? 'No ' + tab + ' services.' : 'No services yet.',
+      rows: rows.map(s => ({ name: s.fi || s.en, other: [s.en, s.sv].filter(Boolean).join(' · '), price: '€' + s.price.toFixed(2), dur: mins(s.dur), status: s.active ? 'Active' : 'Inactive', inactive: !s.active,
+        edit: () => this.setState({ form: { ...s }, lang: 'fi' }),
+        toggleLabel: s.active ? 'Deactivate' : 'Reactivate',
+        toggle: () => this.setState({ services: all.map(x => (x.id === s.id ? { ...x, active: !x.active } : x)), msg: (s.fi || s.en) + (s.active ? ' deactivated.' : ' reactivated.') }),
+        del: () => this.setState({ del: s.id }) })),
+      formOpen: !!f, formTitle: f && f.id ? 'Edit service' : 'Add service', saveLabel: f && f.id ? 'Save changes' : 'Create service',
+      f: f || { slug: '' }, onSlug: e => setF({ slug: e.target.value }),
+      langs: LANGS.map(([k, l]) => ({ label: l, on: lang === k, go: () => this.setState({ lang: k }) })),
+      langName: LANGS.find(x => x[0] === lang)[1], reqText: lang === 'fi' ? ' (required)' : '',
+      nameVal: f ? f[lang] : '', descVal: '',
+      onName: e => setF({ [lang]: e.target.value }),
+      priceText: f ? '€' + f.price.toFixed(2) : '', priceDown: () => setF({ price: Math.max(0, f.price - 5) }), priceUp: () => setF({ price: f.price + 5 }),
+      durText: f ? mins(f.dur) : '', durDown: () => setF({ dur: Math.max(15, f.dur - 15) }), durUp: () => setF({ dur: f.dur + 15 }),
+      closeForm: () => this.setState({ form: null }),
+      saveForm: () => {
+        if (!f.slug.trim() || !f.fi.trim()) { this.setState({ msg: 'The web address name and the Finnish name are required.' }); return; }
+        if (f.id) this.setState({ services: all.map(x => (x.id === f.id ? f : x)), form: null, msg: 'Service saved.' });
+        else this.setState({ services: all.concat([{ ...f, id: 's' + Date.now(), active: true }]), form: null, tab: 'active', msg: 'Service created.' });
+      },
+      confirmOpen: !!del, confirmName: del ? del.fi || del.en : '',
+      closeConfirm: () => this.setState({ del: null }),
+      doConfirm: () => this.setState({ services: all.filter(s => s.id !== st.del), del: null, msg: 'Service deleted.' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

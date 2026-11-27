@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Leads for the cleaning company: prospects, branches, images, voice notes, follow-ups and conversion to customers.">
+<title>Leads</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.btn-gold{border:0;background:var(--gold);color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.panel{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.card{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+textarea.input{padding:8px 12px;min-height:88px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:760px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.sub{font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.thumb{width:160px;height:112px;border-radius:12px;background:var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
+.dlg{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg>section{display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);max-height:92%;overflow:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Shift-calendar.dc.html">Work order calendar</a>
+    <a href="Employee-schedule.dc.html">Employee schedule</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html" aria-current="page">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Leads</h1><p style="margin:4px 0 0" class="sub">Prospects, their contacts and properties, and conversion to customers.</p></div>
+      <button type="button" class="btn btn-primary" onClick="{{ newLead }}">New lead</button>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <label class="field" style="flex:1 1 280px">Search leads<input class="input" type="search" placeholder="Company, business ID or email" onInput="{{ onSearch }}"></label>
+      <label class="field">Lead filter<select class="input" onChange="{{ onFilter }}"><option>Active</option><option>Inactive</option><option>Converted</option><option>New</option><option>Contacted</option><option>In discussion</option><option>Lost</option></select></label>
+    </div>
+    <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">No leads in this view.</p></sc-if>
+    <div class="tablebox" role="region" aria-label="Leads" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Company</th><th scope="col">Properties</th><th scope="col">Contact</th><th scope="col">Status</th><th scope="col">Images</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+          <tr><td><strong>{{ r.name }}</strong><div class="sub">{{ r.bid }}</div></td><td>{{ r.branches }}</td><td>{{ r.contact }}<div class="sub">{{ r.emailCount }}</div></td><td><span class="{{ r.chip }}">{{ r.status }}</span></td><td>{{ r.images }}/3</td><td><button type="button" class="btn btn-ghost" onClick="{{ r.open }}">View lead</button></td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px"><button type="button" class="btn btn-ghost" disabled>Previous</button><span class="sub">{{ pageText }}</span><button type="button" class="btn btn-ghost" disabled>Next</button></div>
+  </main>
+</div>
+
+<sc-if value="{{ leadOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ dlgTitle }}">
+  <section style="width:min(880px,100%)">
+    <div class="dlg-head"><div><strong style="font-size:20px">{{ dlgTitle }}</strong><div class="sub">{{ dlgSub }}</div></div><button type="button" class="btn btn-ghost" aria-label="Close lead" onClick="{{ closeLead }}" style="min-width:44px">×</button></div>
+    <sc-if value="{{ hasDlgMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ dlgMsg }}</div></sc-if>
+    <sc-if value="{{ isConverted }}" hint-placeholder-val="{{ false }}"><div class="card" style="background:var(--gold-wash)"><span>This lead was converted to a customer and is kept as a read-only record.</span><a class="btn btn-ghost" href="Company-detail.dc.html" style="width:fit-content">Open customer</a></div></sc-if>
+    <div class="seg" role="tablist" aria-label="Lead sections">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6"><button type="button" role="tab" aria-selected="{{ t.on }}" aria-pressed="{{ t.on }}" disabled="{{ t.off }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
+    </div>
+
+    <sc-if value="{{ tabDetails }}" hint-placeholder-val="{{ true }}">
+    <div class="grid2">
+      <label class="field">Company name (required)<input class="input" type="text" value="{{ f.name }}" readonly="{{ isConverted }}" onChange="{{ onName }}"></label>
+      <label class="field">Business ID (required to convert)<input class="input" type="text" value="{{ f.bid }}" readonly="{{ isConverted }}"></label>
+      <label class="field">Contact name<input class="input" type="text" value="{{ f.contact }}" readonly="{{ isConverted }}"></label>
+      <label class="field">Company phone<input class="input" type="tel" value="{{ f.phone }}" readonly="{{ isConverted }}"></label>
+    </div>
+    <label class="field">Contact email addresses (one per line, up to 20)<textarea class="input" readonly="{{ isConverted }}">{{ f.emails }}</textarea></label>
+    <div class="grid2">
+      <label class="field">Primary company email<select class="input" disabled="{{ isConverted }}"><option>tuomas@kivimaki.fi</option><option>office@kivimaki.fi</option></select></label>
+      <label class="field">Lead status<select class="input" disabled="{{ isConverted }}" onChange="{{ onStatus }}"><option>New</option><option>Contacted</option><option>In discussion</option><option>Lost</option></select></label>
+    </div>
+    <label class="field">Company notes<textarea class="input" readonly="{{ isConverted }}">{{ f.notes }}</textarea></label>
+    <label class="field">Description<textarea class="input" readonly="{{ isConverted }}">{{ f.desc }}</textarea></label>
+    </sc-if>
+
+    <sc-if value="{{ tabBranches }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><span class="sub">A lead can be saved and converted without a property.</span><sc-if value="{{ editable }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ addBranch }}">Add property</button></sc-if></div>
+    <sc-for list="{{ branches }}" as="b" hint-placeholder-count="2">
+    <article class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong>Property {{ b.n }}</strong><sc-if value="{{ editable }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ b.remove }}">Remove property {{ b.n }}</button></sc-if></div>
+      <div class="grid2">
+        <label class="field">Name (required)<input class="input" type="text" value="{{ b.name }}" readonly="{{ isConverted }}"></label>
+        <label class="field">Street<input class="input" type="text" value="{{ b.street }}" readonly="{{ isConverted }}"></label>
+        <label class="field">Postal code<input class="input" type="text" value="{{ b.postal }}" readonly="{{ isConverted }}"></label>
+        <label class="field">City<input class="input" type="text" value="{{ b.city }}" readonly="{{ isConverted }}"></label>
+        <label class="field">Country<input class="input" type="text" value="FI" readonly="{{ isConverted }}"></label>
+        <label class="field">Phone<input class="input" type="tel" readonly="{{ isConverted }}"></label>
+        <label class="field">Email<input class="input" type="email" readonly="{{ isConverted }}"></label>
+      </div>
+    </article>
+    </sc-for>
+    </sc-if>
+
+    <sc-if value="{{ tabImages }}" hint-placeholder-val="{{ false }}">
+    <p style="margin:0" class="sub">Images {{ imgCount }}/3. JPEG, PNG or WebP, up to 5 MiB each. Only tenant admins and managers can see them.</p>
+    <sc-if value="{{ editable }}" hint-placeholder-val="{{ true }}"><div class="seg" role="group" aria-label="Image mode"><button type="button" aria-pressed="{{ imgView }}" onClick="{{ viewImages }}">View images</button><button type="button" aria-pressed="{{ imgManage }}" onClick="{{ manageImages }}">Manage images</button></div></sc-if>
+    <sc-if value="{{ noImages }}" hint-placeholder-val="{{ false }}"><p style="margin:0">No images attached.</p></sc-if>
+    <div style="display:flex;flex-wrap:wrap;gap:12px">
+      <sc-for list="{{ images }}" as="im" hint-placeholder-count="2"><figure style="margin:0;display:flex;flex-direction:column;gap:8px"><button type="button" class="thumb" style="border:0;cursor:zoom-in" onClick="{{ im.open }}" aria-label="Open {{ im.name }}">{{ im.name }}</button><sc-if value="{{ imgManage }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ im.remove }}">Remove image</button></sc-if></figure></sc-for>
+    </div>
+    <sc-if value="{{ imgManage }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" style="width:fit-content" disabled="{{ imgFull }}" onClick="{{ addImage }}">Add images</button></sc-if>
+    </sc-if>
+
+    <sc-if value="{{ tabVoice }}" hint-placeholder-val="{{ false }}">
+    <div class="card">
+      <strong>Record a voice note</strong>
+      <span class="sub">Record, listen back, then save. Up to five minutes. Your name and the date are added automatically.</span>
+      <sc-if value="{{ recIdle }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-primary" style="width:fit-content" disabled="{{ readOnlyCollab }}" onClick="{{ startRec }}">Record voice note</button></sc-if>
+      <sc-if value="{{ recOn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px"><span role="status" style="font-variant-numeric:tabular-nums">Recording 0:42 / 5:00</span><button type="button" class="btn btn-gold" onClick="{{ stopRec }}">Stop recording</button></div></sc-if>
+      <sc-if value="{{ recPreview }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px"><span class="chip">Preview 0:42</span><button type="button" class="btn btn-primary" onClick="{{ saveRec }}">Save recording</button><button type="button" class="btn btn-ghost" onClick="{{ discardRec }}">Discard recording</button></div></sc-if>
+      <sc-if value="{{ readOnlyCollab }}" hint-placeholder-val="{{ false }}"><span class="sub">Recording is turned off for lost, inactive or converted leads.</span></sc-if>
+    </div>
+    <sc-for list="{{ voices }}" as="v" hint-placeholder-count="2">
+    <article class="card"><strong>{{ v.author }}</strong><span class="sub">{{ v.when }}</span><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ v.play }}">{{ v.playLabel }}</button><sc-if value="{{ editable }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ v.del }}">Delete voice note</button></sc-if></div></article>
+    </sc-for>
+    </sc-if>
+
+    <sc-if value="{{ tabFollow }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px"><span class="sub">Reminder emails go out at 06:00 Helsinki time. Lost, inactive or converted leads stop future reminders.</span><button type="button" class="btn btn-primary" disabled="{{ readOnlyCollab }}" onClick="{{ addFollow }}">Add follow-up</button></div>
+    <sc-for list="{{ follows }}" as="fu" hint-placeholder-count="2">
+    <article class="card">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><strong>{{ fu.reason }}</strong><span class="{{ fu.chip }}">{{ fu.state }}</span></div>
+      <span class="sub">{{ fu.rule }}</span><span class="sub">{{ fu.next }}</span><span class="sub">Set by {{ fu.author }}</span>
+      <sc-if value="{{ fu.canEdit }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ fu.edit }}">Edit follow-up</button><button type="button" class="btn btn-ghost" onClick="{{ fu.cancel }}">Cancel follow-up</button></div></sc-if>
+    </article>
+    </sc-for>
+    <sc-if value="{{ noFollows }}" hint-placeholder-val="{{ false }}"><p style="margin:0">No follow-ups yet.</p></sc-if>
+    </sc-if>
+
+    <sc-if value="{{ tabHistory }}" hint-placeholder-val="{{ false }}">
+    <p style="margin:0" class="sub">“Sent” means the email provider accepted it. “Needs review” means acceptance could not be confirmed; check before creating a new reminder.</p>
+    <sc-for list="{{ history }}" as="h" hint-placeholder-count="2">
+    <article class="card"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><strong>{{ h.to }}</strong><span class="{{ h.chip }}">{{ h.state }}</span></div><span class="sub">Scheduled {{ h.due }}</span><span class="sub">{{ h.detail }}</span></article>
+    </sc-for>
+    </sc-if>
+
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--line);padding-top:16px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <sc-if value="{{ showLifecycle }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ toggleActive }}">{{ activeLabel }}</button></sc-if>
+        <sc-if value="{{ canConvert }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-gold" onClick="{{ openConvert }}">Convert to customer</button></sc-if>
+        <sc-if value="{{ canDelete }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ askDelete }}">Delete lead</button></sc-if>
+      </div>
+      <sc-if value="{{ editable }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:8px"><sc-if value="{{ isSaved }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ reloadLead }}">Reload lead</button></sc-if><button type="button" class="btn btn-primary" onClick="{{ saveLead }}">Save lead</button></div></sc-if>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ followOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ followTitle }}" style="z-index:60">
+  <section style="width:min(520px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ followTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeFollow }}" style="min-width:44px">×</button></div>
+    <label class="field">Follow-up reason (required)<textarea class="input" maxlength="1000" onChange="{{ onReason }}">{{ fuReason }}</textarea></label>
+    <div class="field"><span>First reminder date</span><div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ dayChoices }}" as="d" hint-placeholder-count="4"><button type="button" class="btn btn-ghost" aria-pressed="{{ d.on }}" style="{{ d.style }}" onClick="{{ d.pick }}">{{ d.label }}</button></sc-for></div><span class="sub">At 06:00 Helsinki time.</span></div>
+    <label class="field">Repeat follow-up<select class="input" onChange="{{ onRepeat }}"><option>Once</option><option>Daily</option><option>Weekly</option><option>Monthly</option></select></label>
+    <sc-if value="{{ repeats }}" hint-placeholder-val="{{ false }}"><div class="grid2"><div class="field"><span>Repeat every</span><div style="display:flex;align-items:center;gap:8px"><button type="button" class="btn btn-ghost" aria-label="Fewer" onClick="{{ intervalDown }}" style="min-width:44px">−</button><span style="min-width:48px;text-align:center;font-variant-numeric:tabular-nums">{{ interval }}</span><button type="button" class="btn btn-ghost" aria-label="More" onClick="{{ intervalUp }}" style="min-width:44px">+</button></div></div><label class="field">Last reminder date (optional)<select class="input"><option>No end date</option><option>31 Dec 2026</option><option>31 Mar 2027</option></select></label></div></sc-if>
+    <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 12px;margin:0;display:flex;flex-direction:column"><legend class="sub" style="padding:0 4px">Notify tenant admins (at least one)</legend><sc-for list="{{ admins }}" as="a" hint-placeholder-count="2"><label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" checked="{{ a.on }}" onChange="{{ a.toggle }}" style="width:20px;height:20px">{{ a.label }}</label></sc-for></fieldset>
+    <button type="button" class="btn btn-ghost" style="width:fit-content" onClick="{{ reloadAdmins }}">Reload admin recipients</button>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeFollow }}">Discard follow-up</button><button type="button" class="btn btn-primary" onClick="{{ saveFollow }}">Save follow-up</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ convertOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Convert lead to customer" style="z-index:60">
+  <section style="width:min(560px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Convert lead to customer</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeConvert }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">Create a company and its properties for {{ f.name }}? Every added property is created; none is fine too.</p>
+    <p style="margin:0" class="sub">The primary email becomes the company contact email. Other emails, the description and images stay on this linked lead.</p>
+    <div class="card"><strong>{{ f.name }}</strong><span class="sub">Business ID: {{ bidText }}</span><span class="sub">Primary email: tuomas@kivimaki.fi</span><span class="sub">{{ branchCount }} properties will be created: {{ branchNames }}</span></div>
+    <sc-if value="{{ bidMissing }}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin:0;color:var(--gold-ink)">Add the business ID on the Details tab before converting.</p></sc-if>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeConvert }}">Cancel</button><button type="button" class="btn btn-primary" disabled="{{ bidMissing }}" onClick="{{ confirmConvert }}">Confirm conversion</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ confirmTitle }}" style="z-index:70">
+  <section style="width:min(440px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ confirmTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeConfirm }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">{{ confirmText }}</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeConfirm }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ doConfirm }}">{{ confirmLabel }}</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const LEADS = [
+  { id: 'l1', name: 'Kivimäki Dental Oy', bid: '3124567-8', contact: 'Tuomas Kivimäki', phone: '+358 40 123 4567', emails: ['tuomas@kivimaki.fi', 'office@kivimaki.fi'], status: 'In discussion', active: true, converted: false, notes: 'Wants evening cleaning after 18:00.', desc: 'Two clinics, about 240 m² each.', branches: [{ name: 'Kamppi clinic', street: 'Urho Kekkosen katu 4', postal: '00100', city: 'Helsinki' }, { name: 'Tapiola clinic', street: 'Tapiontori 3', postal: '02100', city: 'Espoo' }], images: ['Reception.jpg', 'Floor plan.png'] },
+  { id: 'l2', name: 'Lindholm Logistics', bid: '', contact: 'Anna Lindholm', phone: '+358 50 765 4321', emails: ['anna@lindholm.fi'], status: 'New', active: true, converted: false, notes: '', desc: '', branches: [], images: [] },
+  { id: 'l3', name: 'Puistola Day Care', bid: '2987654-3', contact: 'Mira Salo', phone: '', emails: ['mira@puistola.fi'], status: 'Lost', active: false, converted: false, notes: 'Chose another provider.', desc: '', branches: [{ name: 'Puistola', street: 'Puistolan raitti 2', postal: '00760', city: 'Helsinki' }], images: ['Playroom.jpg'] },
+  { id: 'l4', name: 'Aalto Studio Oy', bid: '3011223-4', contact: 'Ville Aalto', phone: '', emails: ['ville@aaltostudio.fi'], status: 'Contacted', active: true, converted: true, notes: '', desc: '', branches: [{ name: 'Studio', street: 'Hämeentie 31', postal: '00500', city: 'Helsinki' }], images: [] },
+];
+const VOICES = [{ id: 'v1', author: 'Satu Laine', when: '24 Nov 2026 14:05 Helsinki · 1 min 12 s' }, { id: 'v2', author: 'Jari Koski', when: '20 Nov 2026 09:40 Helsinki · 38 s' }];
+const FOLLOWS = [{ id: 'f1', reason: 'Call about the evening cleaning quote', state: 'Active', rule: 'Weekly, every 1 week · 2 admin recipients', next: 'Next: 1 Dec 2026 at 06:00 Helsinki', author: 'Satu Laine' }, { id: 'f2', reason: 'Send revised price', state: 'Completed', rule: 'Once · 1 admin recipient', next: 'No future reminder', author: 'Jari Koski' }];
+const HISTORY = [{ to: 'Satu Laine · satu@readysetsiivous.fi', state: 'Sent', due: '24 Nov 2026 06:00 Helsinki', detail: 'Sent 24 Nov 2026 06:01 · 1 attempt' }, { to: 'Jari Koski · jari@readysetsiivous.fi', state: 'Needs review', due: '24 Nov 2026 06:00 Helsinki', detail: 'The email provider did not confirm acceptance · 3 attempts' }];
+const ADMINS = [{ id: 'a1', label: 'Satu Laine (satu@readysetsiivous.fi)' }, { id: 'a2', label: 'Jari Koski (jari@readysetsiivous.fi)' }];
+const DAYS = ['Tomorrow, 27 Nov', 'Mon 30 Nov', 'Mon 7 Dec', 'Fri 1 Jan'];
+const TABS = [['details', 'Details'], ['branches', 'Properties'], ['images', 'Images'], ['voice', 'Voice notes'], ['follow', 'Follow-ups'], ['history', 'Notification history']];
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  leads() { return this.st().leads || LEADS; }
+  patch(id, ch) { return this.leads().map(l => (l.id === id ? { ...l, ...ch } : l)); }
+  renderVals() {
+    const st = this.st();
+    const leads = this.leads();
+    const filter = st.filter || 'Active';
+    const q = (st.q || '').toLowerCase();
+    const shown = leads.filter(l => {
+      const okF = filter === 'Active' ? l.active && !l.converted : filter === 'Inactive' ? !l.active : filter === 'Converted' ? l.converted : l.status === filter;
+      const okQ = !q || (l.name + ' ' + l.bid + ' ' + l.emails.join(' ')).toLowerCase().includes(q);
+      return okF && okQ;
+    });
+    const isNew = st.open === 'new';
+    const lead = isNew ? { id: 'new', name: '', bid: '', contact: '', phone: '', emails: [], status: 'New', active: true, converted: false, notes: '', desc: '', branches: st.newBranches || [], images: [] } : leads.find(l => l.id === st.open);
+    const tab = st.tab || 'details';
+    const conv = !!lead && lead.converted;
+    const editable = !!lead && !conv;
+    const collabOff = !lead || conv || !lead.active || lead.status === 'Lost';
+    const imgMode = st.imgMode || 'view';
+    const rec = st.rec || 'idle';
+    const voices = st.voices || VOICES;
+    const follows = st.follows || FOLLOWS;
+    const fu = st.fu || null;
+    const picked = fu ? fu.admins : [];
+    const cf = st.confirm || null;
+    const setLead = ch => this.setState({ leads: this.patch(lead.id, ch) });
+    return {
+      newLead: () => this.setState({ open: 'new', tab: 'details', dlgMsg: '', newBranches: [] }),
+      onSearch: e => this.setState({ q: e.target.value }),
+      onFilter: e => this.setState({ filter: e.target.value }),
+      listEmpty: shown.length === 0,
+      pageText: shown.length ? '1–' + shown.length + ' of ' + shown.length : '0 leads',
+      rows: shown.map(l => ({
+        name: l.name, bid: l.bid || 'No business ID',
+        branches: l.branches.map(b => b.name).join(', ') || 'No properties',
+        contact: l.emails[0] || l.phone || 'No contact', emailCount: l.emails.length > 1 ? l.emails.length + ' email addresses' : '',
+        status: l.converted ? 'Converted' : l.active ? l.status : 'Inactive', chip: 'chip' + (l.converted ? ' chip-gold' : ''),
+        images: l.images.length, open: () => this.setState({ open: l.id, tab: 'details', dlgMsg: '', imgMode: 'view', rec: 'idle' }),
+      })),
+      hasMsg: !!st.msg, msg: st.msg || '',
+      leadOpen: !!lead,
+      dlgTitle: lead ? (lead.name || 'New lead') : '',
+      dlgSub: lead ? (isNew ? 'Save the lead to add images, voice notes and follow-ups.' : (conv ? 'Converted' : lead.active ? 'Active lead' : 'Inactive lead') + ' · ' + lead.status) : '',
+      hasDlgMsg: !!st.dlgMsg, dlgMsg: st.dlgMsg || '',
+      closeLead: () => this.setState({ open: null, rec: 'idle' }),
+      isConverted: conv, editable: editable, isSaved: !isNew,
+      tabs: TABS.map(([k, label]) => ({ label: label, on: tab === k, off: isNew && ['images', 'voice', 'follow', 'history'].includes(k), go: () => this.setState({ tab: k }) })),
+      tabDetails: tab === 'details', tabBranches: tab === 'branches', tabImages: tab === 'images', tabVoice: tab === 'voice', tabFollow: tab === 'follow', tabHistory: tab === 'history',
+      f: lead ? { name: lead.name, bid: lead.bid, contact: lead.contact, phone: lead.phone, emails: lead.emails.join('\n'), notes: lead.notes, desc: lead.desc } : { name: '', bid: '', contact: '', phone: '', emails: '', notes: '', desc: '' },
+      onName: e => this.setState({ draftName: e.target.value }),
+      onStatus: e => this.setState({ draftStatus: e.target.value }),
+      addBranch: () => { const b = { name: '', street: '', postal: '', city: '' }; if (isNew) this.setState({ newBranches: (st.newBranches || []).concat([b]) }); else setLead({ branches: lead.branches.concat([b]) }); },
+      branches: lead ? lead.branches.map((b, i) => ({ n: i + 1, name: b.name, street: b.street, postal: b.postal, city: b.city,
+        remove: () => this.setState({ confirm: { title: 'Remove property ' + (i + 1) + '?', text: 'Remove property ' + (i + 1) + ' from this lead? Save the lead to apply this change.', label: 'Remove', kind: 'branch', idx: i } }) })) : [],
+      imgCount: lead ? lead.images.length : 0, noImages: !!lead && lead.images.length === 0, imgFull: !!lead && lead.images.length >= 3,
+      imgView: imgMode === 'view', imgManage: editable && imgMode === 'manage',
+      viewImages: () => this.setState({ imgMode: 'view' }),
+      manageImages: () => (lead.active ? this.setState({ imgMode: 'manage' }) : this.setState({ dlgMsg: 'Reactivate this lead before managing images.' })),
+      images: lead ? lead.images.map((n, i) => ({ name: n, open: () => this.setState({ dlgMsg: n + ' opens full size in a new tab. (Prototype.)' }), remove: () => this.setState({ confirm: { title: 'Remove image?', text: 'Remove ' + n + ' from this lead?', label: 'Remove image', kind: 'image', idx: i } }) })) : [],
+      addImage: () => setLead({ images: lead.images.concat(['Photo ' + (lead.images.length + 1) + '.jpg']) }),
+      recIdle: rec === 'idle', recOn: rec === 'on', recPreview: rec === 'preview', readOnlyCollab: collabOff,
+      startRec: () => this.setState({ rec: 'on' }), stopRec: () => this.setState({ rec: 'preview' }),
+      saveRec: () => this.setState({ rec: 'idle', voices: [{ id: 'v' + Date.now(), author: 'You', when: '26 Nov 2026 10:30 Helsinki · 42 s' }].concat(voices), dlgMsg: 'Voice note saved.' }),
+      discardRec: () => this.setState({ rec: 'idle' }),
+      voices: voices.map(v => ({ author: v.author, when: v.when, playLabel: st.playing === v.id ? 'Playing…' : 'Load audio', play: () => this.setState({ playing: v.id }), del: () => this.setState({ confirm: { title: 'Delete voice note?', text: 'Delete this voice note permanently?', label: 'Delete', kind: 'voice', id: v.id } }) })),
+      addFollow: () => this.setState({ fu: { id: null, reason: '', day: 0, repeat: 'Once', interval: 1, admins: [] } }),
+      noFollows: follows.length === 0,
+      follows: follows.map(x => ({ reason: x.reason, state: x.state, chip: 'chip' + (x.state === 'Active' ? ' chip-gold' : ''), rule: x.rule, next: x.next, author: x.author, canEdit: x.state === 'Active' && !collabOff,
+        edit: () => this.setState({ fu: { id: x.id, reason: x.reason, day: 1, repeat: 'Weekly', interval: 1, admins: ['a1', 'a2'] } }),
+        cancel: () => this.setState({ confirm: { title: 'Cancel follow-up?', text: 'Cancel this follow-up? A send already in progress may finish; no new sends start after this.', label: 'Cancel follow-up', kind: 'follow', id: x.id } }) })),
+      history: HISTORY.map(h => ({ to: h.to, state: h.state, chip: 'chip' + (h.state === 'Needs review' ? ' chip-gold' : ''), due: h.due, detail: h.detail })),
+      followOpen: !!fu, followTitle: fu && fu.id ? 'Edit follow-up' : 'New follow-up', fuReason: fu ? fu.reason : '',
+      onReason: e => this.setState({ fu: { ...fu, reason: e.target.value } }),
+      dayChoices: DAYS.map((d, i) => ({ label: d, on: !!fu && fu.day === i, style: fu && fu.day === i ? { background: 'var(--ink)', color: 'var(--surface)' } : {}, pick: () => this.setState({ fu: { ...fu, day: i } }) })),
+      onRepeat: e => this.setState({ fu: { ...fu, repeat: e.target.value } }),
+      repeats: !!fu && fu.repeat !== 'Once', interval: fu ? fu.interval : 1,
+      intervalDown: () => this.setState({ fu: { ...fu, interval: Math.max(1, fu.interval - 1) } }),
+      intervalUp: () => this.setState({ fu: { ...fu, interval: Math.min(365, fu.interval + 1) } }),
+      admins: ADMINS.map(a => ({ label: a.label, on: picked.includes(a.id), toggle: () => this.setState({ fu: { ...fu, admins: picked.includes(a.id) ? picked.filter(x => x !== a.id) : picked.concat([a.id]) } }) })),
+      reloadAdmins: () => this.setState({ dlgMsg: 'Admin recipients reloaded.' }),
+      closeFollow: () => this.setState({ fu: null }),
+      saveFollow: () => {
+        if (!fu.reason.trim() || !fu.admins.length) { this.setState({ dlgMsg: 'Enter a reason, a date and at least one tenant admin.', fu: null }); return; }
+        const item = { id: fu.id || 'f' + Date.now(), reason: fu.reason, state: 'Active', rule: fu.repeat + (fu.repeat === 'Once' ? '' : ', every ' + fu.interval) + ' · ' + fu.admins.length + ' admin recipient(s)', next: 'Next: ' + DAYS[fu.day] + ' at 06:00 Helsinki', author: 'You' };
+        this.setState({ follows: fu.id ? follows.map(x => (x.id === fu.id ? item : x)) : [item].concat(follows), fu: null, dlgMsg: 'Follow-up saved.' });
+      },
+      showLifecycle: !!lead && !isNew && !conv, activeLabel: lead && lead.active ? 'Deactivate' : 'Reactivate',
+      toggleActive: () => setLead({ active: !lead.active }),
+      canConvert: !!lead && !isNew && !conv && lead.active, canDelete: !!lead && !isNew && !conv && !lead.active,
+      askDelete: () => this.setState({ confirm: { title: 'Delete lead?', text: 'Permanently delete this inactive lead and its images? This cannot be undone.', label: 'Delete lead', kind: 'lead' } }),
+      reloadLead: () => this.setState({ dlgMsg: 'Lead reloaded.' }),
+      saveLead: () => {
+        if (isNew) {
+          const name = st.draftName || '';
+          if (!name.trim()) { this.setState({ dlgMsg: 'Company name is required.' }); return; }
+          const id = 'l' + Date.now();
+          this.setState({ leads: [{ id: id, name: name, bid: '', contact: '', phone: '', emails: [], status: st.draftStatus || 'New', active: true, converted: false, notes: '', desc: '', branches: st.newBranches || [], images: [] }].concat(leads), open: id, dlgMsg: 'Lead saved.', draftName: '' });
+          return;
+        }
+        setLead({ name: st.draftName || lead.name, status: st.draftStatus || lead.status });
+        this.setState({ dlgMsg: 'Lead saved.' + (lead.bid ? '' : ' Add the business ID before converting.') });
+      },
+      convertOpen: !!st.convert, openConvert: () => this.setState({ convert: true }), closeConvert: () => this.setState({ convert: false }),
+      bidMissing: !!lead && !lead.bid, bidText: lead && lead.bid ? lead.bid : 'Missing',
+      branchCount: lead ? lead.branches.length : 0, branchNames: lead ? (lead.branches.map(b => b.name).join(', ') || 'none') : '',
+      confirmConvert: () => this.setState({ leads: this.patch(lead.id, { converted: true }), convert: false, dlgMsg: 'Lead converted. The company and its properties were created.' }),
+      confirmOpen: !!cf, confirmTitle: cf ? cf.title : '', confirmText: cf ? cf.text : '', confirmLabel: cf ? cf.label : '',
+      closeConfirm: () => this.setState({ confirm: null }),
+      doConfirm: () => {
+        if (cf.kind === 'branch') { if (isNew) this.setState({ newBranches: (st.newBranches || []).filter((b, j) => j !== cf.idx), confirm: null }); else this.setState({ leads: this.patch(lead.id, { branches: lead.branches.filter((b, j) => j !== cf.idx) }), confirm: null }); }
+        else if (cf.kind === 'image') this.setState({ leads: this.patch(lead.id, { images: lead.images.filter((b, j) => j !== cf.idx) }), confirm: null, dlgMsg: 'Image removed.' });
+        else if (cf.kind === 'voice') this.setState({ voices: voices.filter(v => v.id !== cf.id), confirm: null, dlgMsg: 'Voice note deleted.' });
+        else if (cf.kind === 'follow') this.setState({ follows: follows.map(x => (x.id === cf.id ? { ...x, state: 'Cancelled' } : x)), confirm: null, dlgMsg: 'Follow-up cancelled.' });
+        else if (cf.kind === 'lead') this.setState({ leads: leads.filter(l => l.id !== lead.id), confirm: null, open: null, msg: 'Lead deleted.' });
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

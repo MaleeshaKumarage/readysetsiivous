@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="One customer of the cleaning company: overview, properties, agreements, work orders and invoices.">
+<title>Customer workspace</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line-2)}
+.tabs button{min-height:44px;padding:0 16px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.tabs button[aria-selected='true']{border-bottom-color:var(--gold);color:var(--ink);font-weight:600}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.panel{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.sub{font-size:14px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.kv div{display:flex;flex-direction:column;gap:4px;padding:12px 16px;border:1px solid var(--line);border-radius:14px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:960px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Shift-calendar.dc.html">Work order calendar</a>
+    <a href="Employee-schedule.dc.html">Employee schedule</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html" aria-current="page">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <a class="btn btn-ghost" href="Companies.dc.html" style="width:fit-content">Back to customers</a>
+    <header style="display:flex;flex-direction:column;gap:8px">
+      <h1 style="margin:0;font-size:28px;line-height:1.2">Virtanen Oy</h1>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="sub">Business ID 2345678-9</span><span class="chip">Active</span><span class="chip chip-gold">Partner access</span></div>
+    </header>
+    <div class="tabs" role="tablist" aria-label="Customer sections">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5"><button type="button" role="tab" aria-selected="{{ t.on }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
+    </div>
+
+    <sc-if value="{{ tOverview }}" hint-placeholder-val="{{ true }}">
+    <section class="panel" aria-label="Overview">
+      <div class="kv">
+        <div><span class="sub">Contact</span><strong>Päivi Virtanen</strong><span class="sub">paivi@virtanen.fi, +358 40 555 0101</span></div>
+        <div><span class="sub">Partner access</span><strong>Enabled</strong><span class="sub">Quality cycle: Weekly office cleaning</span></div>
+        <div><span class="sub">Properties</span><strong>2 active, 1 inactive</strong></div>
+      </div>
+      <a class="btn btn-ghost" href="Companies.dc.html" style="width:fit-content">Edit company</a>
+    </section>
+    </sc-if>
+
+    <sc-if value="{{ tProperties }}" hint-placeholder-val="{{ false }}">
+    <section class="panel" aria-label="Properties">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:18px">Properties</h2><a class="btn btn-ghost" href="Companies.dc.html">Manage properties</a></div>
+      <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px">
+        <li style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">Espoo head office, Espoo</li>
+        <li style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">Tampere warehouse, Tampere</li>
+        <li style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">Old Vantaa office, Vantaa <span class="chip">Inactive</span></li>
+      </ul>
+    </section>
+    </sc-if>
+
+    <sc-if value="{{ tAgreements }}" hint-placeholder-val="{{ false }}">
+    <section class="panel" aria-label="Agreements">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:18px">Agreements</h2><a class="btn btn-primary" href="Agreements.dc.html">New agreement</a></div>
+      <div class="tablebox" role="region" aria-label="Agreements table" tabindex="0"><table>
+        <thead><tr><th scope="col">Title</th><th scope="col">Code</th><th scope="col">Signers</th><th scope="col">Status</th></tr></thead>
+        <tbody><tr><td>Office cleaning 2026</td><td>AGR-0142</td><td>2 / 2</td><td><span class="chip">Signed</span></td></tr><tr><td>Warehouse add-on</td><td>AGR-0157</td><td>0 / 1</td><td><span class="chip chip-gold">Sent</span></td></tr></tbody>
+      </table></div>
+    </section>
+    </sc-if>
+
+    <sc-if value="{{ tWork }}" hint-placeholder-val="{{ false }}">
+    <section class="panel" aria-label="Work orders">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:18px">Work orders</h2><a class="btn btn-primary" href="Shifts.dc.html">Add work order</a></div>
+      <div class="seg" role="tablist" aria-label="Work order activity"><button type="button" role="tab" aria-pressed="{{ wActive }}" aria-selected="{{ wActive }}" onClick="{{ showWActive }}">Active 2</button><button type="button" role="tab" aria-pressed="{{ wInactive }}" aria-selected="{{ wInactive }}" onClick="{{ showWInactive }}">Inactive 1</button></div>
+      <div class="tablebox" role="region" aria-label="Work orders table" tabindex="0"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Property</th><th scope="col">Status</th><th scope="col">Valid from</th><th scope="col">Valid until</th></tr></thead>
+        <tbody><sc-for list="{{ work }}" as="w" hint-placeholder-count="2"><tr><td><a href="Shifts.dc.html">{{ w.name }}</a></td><td>{{ w.prop }}</td><td>{{ w.status }}</td><td>{{ w.from }}</td><td>{{ w.until }}</td></tr></sc-for></tbody>
+      </table></div>
+    </section>
+    </sc-if>
+
+    <sc-if value="{{ tInvoices }}" hint-placeholder-val="{{ false }}">
+    <section class="panel" aria-label="Invoices">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:18px">Invoices</h2><a class="btn btn-ghost" href="Invoices.dc.html">Open invoices</a></div>
+      <div class="tablebox" role="region" aria-label="Invoices table" tabindex="0"><table>
+        <thead><tr><th scope="col">Invoice</th><th scope="col">Issued</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col" style="text-align:right">Total</th></tr></thead>
+        <tbody><tr><td>2026-0311</td><td>2026-11-01</td><td>2026-11-15</td><td>Paid</td><td style="text-align:right">€1,820.00</td></tr><tr><td>2026-0342</td><td>2026-11-20</td><td>2026-12-04</td><td>Sent</td><td style="text-align:right">€1,906.25</td></tr></tbody>
+      </table></div>
+    </section>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
+const TABS = [['overview', 'Overview'], ['properties', 'Properties'], ['agreements', 'Agreements'], ['work', 'Work orders'], ['invoices', 'Invoices']];
+const WORK = [
+  { name: 'Espoo, weekly clean', prop: 'Espoo head office', status: 'Active', from: '2026-01-05', until: '2026-12-31', active: true },
+  { name: 'Tampere, monthly deep clean', prop: 'Tampere warehouse', status: 'Active', from: '2026-03-01', until: 'No end date', active: true },
+  { name: 'Vantaa, office move-out', prop: 'Old Vantaa office', status: 'Completed', from: '2026-02-10', until: '2026-02-10', active: false },
+];
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const tab = st.tab || 'overview';
+    const w = st.w || 'active';
+    return {
+      tabs: TABS.map(([k, label]) => ({ label: label, on: tab === k, go: () => this.setState({ tab: k }) })),
+      tOverview: tab === 'overview', tProperties: tab === 'properties', tAgreements: tab === 'agreements', tWork: tab === 'work', tInvoices: tab === 'invoices',
+      wActive: w === 'active', wInactive: w === 'inactive',
+      showWActive: () => this.setState({ w: 'active' }), showWInactive: () => this.setState({ w: 'inactive' }),
+      work: WORK.filter(x => (w === 'active' ? x.active : !x.active)),
+    };
+  }
+}
+</script>
+</body>
+</html>

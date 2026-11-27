@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Office portal screen for the cleaning company: work orders, visits, bookings and invoices.">
+<title>Menus and dropdowns</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--a-0d142818:#0d142818;--font:'Inter',system-ui,-apple-system,sans-serif;--gold-focus:#7d6220;--ink:#0a1741;--ink-2:#232e54;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--muted:#32406f;--surface:#fdfeff;--wash:#f3f5fa}
+html,body{overflow-x:clip}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+.btn,button{white-space:nowrap}
+button:disabled,[aria-disabled='true']{opacity:.5;cursor:not-allowed}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+a{color:var(--muted)}
+.menu{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 8px var(--a-0d142818);padding:8px;display:flex;flex-direction:column;min-width:240px}
+.menu button,.menu a{min-height:44px;text-align:left;padding:0 12px;border:0;background:transparent;font:inherit;color:var(--ink);border-radius:8px;display:flex;align-items:center;text-decoration:none;cursor:pointer}
+.menu button:hover,.menu a:hover{background:var(--wash)}
+.menu .danger{color:var(--ink);font-weight:700}
+.menu hr{border:0;border-top:1px solid var(--line);margin:8px 0}
+.state{padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface);display:flex;flex-direction:column;gap:12px}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;align-self:flex-start}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+</style>
+</helmet>
+<div style="box-sizing:border-box;width:100%;padding:24px 32px;display:flex;flex-direction:column;gap:24px;min-height:1040px">
+  <header>
+    <h1 style="margin:0;font-size:28px;line-height:1.2">Menus and dropdowns</h1>
+    <p style="margin:4px 0 0;color:var(--muted);font-size:15px">Shared patterns for every office page. Touch targets are 44 px. Keyboard: Enter opens, Escape closes, arrows move.</p>
+  </header>
+
+  <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}">
+  <div role="status" style="padding:16px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)">{{ msg }}</div>
+  </sc-if>
+
+  <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+    <section class="state" aria-labelledby="sb" style="flex:0 1 300px;min-width:0">
+      <h2 id="sb" style="margin:0;font-size:18px">1. Sidebar</h2>
+      <p style="margin:0;font-size:14px;color:var(--muted)">Groups are in the order of use. The current page is marked, not only coloured.</p>
+      <nav class="nav" aria-label="Office navigation example" style="display:flex;flex-direction:column;gap:2px">
+        <a href="Main.dc.html">Dashboard</a>
+        <div class="grp">Operations</div>
+        <a href="Shifts.dc.html" aria-current="page">Work orders</a>
+        <a href="Bookings.dc.html">Bookings</a>
+        <a href="Work-queue.dc.html">Work queue</a>
+        <div class="grp">Customers</div>
+        <a href="Leads.dc.html">Leads</a>
+      </nav>
+    </section>
+
+    <section class="state" aria-labelledby="rm" style="flex:0 1 300px;min-width:0">
+      <h2 id="rm" style="margin:0;font-size:18px">2. Row action menu</h2>
+      <p style="margin:0;font-size:14px;color:var(--muted)">Opens from a 44 px button. Destructive action at the bottom, after a divider.</p>
+      <details>
+        <summary class="btn btn-ghost" style="list-style:none">Row actions</summary>
+        <div role="menu" class="menu" aria-label="Row actions">
+          <button role="menuitem" type="button" onClick="{{ act1 }}">Edit work order</button>
+          <button role="menuitem" type="button" onClick="{{ act2 }}">Reassign cleaner</button>
+          <button role="menuitem" type="button" onClick="{{ act3 }}">Copy link</button>
+          <hr>
+          <button role="menuitem" type="button" class="danger" onClick="{{ act4 }}">Cancel work order</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="state" aria-labelledby="sel" style="flex:0 1 300px;min-width:0">
+      <h2 id="sel" style="margin:0;font-size:18px">3. Select and listbox</h2>
+      <p style="margin:0;font-size:14px;color:var(--muted)">The chosen value is shown. Options use the same status colours as tables.</p>
+      <label style="display:flex;flex-direction:column;gap:8px;font-size:14px">Status
+        <select onChange="{{ onStatus }}" style="min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Confirmed">Confirmed</option><option value="Unassigned">Unassigned</option><option value="Changed">Changed</option></select></label>
+      <div role="listbox" aria-label="Cleaner" class="menu" style="min-width:0">
+        <button role="option" type="button" aria-selected="{{ cleanerAnna }}" onClick="{{ pickAnna }}">Anna K.</button>
+        <button role="option" type="button" aria-selected="{{ cleanerVille }}" onClick="{{ pickVille }}">Ville R.</button>
+        <button role="option" type="button" aria-selected="{{ cleanerMinna }}" onClick="{{ pickMinna }}">Minna S.</button>
+      </div>
+    </section>
+
+    <section class="state" aria-labelledby="fl" style="flex:0 1 300px;min-width:0">
+      <h2 id="fl" style="margin:0;font-size:18px">4. Filter panel</h2>
+      <p style="margin:0;font-size:14px;color:var(--muted)">Closed by default. Shows active filters as chips so the user can see what is applied.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px"><span style="padding:8px 12px;border-radius:999px;background:var(--line);font-size:13px">Cleaner: {{ cleaner }}</span><span style="padding:8px 12px;border-radius:999px;background:var(--line);font-size:13px">This week</span></div>
+      <details>
+        <summary class="btn btn-ghost" style="list-style:none">More filters</summary>
+        <div class="menu" style="margin-top:8px">
+          <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;padding:8px">Company<select onChange="{{ onCompany }}" style="min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit"><option value="All companies">All companies</option><option value="Virtanen Oy">Virtanen Oy</option></select></label>
+          <div style="display:flex;justify-content:flex-end;gap:8px;padding:8px"><button type="button" class="btn btn-ghost" onClick="{{ resetFilters }}">Reset</button></div>
+        </div>
+      </details>
+    </section>
+
+    <section class="state" aria-labelledby="mob" style="flex:0 1 300px;min-width:0">
+      <h2 id="mob" style="margin:0;font-size:18px">5. Phone navigation</h2>
+      <p style="margin:0;font-size:14px;color:var(--muted)">Below 760 px the sidebar becomes a drawer behind one menu button with a clear label.</p>
+      <button type="button" class="btn btn-ghost" aria-expanded="{{ drawerOpen }}" aria-controls="drawer" onClick="{{ toggleDrawer }}">{{ drawerLabel }}</button>
+      <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+      <div id="drawer" class="menu" style="min-width:0">
+        <a href="Shifts.dc.html">Work orders</a>
+        <a href="Bookings.dc.html">Bookings</a>
+        <a href="Invoices.dc.html">Invoices</a>
+      </div>
+      </sc-if>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  say(msg, patch) { this.setState({ ...(patch || {}), msg: msg }); }
+  renderVals() {
+    const st = this.st();
+    const cleaner = st.cleaner || 'Anna K.';
+    const drawerOpen = !!st.drawerOpen;
+    return {
+      hasMsg: !!st.msg,
+      msg: st.msg || 'Use any control on this sheet. Each one reports what it did here.',
+      act1: () => this.say('Edit work order opened.'),
+      act2: () => this.say('Reassign cleaner: choose a name from the list.'),
+      act3: () => this.say('Link copied to the clipboard.'),
+      act4: () => this.say('Work order cancelled. The cleaner has been notified.'),
+      onStatus: e => this.say('Status set to ' + e.target.value + '.'),
+      cleanerAnna: cleaner === 'Anna K.',
+      cleanerVille: cleaner === 'Ville R.',
+      cleanerMinna: cleaner === 'Minna S.',
+      cleaner: cleaner,
+      pickAnna: () => this.say('Cleaner set to Anna K.', { cleaner: 'Anna K.' }),
+      pickVille: () => this.say('Cleaner set to Ville R.', { cleaner: 'Ville R.' }),
+      pickMinna: () => this.say('Cleaner set to Minna S.', { cleaner: 'Minna S.' }),
+      onCompany: e => this.say('Company filter: ' + e.target.value + '.'),
+      resetFilters: () => this.say('Filters reset.', { cleaner: 'Anna K.' }),
+      drawerOpen: drawerOpen,
+      drawerLabel: drawerOpen ? 'Close menu' : 'Menu',
+      toggleDrawer: () => this.setState({ drawerOpen: !drawerOpen }),
+    };
+  }
+}
+</script>
+</body>
+</html>

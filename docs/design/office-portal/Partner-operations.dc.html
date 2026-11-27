@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Partner operations for the cleaning company: requests, quotes, changes, key requests and partner properties.">
+<title>Partner operations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+a{color:var(--muted)}
+.nav a{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;border-bottom:1px solid var(--line-2)}
+.tabs button{min-height:44px;padding:0 12px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.tabs button[aria-selected='true']{border-bottom-color:var(--gold-ink);color:var(--ink);font-weight:700}
+.count{min-width:24px;padding:0 8px;border-radius:999px;background:var(--gold-wash);color:var(--gold-ink);font-size:13px;font-weight:700}
+.card{display:flex;flex-direction:column;gap:8px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.sub{font-size:14px;color:var(--muted)}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Shift-calendar.dc.html">Work order calendar</a>
+    <a href="Employee-schedule.dc.html">Employee schedule</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html" aria-current="page">Partner operations <span class="count">{{ badgeTotal }}</span></a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Partner operations</h1><p style="margin:4px 0 0" class="sub">Price properties, arrange one-time cleaning and handle owner change requests. Times use Europe/Helsinki.</p></div>
+      <button type="button" class="btn btn-ghost" onClick="{{ refresh }}">Refresh</button>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+
+    <div class="tabs" role="tablist" aria-label="Partner operations sections">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="8"><button type="button" role="tab" aria-selected="{{ t.on }}" onClick="{{ t.pick }}">{{ t.label }}<sc-if value="{{ t.hasCount }}" hint-placeholder-val="{{ false }}"><span class="count">{{ t.count }}</span></sc-if></button></sc-for>
+    </div>
+
+    <sc-if value="{{ isReqTab }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ isRequests }}" hint-placeholder-val="{{ true }}"><p style="margin:0" class="sub">The Requests count shows requests needing arrangement. This list also includes offers waiting for an employee’s answer.</p></sc-if>
+    <sc-if value="{{ reqEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:0">{{ reqEmptyText }}</p></sc-if>
+    <sc-for list="{{ reqs }}" as="r" hint-placeholder-count="2">
+    <article class="card" aria-label="{{ r.property }} request">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px"><strong>{{ r.property }}</strong><span class="{{ r.chip }}">{{ r.status }}</span></div>
+      <span class="sub">{{ r.window }}</span>
+      <span class="sub">{{ r.price }}</span>
+      <sc-if value="{{ r.deep }}" hint-placeholder-val="{{ false }}"><span class="sub">Deep cleaning · adds 15.00 € excl. VAT</span></sc-if>
+      <span>Employee: {{ r.employee }}</span>
+      <sc-if value="{{ r.hasNotes }}" hint-placeholder-val="{{ false }}"><span class="sub">{{ r.notes }}</span></sc-if>
+      <sc-if value="{{ r.open }}" hint-placeholder-val="{{ true }}"><div class="row"><button type="button" class="btn btn-primary" onClick="{{ r.arrange }}">Arrange employee / time</button><button type="button" class="btn btn-ghost" onClick="{{ r.edit }}">Edit / reschedule request</button><button type="button" class="btn btn-ghost" onClick="{{ r.cancel }}">Cancel request</button></div></sc-if>
+    </article>
+    </sc-for>
+    </sc-if>
+
+    <sc-if value="{{ isQuotes }}" hint-placeholder-val="{{ false }}">
+    <sc-if value="{{ quotesEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:0">No quotes awaiting pricing.</p></sc-if>
+    <sc-for list="{{ quotes }}" as="q" hint-placeholder-count="2">
+    <article class="card"><strong>{{ q.name }}</strong><span class="sub">{{ q.company }} · waiting since {{ q.since }}</span><div class="row"><button type="button" class="btn btn-primary" onClick="{{ q.price }}">Set cleaning price</button><button type="button" class="btn btn-ghost" onClick="{{ q.reject }}">Reject quote</button></div></article>
+    </sc-for>
+    </sc-if>
+
+    <sc-if value="{{ isChanges }}" hint-placeholder-val="{{ false }}">
+    <sc-for list="{{ changes }}" as="c" hint-placeholder-count="2">
+    <article class="card"><strong>{{ c.property }}</strong><span>{{ c.message }}</span><sc-if value="{{ c.hasRequested }}" hint-placeholder-val="{{ false }}"><span class="sub">Requested: {{ c.requested }}</span></sc-if><sc-if value="{{ c.resolved }}" hint-placeholder-val="{{ false }}"><span class="sub">Resolved: {{ c.resolution }}</span></sc-if><sc-if value="{{ c.open }}" hint-placeholder-val="{{ true }}"><div class="row"><button type="button" class="btn btn-primary" onClick="{{ c.resolve }}">{{ c.action }}</button></div></sc-if></article>
+    </sc-for>
+    </sc-if>
+
+    <sc-if value="{{ isKeys }}" hint-placeholder-val="{{ false }}">
+    <section class="card" aria-label="Key request fee">
+      <strong>Fee per key request, excl. VAT</strong>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><button type="button" class="btn btn-ghost" aria-label="Lower fee by 1 euro" onClick="{{ feeDown }}" style="min-width:44px">−</button><span style="min-width:96px;text-align:center;font-size:18px;font-weight:600">{{ feeText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise fee by 1 euro" onClick="{{ feeUp }}" style="min-width:44px">+</button><button type="button" class="btn btn-primary" onClick="{{ saveFee }}">Save fee</button></div>
+      <span class="sub">Current fee {{ savedFee }} excl. VAT. VAT 25% is added on invoicing.</span>
+    </section>
+    <sc-for list="{{ keys }}" as="k" hint-placeholder-count="2">
+    <article class="card">
+      <strong>{{ k.title }}</strong>
+      <span class="sub">{{ k.line }}</span>
+      <sc-if value="{{ k.hasNotes }}" hint-placeholder-val="{{ false }}"><span class="sub">{{ k.notes }}</span></sc-if>
+      <sc-if value="{{ k.open }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end"><label class="field">Collected or handed over by<select class="input" onChange="{{ k.onPick }}"><option value="">Choose a staff member</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label><button type="button" class="btn btn-ghost" onClick="{{ k.assign }}">Assign</button><button type="button" class="btn btn-ghost" disabled="{{ k.cantComplete }}" onClick="{{ k.complete }}">Mark completed</button></div></sc-if>
+      <sc-if value="{{ k.canPhoto }}" hint-placeholder-val="{{ false }}"><div class="row" style="align-items:center"><span class="sub">Photos: {{ k.photos }}</span><button type="button" class="btn btn-ghost" onClick="{{ k.addPhoto }}">Add photo</button></div></sc-if>
+    </article>
+    </sc-for>
+    </sc-if>
+
+    <sc-if value="{{ isProps }}" hint-placeholder-val="{{ false }}">
+    <div><button type="button" class="btn btn-primary" onClick="{{ addProp }}">Add property</button></div>
+    <sc-for list="{{ props }}" as="p" hint-placeholder-count="2">
+    <article class="card"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><strong>{{ p.name }}</strong><sc-if value="{{ p.inactive }}" hint-placeholder-val="{{ false }}"><span class="chip">Inactive</span></sc-if></div><span class="sub">{{ p.address }} · {{ p.company }}</span><span>{{ p.price }}</span><div class="row"><button type="button" class="btn btn-ghost" onClick="{{ p.edit }}">Edit property</button><button type="button" class="btn btn-ghost" onClick="{{ p.setPrice }}">Set cleaning price</button></div></article>
+    </sc-for>
+    </sc-if>
+  </main>
+</div>
+
+<sc-if value="{{ dlgOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="{{ dlgTitle }}" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(560px,100%);max-height:92%;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">{{ dlgTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close dialog" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+
+    <sc-if value="{{ k_offer }}" hint-placeholder-val="{{ false }}">
+      <sc-if value="{{ offerWarn }}" hint-placeholder-val="{{ false }}"><p role="status" style="margin:0;padding:12px;border:1px solid var(--gold);border-radius:12px;background:var(--gold-wash)">{{ offerWarnText }}</p></sc-if>
+      <span class="sub">{{ offerWindow }}</span>
+      <label class="field">Employee<select class="input" onChange="{{ onEmp }}"><option value="">Select employee</option><option value="Anna K.">Anna K. (accepts automatically)</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+      <span class="sub">{{ autoText }}</span>
+      <label class="field">Planned start (optional)<select class="input" onChange="{{ onStart }}"><option value="">Flexible, no fixed start</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="13:00">13:00</option></select></label>
+      <div class="row" style="justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ sendOffer }}">Send cleaning offer</button></div>
+    </sc-if>
+
+    <sc-if value="{{ k_edit }}" hint-placeholder-val="{{ false }}">
+      <p style="margin:0" class="sub">Changes cancel outstanding offers and need the employee to accept again. Started or billed work is protected.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+        <label class="field">From date<select class="input" onChange="{{ onFrom }}"><option value="4 Dec 2026">4 Dec 2026</option><option value="5 Dec 2026">5 Dec 2026</option><option value="8 Dec 2026">8 Dec 2026</option></select></label>
+        <label class="field">To date<select class="input" onChange="{{ onTo }}"><option value="4 Dec 2026">4 Dec 2026</option><option value="5 Dec 2026">5 Dec 2026</option><option value="8 Dec 2026">8 Dec 2026</option></select></label>
+        <label class="field">Exact start (single date only)<select class="input" onChange="{{ onExact }}"><option value="">No exact start</option><option value="09:00">09:00</option><option value="10:00">10:00</option></select></label>
+      </div>
+      <label class="field">Cleaning instructions<input class="input" type="text" onChange="{{ onText }}"></label>
+      <div class="row" style="justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveEdit }}">Save request changes</button></div>
+    </sc-if>
+
+    <sc-if value="{{ k_reason }}" hint-placeholder-val="{{ false }}">
+      <p style="margin:0" class="sub">{{ reasonHelp }}</p>
+      <label class="field">{{ reasonLabel }}<input class="input" type="text" onChange="{{ onText }}"></label>
+      <div class="row" style="justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">{{ keepLabel }}</button><button type="button" class="btn btn-primary" onClick="{{ saveReason }}">{{ confirmLabel }}</button></div>
+    </sc-if>
+
+    <sc-if value="{{ k_price }}" hint-placeholder-val="{{ false }}">
+      <p style="margin:0" class="sub">New requests use the new price. Existing requests keep their agreed price. VAT 25% is added on invoicing.</p>
+      <div role="group" aria-label="Fixed cleaning price" class="field"><span>Fixed cleaning price, excl. VAT</span><div style="display:flex;align-items:center;gap:8px"><button type="button" class="btn btn-ghost" aria-label="Lower price by 1 euro" onClick="{{ priceDown }}" style="min-width:44px">−</button><span style="min-width:96px;text-align:center;font-size:18px;font-weight:600;color:var(--ink)">{{ priceText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise price by 1 euro" onClick="{{ priceUp }}" style="min-width:44px">+</button></div></div>
+      <label class="field">Estimated duration<select class="input" onChange="{{ onDuration }}"><option value="120">2 h</option><option value="180" selected>3 h</option><option value="240">4 h</option><option value="300">5 h</option></select></label>
+      <div class="row" style="justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ savePrice }}">Save pricing</button></div>
+    </sc-if>
+
+    <sc-if value="{{ k_prop }}" hint-placeholder-val="{{ false }}">
+      <sc-if value="{{ propIsNew }}" hint-placeholder-val="{{ false }}"><label class="field">Company<select class="input" onChange="{{ onPropCompany }}"><option value="">Select company</option><option value="Nordea Oy">Nordea Oy</option><option value="Aurora clinic">Aurora clinic</option><option value="Virtanen Oy">Virtanen Oy</option></select></label></sc-if>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+        <label class="field">Property name<input class="input" type="text" onChange="{{ onPropName }}"></label>
+        <label class="field">Street<input class="input" type="text"></label>
+        <label class="field">Postal code<input class="input" type="text"></label>
+        <label class="field">City<input class="input" type="text"></label>
+        <label class="field">Country<input class="input" type="text"></label>
+        <label class="field">Contact phone<input class="input" type="tel"></label>
+        <label class="field">Contact email<input class="input" type="email"></label>
+        <label class="field">Rooms (optional)<select class="input"><option value="">Not set</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+        <label class="field">Beds (optional)<select class="input"><option value="">Not set</option><option>1</option><option>2</option><option>3</option></select></label>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" checked style="width:20px;height:20px">Active property</label>
+      <div class="row" style="justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveProp }}">Save property</button></div>
+    </sc-if>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const REQS = [
+  { id: 'r1', property: 'Nordea branch, Mannerheimintie', status: 'Requested', window: 'Window: 4 Dec 2026 – 4 Dec 2026 at 09:00', price: '120.00 € excl. VAT · VAT 25.5% · 180 min', deep: false, employee: null, notes: 'Use the staff entrance.' },
+  { id: 'r2', property: 'Aurora clinic, Töölö', status: 'Offered', window: 'Window: 5 Dec 2026 – 8 Dec 2026', price: '95.00 € excl. VAT · VAT 25.5% · 150 min', deep: true, employee: null, offered: 'Ville R.', notes: '' },
+  { id: 'r3', property: 'Kallio studio', status: 'Accepted', window: 'Window: 2 Dec 2026 – 2 Dec 2026 at 10:00', price: '60.00 € excl. VAT · VAT 25.5% · 120 min', deep: true, employee: 'Anna K.', notes: '' },
+  { id: 'r4', property: 'Pasila office', status: 'InProgress', window: 'Window: 26 Nov 2026', price: '140.00 € excl. VAT · VAT 25.5% · 240 min', deep: false, employee: 'Minna S.', notes: '' },
+  { id: 'r5', property: 'Kallio studio', status: 'Completed', window: 'Window: 20 Nov 2026', price: '60.00 € excl. VAT · VAT 25.5% · 120 min', deep: false, employee: 'Anna K.', notes: '' },
+  { id: 'r6', property: 'Nordea branch, Mannerheimintie', status: 'Cancelled', window: 'Window: 18 Nov 2026', price: '120.00 € excl. VAT · VAT 25.5% · 180 min', deep: false, employee: null, notes: 'Cancelled: owner moved the visit.' },
+];
+const QUOTES = [
+  { id: 'q1', name: 'Helsinki showroom', company: 'Virtanen Oy', since: '20 Nov 2026' },
+  { id: 'q2', name: 'Pasila meeting rooms', company: 'Nordea Oy', since: '24 Nov 2026' },
+];
+const CHANGES = [
+  { id: 'c1', property: 'Nordea branch, Mannerheimintie', message: 'Can you come a day later?', requested: '5 Dec 2026 – 5 Dec 2026 at 10:00', structured: true, resolution: '' },
+  { id: 'c2', property: 'Aurora clinic, Töölö', message: 'Please use the side door from now on.', requested: '', structured: false, resolution: '' },
+  { id: 'c3', property: 'Kallio studio', message: 'Add the balcony to the list.', requested: '', structured: false, resolution: 'Added to the cleaning instructions.' },
+];
+const KEYS = [
+  { id: 'k1', property: 'Nordea branch, Mannerheimintie', kind: 'Key handover', date: '3 Dec 2026', status: 'Requested', fee: 15, assigned: null, notes: 'Key at the reception.', photos: 0 },
+  { id: 'k2', property: 'Aurora clinic, Töölö', kind: 'Key pickup', date: '1 Dec 2026', status: 'Requested', fee: 15, assigned: 'Ville R.', notes: '', photos: 1 },
+  { id: 'k3', property: 'Kallio studio', kind: 'Key handover', date: '20 Nov 2026', status: 'Completed', fee: 12, assigned: 'Anna K.', notes: '', photos: 2 },
+];
+const PROPS = [
+  { id: 'p1', name: 'Nordea branch, Mannerheimintie', company: 'Nordea Oy', address: 'Mannerheimintie 12, 00100 Helsinki', price: 120, active: true },
+  { id: 'p2', name: 'Helsinki showroom', company: 'Virtanen Oy', address: 'Bulevardi 5, 00120 Helsinki', price: null, active: true },
+  { id: 'p3', name: 'Old depot', company: 'Aurora clinic', address: 'Teollisuuskatu 3, 00510 Helsinki', price: 80, active: false },
+];
+const TABS = ['Requests', 'Assigned', 'Completed requests', 'Cancelled requests', 'Quote requests', 'Changes', 'Key requests', 'Properties'];
+const STATUS_LABEL = { Requested: 'Requested', Offered: 'Offer sent', Accepted: 'Accepted', InProgress: 'In progress', Completed: 'Completed', Cancelled: 'Cancelled' };
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  get(key, seed) { return this.st()[key] || seed; }
+  dv() { return this.st().dv || {}; }
+  setDv(p) { this.setState({ dv: { ...this.dv(), ...p } }); }
+  open(kind, id) { this.setState({ dlg: { kind: kind, id: id }, dv: {}, msg: '' }); }
+  done(patch, msg) { this.setState({ ...patch, dlg: null, msg: msg }); }
+  renderVals() {
+    const st = this.st();
+    const tab = st.tab || 'Requests';
+    const reqs = this.get('reqs', REQS), quotes = this.get('quotes', QUOTES), changes = this.get('changes', CHANGES), keys = this.get('keys', KEYS), props = this.get('props', PROPS);
+    const fee = typeof st.fee === 'number' ? st.fee : 15;
+    const savedFee = typeof st.savedFee === 'number' ? st.savedFee : 15;
+    const groups = {
+      Requests: reqs.filter(r => r.status === 'Requested' || r.status === 'Offered'),
+      Assigned: reqs.filter(r => r.status === 'Accepted' || r.status === 'InProgress'),
+      'Completed requests': reqs.filter(r => r.status === 'Completed'),
+      'Cancelled requests': reqs.filter(r => r.status === 'Cancelled'),
+    };
+    const counts = { Requests: reqs.filter(r => r.status === 'Requested').length, 'Quote requests': quotes.length, Changes: changes.filter(c => !c.resolution).length };
+    const list = groups[tab] || [];
+    const dl = st.dlg || null;
+    const dv = this.dv();
+    const req = dl ? reqs.find(r => r.id === dl.id) : null;
+    const quote = dl ? quotes.find(q => q.id === dl.id) : null;
+    const change = dl ? changes.find(c => c.id === dl.id) : null;
+    const prop = dl ? props.find(p => p.id === dl.id) : null;
+    const REASON = {
+      cancel: { title: req ? 'Cancel ' + req.property : '', help: 'The employee offer and any scheduled visit are removed. The owner is notified.', label: 'Reason for cancellation', keep: 'Keep request', confirm: 'Confirm cancellation' },
+      reject: { title: quote ? 'Reject quote · ' + quote.name : '', help: 'The owner sees this reason and the property leaves the quote queue.', label: 'Reason for rejecting the quote', keep: 'Keep quote', confirm: 'Confirm rejection' },
+      resolve: { title: change && change.structured ? 'Apply change request' : 'Resolve change request', help: change ? change.property + ': ' + change.message : '', label: 'Resolution', keep: 'Cancel', confirm: change && change.structured ? 'Apply and resolve' : 'Save resolution' },
+    };
+    const rk = dl && REASON[dl.kind];
+    const titles = { offer: req ? 'Arrange ' + req.property : '', edit: req ? 'Edit / reschedule ' + req.property : '', price: 'Price ' + ((quote && quote.name) || (prop && prop.name) || ''), prop: prop ? 'Edit property' : 'Add property' };
+    const price = typeof dv.price === 'number' ? dv.price : (prop && prop.price) || 100;
+    return {
+      badgeTotal: counts.Requests + counts['Quote requests'] + counts.Changes,
+      tabs: TABS.map(name => ({ label: name, on: tab === name, hasCount: counts[name] !== undefined && counts[name] > 0, count: counts[name] || 0, pick: () => this.setState({ tab: name, msg: '' }) })),
+      refresh: () => this.setState({ msg: 'Partner operations refreshed.' }),
+      isReqTab: !!groups[tab], isRequests: tab === 'Requests',
+      reqEmpty: !!groups[tab] && list.length === 0,
+      reqEmptyText: { Requests: 'No requests waiting for an employee.', Assigned: 'No assigned visits.', 'Completed requests': 'No completed requests.', 'Cancelled requests': 'No cancelled requests.' }[tab] || '',
+      reqs: list.map(r => ({
+        property: r.property, status: STATUS_LABEL[r.status], chip: r.status === 'Requested' ? 'chip chip-gold' : 'chip',
+        window: r.window, price: r.price, deep: r.deep, employee: r.employee || (r.offered ? 'Not accepted (offer sent to ' + r.offered + ')' : 'Not accepted'),
+        hasNotes: !!r.notes, notes: r.notes,
+        open: !['Completed', 'InProgress', 'Cancelled'].includes(r.status),
+        arrange: () => this.open('offer', r.id), edit: () => this.open('edit', r.id), cancel: () => this.open('cancel', r.id),
+      })),
+      isQuotes: tab === 'Quote requests', quotesEmpty: quotes.length === 0,
+      quotes: quotes.map(q => ({ name: q.name, company: q.company, since: q.since, price: () => this.open('price', q.id), reject: () => this.open('reject', q.id) })),
+      isChanges: tab === 'Changes',
+      changes: changes.map(c => ({ property: c.property, message: c.message, hasRequested: !!c.requested, requested: c.requested, resolved: !!c.resolution, resolution: c.resolution, open: !c.resolution, action: c.structured ? 'Review and apply' : 'Resolve change request', resolve: () => this.open('resolve', c.id) })),
+      isKeys: tab === 'Key requests',
+      feeText: fee.toFixed(2) + ' €', savedFee: savedFee.toFixed(2) + ' €',
+      feeDown: () => this.setState({ fee: Math.max(0, fee - 1) }), feeUp: () => this.setState({ fee: fee + 1 }),
+      saveFee: () => this.setState({ savedFee: fee, msg: 'Key request fee saved. New requests use this fee.' }),
+      keys: keys.map(k => ({
+        title: k.property + ' · ' + k.kind + ' · ' + k.date,
+        line: k.status + ' · ' + k.fee.toFixed(2) + ' € excl. VAT · ' + (k.assigned ? 'Assigned to ' + k.assigned : 'Not assigned'),
+        hasNotes: !!k.notes, notes: k.notes, open: k.status === 'Requested', cantComplete: !k.assigned,
+        canPhoto: !!k.assigned, photos: k.photos,
+        onPick: e => this.setState({ keyPick: { ...(st.keyPick || {}), [k.id]: e.target.value } }),
+        assign: () => { const who = (st.keyPick || {})[k.id]; if (!who) { this.setState({ msg: 'Choose a staff member first.' }); return; } this.setState({ keys: keys.map(x => (x.id === k.id ? { ...x, assigned: who } : x)), msg: 'Employee assigned.' }); },
+        complete: () => this.setState({ keys: keys.map(x => (x.id === k.id ? { ...x, status: 'Completed' } : x)), msg: 'Key request marked completed.' }),
+        addPhoto: () => this.setState({ keys: keys.map(x => (x.id === k.id ? { ...x, photos: x.photos + 1 } : x)), msg: 'Photo added.' }),
+      })),
+      isProps: tab === 'Properties',
+      addProp: () => this.open('prop', null),
+      props: props.map(p => ({ name: p.name, inactive: !p.active, address: p.address, company: p.company, price: p.price ? p.price.toFixed(2) + ' € excl. VAT per cleaning' : 'Needs a cleaning price', edit: () => this.open('prop', p.id), setPrice: () => this.open('price', p.id) })),
+      dlgOpen: !!dl, dlgTitle: dl ? (titles[dl.kind] || (rk && rk.title) || '') : '',
+      closeDlg: () => this.setState({ dlg: null }),
+      k_offer: !!dl && dl.kind === 'offer', k_edit: !!dl && dl.kind === 'edit', k_reason: !!rk, k_price: !!dl && dl.kind === 'price', k_prop: !!dl && dl.kind === 'prop',
+      offerWarn: !!(req && req.employee), offerWarnText: req && req.employee ? req.employee + ' is booked on this visit. Sending a new offer removes them from it.' : '',
+      offerWindow: req ? req.window : '',
+      autoText: dv.emp === 'Anna K.' ? 'This employee accepts automatically. Set a start time, or leave it blank for a flexible visit.' : 'This employee accepts offers manually.',
+      onEmp: e => this.setDv({ emp: e.target.value }), onStart: e => this.setDv({ start: e.target.value }),
+      sendOffer: () => {
+        if (!dv.emp) { this.setState({ msg: 'Select an employee.' }); return; }
+        const auto = dv.emp === 'Anna K.';
+        this.done({ reqs: reqs.map(r => (r.id === req.id ? { ...r, status: auto ? 'Accepted' : 'Offered', employee: auto ? dv.emp : null, offered: dv.emp } : r)) }, auto ? 'Work scheduled automatically.' : 'Offer sent. Waiting for employee to accept.');
+      },
+      onFrom: e => this.setDv({ from: e.target.value }), onTo: e => this.setDv({ to: e.target.value }), onExact: e => this.setDv({ exact: e.target.value }), onText: e => this.setDv({ text: e.target.value }),
+      saveEdit: () => { const from = dv.from || '4 Dec 2026'; const to = dv.to || from; this.done({ reqs: reqs.map(r => (r.id === req.id ? { ...r, status: 'Requested', employee: null, offered: null, window: 'Window: ' + from + ' – ' + to + (dv.exact ? ' at ' + dv.exact : ''), notes: dv.text || r.notes } : r)) }, 'Request updated.'); },
+      reasonHelp: rk ? rk.help : '', reasonLabel: rk ? rk.label : '', keepLabel: rk ? rk.keep : '', confirmLabel: rk ? rk.confirm : '',
+      saveReason: () => {
+        if (!dv.text) { this.setState({ msg: 'Enter a reason.' }); return; }
+        if (dl.kind === 'cancel') this.done({ reqs: reqs.map(r => (r.id === req.id ? { ...r, status: 'Cancelled', notes: 'Cancelled: ' + dv.text } : r)) }, 'Request cancelled.');
+        else if (dl.kind === 'reject') this.done({ quotes: quotes.filter(q => q.id !== quote.id) }, 'Quote rejected.');
+        else this.done({ changes: changes.map(c => (c.id === change.id ? { ...c, resolution: dv.text } : c)) }, 'Change request resolved.');
+      },
+      priceText: price.toFixed(2) + ' €',
+      priceDown: () => this.setDv({ price: Math.max(1, price - 1) }), priceUp: () => this.setDv({ price: price + 1 }),
+      onDuration: e => this.setDv({ duration: e.target.value }),
+      savePrice: () => {
+        if (quote) this.done({ quotes: quotes.filter(q => q.id !== quote.id) }, 'Pricing saved. ' + quote.name + ' is ready for requests.');
+        else this.done({ props: props.map(p => (p.id === prop.id ? { ...p, price: price } : p)) }, 'Pricing saved.');
+      },
+      propIsNew: !!dl && dl.kind === 'prop' && !prop,
+      onPropCompany: e => this.setDv({ company: e.target.value }), onPropName: e => this.setDv({ name: e.target.value }),
+      saveProp: () => {
+        if (prop) { this.done({ props: props.map(p => (p.id === prop.id ? { ...p, name: dv.name || p.name } : p)) }, 'Property saved.'); return; }
+        if (!dv.company || !dv.name) { this.setState({ msg: 'Choose a company and enter a property name.' }); return; }
+        this.done({ props: props.concat([{ id: 'p' + Date.now(), name: dv.name, company: dv.company, address: 'Address not set', price: null, active: true }]) }, 'Property saved.');
+      },
+      hasMsg: !!st.msg, msg: st.msg || '',
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Work order calendar for the cleaning company: one day of visits, review flags, work-time recording and photos.">
+<title>Work order calendar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+a{color:var(--muted)}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.card{display:flex;flex-direction:column;gap:8px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.card.review{border-color:var(--gold)}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-mute{background:var(--line);color:var(--ink)}
+.person{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;padding-top:8px;border-top:1px solid var(--line)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Shift-calendar.dc.html" aria-current="page">Work order calendar</a>
+    <a href="Employee-schedule.dc.html">Employee schedule</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <h1 style="margin:0;font-size:28px;line-height:1.2">Work order calendar</h1>
+      <button type="button" class="btn btn-primary" onClick="{{ openNew }}">Schedule work order on this day</button>
+    </header>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+      <button type="button" class="btn btn-ghost" onClick="{{ prevDay }}">Previous day</button>
+      <label class="field">Calendar date<select class="input" onChange="{{ onDate }}"><option value="0">Mon 23 Nov 2026</option><option value="1">Tue 24 Nov 2026</option><option value="2">Wed 25 Nov 2026</option><option value="3" selected>Thu 26 Nov 2026 (today)</option><option value="4">Fri 27 Nov 2026</option></select></label>
+      <button type="button" class="btn btn-ghost" onClick="{{ nextDay }}">Next day</button>
+      <button type="button" class="btn btn-ghost" onClick="{{ toToday }}">Today</button>
+      <button type="button" class="btn btn-ghost" onClick="{{ refresh }}">Refresh</button>
+    </div>
+    <p style="margin:0;font-size:14px;color:var(--muted)">{{ dayTitle }}. Times shown in Europe/Helsinki. Work times can be recorded for past dates only.</p>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
+      <strong>{{ reviewText }}</strong>
+      <label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" onChange="{{ onReviewOnly }}" style="width:20px;height:20px"> Show only visits that need review</label>
+    </div>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+    <sc-if value="{{ noVisits }}" hint-placeholder-val="{{ false }}"><p style="margin:0">No visits on this day.</p></sc-if>
+    <sc-if value="{{ filteredOut }}" hint-placeholder-val="{{ false }}"><p style="margin:0">Turn off the review filter to see every visit.</p></sc-if>
+
+    <sc-for list="{{ cards }}" as="c" hint-placeholder-count="3">
+    <article class="{{ c.cls }}">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">
+        <h2 style="margin:0;font-size:18px"><button type="button" onClick="{{ c.openOrder }}" style="border:0;background:transparent;padding:0;font:inherit;font-weight:700;color:var(--ink);text-decoration:underline;cursor:pointer;min-height:44px">{{ c.name }}</button></h2>
+        <sc-if value="{{ c.cancelled }}" hint-placeholder-val="{{ false }}"><span class="chip chip-mute">Cancelled</span></sc-if>
+      </div>
+      <span style="color:var(--muted)">{{ c.place }}</span>
+      <strong style="font-variant-numeric:tabular-nums">Scheduled: {{ c.when }}</strong>
+      <sc-if value="{{ c.unassigned }}" hint-placeholder-val="{{ false }}"><span><span class="chip chip-gold">Unassigned</span></span></sc-if>
+      <sc-for list="{{ c.people }}" as="p" hint-placeholder-count="1">
+      <div class="person">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <strong>{{ p.name }}</strong>
+          <span style="font-size:14px">{{ p.statusText }}</span>
+          <sc-if value="{{ p.hasActual }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;font-variant-numeric:tabular-nums">Actual: {{ p.actual }}</span></sc-if>
+          <sc-if value="{{ p.hasReview }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px"><span class="chip chip-gold">{{ p.reviewKind }}</span> <span style="color:var(--muted)">{{ p.reviewLabel }}</span></span></sc-if>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <sc-if value="{{ p.canRecord }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ p.record }}">{{ p.recordLabel }}</button></sc-if>
+          <sc-if value="{{ p.canPhoto }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ p.photos }}">Add photos</button></sc-if>
+        </div>
+      </div>
+      </sc-for>
+    </article>
+    </sc-for>
+  </main>
+</div>
+
+<sc-if value="{{ recOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="{{ recTitle }}" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(500px,100%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">{{ recTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close work times" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+    <strong>{{ recWho }}</strong>
+    <span style="font-size:14px">Scheduled: {{ recScheduled }}</span>
+    <p style="margin:0;font-size:14px;color:var(--muted)">Confirm actual times in Europe/Helsinki. Scheduled times are prefilled for new records. Saving records this past visit as completed. Checklist evidence is kept.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+      <label class="field">Actual start<select class="input" onChange="{{ onRecStart }}"><option value="07:45">07:45</option><option value="08:00" selected>08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option></select></label>
+      <label class="field">Actual end<select class="input" onChange="{{ onRecEnd }}"><option value="10:30">10:30</option><option value="10:45">10:45</option><option value="11:00" selected>11:00</option><option value="11:15">11:15</option><option value="11:30">11:30</option></select></label>
+    </div>
+    <span style="font-size:14px">Work duration: {{ recDuration }} hours</span>
+    <label class="field">Reason<input class="input" type="text" maxlength="2000" onChange="{{ onRecReason }}"></label>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveRec }}">Save work times</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ photoOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Add photos to this visit" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(500px,100%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Add photos to this visit</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+    <strong>{{ recWho }}</strong>
+    <p style="margin:0;font-size:14px;color:var(--muted)">For photos the employee sent you outside the app. Each photo needs its own note, and the reason is kept with the visit.</p>
+    <button type="button" class="btn btn-ghost" onClick="{{ addPhoto }}">Choose photos ({{ photoCount }} chosen)</button>
+    <sc-for list="{{ photoList }}" as="ph" hint-placeholder-count="1"><label class="field">Note for photo {{ ph.n }}<input class="input" type="text" onChange="{{ ph.onNote }}"></label></sc-for>
+    <label class="field">Reason<input class="input" type="text" onChange="{{ onPhotoReason }}"></label>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ savePhotos }}">Save photos</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ orderOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Work order" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">{{ orderName }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+    <span style="color:var(--muted)">{{ orderPlace }}</span>
+    <span style="font-variant-numeric:tabular-nums">Scheduled: {{ orderWhen }}</span>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Close</button><a href="Shifts.dc.html" class="btn btn-primary" style="display:inline-flex;align-items:center;text-decoration:none">Open work order</a></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ newOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Schedule a work order" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Schedule a work order</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+    <span style="color:var(--muted)">{{ dayTitle }}</span>
+    <label class="field">Property<select class="input" onChange="{{ onNewProp }}"><option value="Espoo head office">Espoo head office (Virtanen Oy)</option><option value="Helsinki showroom">Helsinki showroom (Virtanen Oy)</option><option value="Hietaniemi office">Hietaniemi office (Hietaniemi office Oy)</option><option value="Aurora clinic, Töölö">Aurora clinic, Töölö (Aurora clinic)</option></select></label>
+    <label class="field">Start<select class="input" onChange="{{ onNewTime }}"><option value="08:00">08:00</option><option value="10:00">10:00</option><option value="13:00">13:00</option><option value="16:00">16:00</option></select></label>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveNew }}">Schedule</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const TODAY = 3;
+const DAYS = ['Mon 23 Nov 2026', 'Tue 24 Nov 2026', 'Wed 25 Nov 2026', 'Thu 26 Nov 2026', 'Fri 27 Nov 2026'];
+function seed() {
+  const v = (id, day, name, place, start, end, extra) => Object.assign({ id: id, day: day, name: name, place: place, start: start, end: end, cancelled: false, people: [] }, extra || {});
+  return [
+    v('a', 2, 'Kallio, Lindqvist flat', 'Lindqvist household · Kallio', '08:00', '11:00', { people: [{ name: 'Anna K.', status: 'Completed', hours: 3, actual: '08:05 – 11:02', review: null, version: true }] }),
+    v('b', 2, 'Hietaniemi office', 'Hietaniemi office Oy · Hietaniemi', '10:00', '14:00', { people: [{ name: 'Ville R.', status: 'Started', hours: null, actual: '10:02 – Not ended', review: { kind: 'Missing completion', label: 'Started but never ended' }, version: true }] }),
+    v('c', 2, 'Espoo, weekly clean', 'Virtanen Oy · Espoo head office', '13:00', '16:00', { people: [{ name: 'Minna S.', status: 'Completed', hours: 5.5, actual: '12:30 – 18:00', review: { kind: 'Unusual time', label: '2.5 hours longer than scheduled' }, version: true }] }),
+    v('d', 2, 'Töölö, move-out', 'Aurora clinic · Töölö', '13:00', '15:30', {}),
+    v('e', 3, 'Kallio, Lindqvist flat', 'Lindqvist household · Kallio', '08:00', '11:00', { people: [{ name: 'Anna K.', status: 'Scheduled', hours: null, actual: '', review: null, version: false }] }),
+    v('f', 3, 'Helsinki showroom', 'Virtanen Oy · Helsinki showroom', '09:00', '12:00', { cancelled: true }),
+    v('g', 1, 'Espoo, weekly clean', 'Virtanen Oy · Espoo head office', '09:00', '13:00', { people: [{ name: 'Minna S.', status: 'Not started', hours: null, actual: '', review: { kind: 'Missing completion', label: 'No start or end recorded' }, version: false }] }),
+  ];
+}
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  day() { return typeof this.st().day === 'number' ? this.st().day : TODAY; }
+  visits() { return this.st().visits || seed(); }
+  renderVals() {
+    const st = this.st();
+    const day = this.day();
+    const past = day < TODAY;
+    const visits = this.visits().filter(v => v.day === day).sort((a, b) => a.start.localeCompare(b.start));
+    const needs = v => v.people.some(p => p.review);
+    const shown = visits.filter(v => !st.reviewOnly || needs(v));
+    const reviewCount = visits.filter(needs).length;
+    const dl = st.dlg || null;
+    const dv = dl ? this.visits().find(v => v.id === dl.vid) : null;
+    const dp = dv && dl.person != null ? dv.people[dl.person] : null;
+    const toMin = t => { const p = t.split(':').map(Number); return p[0] * 60 + p[1]; };
+    const recStart = st.recStart || '08:00';
+    const recEnd = st.recEnd || '11:00';
+    const photos = st.photos || [];
+    const cards = shown.map(v => ({
+      cls: 'card' + (needs(v) ? ' review' : ''),
+      name: v.name, place: v.place, when: v.start + ' – ' + v.end, cancelled: v.cancelled,
+      unassigned: !v.cancelled && v.people.length === 0,
+      openOrder: () => this.setState({ dlg: { kind: 'order', vid: v.id } }),
+      people: v.people.map((p, i) => ({
+        name: p.name,
+        statusText: p.status + (p.hours == null ? '' : ' · ' + p.hours.toFixed(2) + ' hours'),
+        hasActual: !!p.actual, actual: p.actual,
+        hasReview: !!p.review, reviewKind: p.review ? p.review.kind : '', reviewLabel: p.review ? p.review.label : '',
+        canRecord: past && !v.cancelled,
+        recordLabel: p.actual ? 'Correct times' : 'Record work',
+        canPhoto: !!p.version,
+        record: () => this.setState({ dlg: { kind: 'rec', vid: v.id, person: i }, recStart: '08:00', recEnd: '11:00', recReason: '' }),
+        photos: () => this.setState({ dlg: { kind: 'photo', vid: v.id, person: i }, photos: [], photoReason: '' }),
+      })),
+    }));
+    return {
+      dayTitle: DAYS[day] + (day === TODAY ? ' (today)' : ''),
+      reviewText: reviewCount === 0 ? 'No visits need review on this day.' : reviewCount + (reviewCount === 1 ? ' visit needs' : ' visits need') + ' review.',
+      onReviewOnly: e => this.setState({ reviewOnly: !!e.target.checked }),
+      cards: cards,
+      noVisits: visits.length === 0,
+      filteredOut: visits.length > 0 && shown.length === 0,
+      prevDay: () => this.setState({ day: Math.max(0, day - 1), msg: '' }),
+      nextDay: () => this.setState({ day: Math.min(DAYS.length - 1, day + 1), msg: '' }),
+      toToday: () => this.setState({ day: TODAY, msg: '' }),
+      onDate: e => this.setState({ day: Number(e.target.value), msg: '' }),
+      refresh: () => this.setState({ msg: 'Calendar refreshed.' }),
+      closeDlg: () => this.setState({ dlg: null }),
+      recOpen: !!dl && dl.kind === 'rec',
+      recTitle: dp && dp.actual ? 'Correct work times' : 'Record work',
+      recWho: dp ? dp.name + ' · ' + dv.name : '',
+      recScheduled: dv ? DAYS[dv.day] + ', ' + dv.start + ' – ' + dv.end : '',
+      recDuration: ((toMin(recEnd) - toMin(recStart)) / 60).toFixed(2),
+      onRecStart: e => this.setState({ recStart: e.target.value }),
+      onRecEnd: e => this.setState({ recEnd: e.target.value }),
+      onRecReason: e => this.setState({ recReason: e.target.value }),
+      saveRec: () => {
+        if (!st.recReason) { this.setState({ msg: 'Enter both times and a reason.' }); return; }
+        if (toMin(recEnd) <= toMin(recStart)) { this.setState({ msg: 'End must be after start.' }); return; }
+        const visits2 = this.visits().map(v => (v.id !== dv.id ? v : { ...v, people: v.people.map((p, i) => (i !== dl.person ? p : { ...p, status: 'Completed', actual: recStart + ' – ' + recEnd, hours: (toMin(recEnd) - toMin(recStart)) / 60, review: null, version: true })) }));
+        this.setState({ visits: visits2, dlg: null, msg: 'Work times saved.' });
+      },
+      photoOpen: !!dl && dl.kind === 'photo',
+      photoCount: photos.length,
+      addPhoto: () => this.setState({ photos: photos.concat([{ note: '' }]) }),
+      photoList: photos.map((p, i) => ({ n: i + 1, onNote: e => this.setState({ photos: photos.map((x, j) => (j === i ? { note: e.target.value } : x)) }) })),
+      onPhotoReason: e => this.setState({ photoReason: e.target.value }),
+      savePhotos: () => {
+        if (!photos.length) { this.setState({ msg: 'Choose at least one photo.' }); return; }
+        if (photos.some(p => !p.note.trim())) { this.setState({ msg: 'Each photo needs a note.' }); return; }
+        if (!st.photoReason) { this.setState({ msg: 'Enter a reason.' }); return; }
+        this.setState({ dlg: null, msg: 'Photos added to the visit.' });
+      },
+      orderOpen: !!dl && dl.kind === 'order',
+      orderName: dv ? dv.name : '', orderPlace: dv ? dv.place : '', orderWhen: dv ? DAYS[dv.day] + ', ' + dv.start + ' – ' + dv.end : '',
+      openNew: () => this.setState({ dlg: { kind: 'new' }, newProp: 'Espoo head office', newTime: '08:00' }),
+      newOpen: !!dl && dl.kind === 'new',
+      onNewProp: e => this.setState({ newProp: e.target.value }),
+      onNewTime: e => this.setState({ newTime: e.target.value }),
+      saveNew: () => {
+        const t = st.newTime || '08:00';
+        const end = String(Number(t.slice(0, 2)) + 3).padStart(2, '0') + t.slice(2);
+        const v = { id: 'n' + Date.now(), day: day, name: st.newProp || 'Espoo head office', place: 'New work order', start: t, end: end, cancelled: false, people: [] };
+        this.setState({ visits: this.visits().concat([v]), dlg: null, msg: 'Scheduled ' + v.name + ' on ' + DAYS[day] + ' at ' + t + '.' });
+      },
+      hasMsg: !!st.msg,
+      msg: st.msg || '',
+    };
+  }
+}
+</script>
+</body>
+</html>

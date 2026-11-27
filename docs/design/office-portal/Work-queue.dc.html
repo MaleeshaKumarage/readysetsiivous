@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Work queue for the cleaning company: every visit from bookings, partner requests and work orders in one list.">
+<title>Work queue</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+a{color:var(--muted)}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;border-bottom:1px solid var(--line-2)}
+.tabs button{min-height:44px;padding:0 16px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.tabs button[aria-selected='true']{border-bottom-color:var(--gold-ink);color:var(--ink);font-weight:700}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.item{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.item.alert{border-color:var(--gold-ink);border-width:2px}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.chip-state{background:var(--line);color:var(--ink)}
+.chip-alert{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-src{background:transparent;border:1px solid var(--line-2);color:var(--muted)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100%;box-sizing:border-box;overflow-y:auto;padding:20px;background:var(--surface);border-left:2px solid var(--line-2);z-index:50;display:flex;flex-direction:column;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Shift-calendar.dc.html">Work order calendar</a>
+    <a href="Employee-schedule.dc.html">Employee schedule</a>
+    <a href="Work-queue.dc.html" aria-current="page">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <h1 style="margin:0;font-size:28px;line-height:1.2">Work queue</h1>
+
+    <div class="tabs" role="tablist" aria-label="Work queue views">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5"><button type="button" role="tab" aria-selected="{{ t.on }}" onClick="{{ t.pick }}">{{ t.label }} ({{ t.count }})</button></sc-for>
+    </div>
+
+    <div class="filters">
+      <label class="field">Source<select class="input" onChange="{{ onSource }}"><option value="all">All sources</option><option value="booking">Public bookings</option><option value="partner">Partner requests</option><option value="shift">Work orders</option></select></label>
+      <label class="field">Search<input class="input" type="search" placeholder="Customer, booking number or company" onChange="{{ onSearch }}"></label>
+      <label class="field">From<select class="input" onChange="{{ onFrom }}"><option value="2026-05-30">30 May 2026</option><option value="2026-11-01">1 Nov 2026</option><option value="2026-11-26">26 Nov 2026</option><option value="">Any date</option></select></label>
+      <label class="field">To<select class="input" onChange="{{ onTo }}"><option value="2026-12-09">9 Dec 2026</option><option value="2026-12-31">31 Dec 2026</option><option value="">Any date</option></select></label>
+      <label class="field">Assignee<select class="input" onChange="{{ onAssignee }}"><option value="">Anyone</option><option value="unassigned">Unassigned</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+    </div>
+
+    <sc-if value="{{ defaultWindow }}" hint-placeholder-val="{{ true }}"><div role="status" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center"><span>Showing overdue and upcoming work (30 May 2026 to 9 Dec 2026).</span><button type="button" class="btn btn-ghost" onClick="{{ showAll }}">Show all work</button></div></sc-if>
+    <sc-if value="{{ partnerHidden }}" hint-placeholder-val="{{ false }}"><p style="margin:0;font-size:14px;color:var(--muted)">Partner requests have no assignee, so they are hidden while this filter is on.</p></sc-if>
+
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:0;color:var(--muted)">{{ emptyText }}</p></sc-if>
+    <div role="list" aria-label="Work items" style="display:flex;flex-direction:column;gap:8px">
+      <sc-for list="{{ items }}" as="it" hint-placeholder-count="4">
+      <div role="listitem" class="{{ it.cls }}">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <strong>{{ it.customer }}</strong>
+          <span style="font-size:14px;color:var(--muted)">{{ it.reference }} · {{ it.when }}</span>
+          <span style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="{{ it.stateChip }}">{{ it.state }}</span><sc-if value="{{ it.unassigned }}" hint-placeholder-val="{{ false }}"><span class="chip chip-src">Unassigned</span></sc-if><span class="chip chip-src">{{ it.sourceLabel }}</span><span style="font-size:13px">{{ it.assignee }}</span></span>
+        </div>
+        <sc-if value="{{ it.isBooking }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ it.open }}" aria-label="Open booking {{ it.reference }}">Open</button></sc-if>
+        <sc-if value="{{ it.isLink }}" hint-placeholder-val="{{ true }}"><a class="btn btn-ghost" href="{{ it.href }}">Open</a></sc-if>
+      </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
+      <span style="font-size:14px">{{ pageText }}</span>
+      <div style="display:flex;gap:8px;align-items:center"><button type="button" class="btn btn-ghost" disabled="{{ firstPage }}" onClick="{{ prevPage }}">Previous</button><span style="font-size:14px">Page {{ page }} of {{ pageCount }}</span><button type="button" class="btn btn-ghost" disabled="{{ lastPage }}" onClick="{{ nextPage }}">Next</button></div>
+    </div>
+  </main>
+</div>
+
+<sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+<aside class="drawer" role="dialog" aria-modal="true" aria-label="Booking {{ bk.number }}">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Booking {{ bk.number }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDrawer }}" style="min-width:44px">×</button></div>
+  <dl style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;margin:0">
+    <dt style="color:var(--muted)">Customer</dt><dd style="margin:0">{{ bk.customer }}</dd>
+    <dt style="color:var(--muted)">Contact</dt><dd style="margin:0">{{ bk.contact }}</dd>
+    <dt style="color:var(--muted)">Service</dt><dd style="margin:0">{{ bk.service }}</dd>
+    <dt style="color:var(--muted)">Start</dt><dd style="margin:0">{{ bk.when }}</dd>
+    <dt style="color:var(--muted)">Status</dt><dd style="margin:0">{{ bk.status }}</dd>
+    <dt style="color:var(--muted)">Assigned to</dt><dd style="margin:0">{{ bk.assignee }}</dd>
+  </dl>
+  <sc-if value="{{ bk.isNew }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ confirmIt }}">Confirm</button><button type="button" class="btn btn-ghost" onClick="{{ askCancel }}">Cancel booking</button></div></sc-if>
+  <sc-if value="{{ bk.isConfirmed }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ completeIt }}">Mark completed</button><button type="button" class="btn btn-ghost" onClick="{{ askCancel }}">Cancel booking</button></div></sc-if>
+  <sc-if value="{{ cancelAsk }}" hint-placeholder-val="{{ false }}"><div role="alertdialog" aria-label="Cancel booking?" style="padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);display:flex;flex-direction:column;gap:8px"><strong>Cancel booking {{ bk.number }}?</strong><div style="display:flex;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ keep }}">Keep booking</button><button type="button" class="btn btn-primary" onClick="{{ cancelIt }}">Cancel booking</button></div></div></sc-if>
+</aside>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const ITEMS = [
+  { id: 'w1', view: 'needs-action', source: 'shift', customer: 'Lindqvist household', reference: 'Kallio, Lindqvist flat, visit 4', when: '24 Nov 2026 08:00', date: '2026-11-24', state: 'Overdue · not started', assignee: '', alert: true, href: 'Shifts.dc.html' },
+  { id: 'w2', view: 'needs-action', source: 'booking', customer: 'Eeva Mäkinen', reference: 'B-1042', when: '30 Nov 2026 08:00', date: '2026-11-30', state: 'New booking', assignee: '', alert: false, href: '' },
+  { id: 'w3', view: 'needs-action', source: 'partner', customer: 'Nordea branch, Mannerheimintie', reference: 'Quote request', when: '4 Dec 2026 09:00', date: '2026-12-04', state: 'Waiting for a quote', assignee: '', alert: false, href: 'Partner-operations.dc.html' },
+  { id: 'w4', view: 'needs-action', source: 'shift', customer: 'Aurora clinic', reference: 'Töölö, move-out, visit 1', when: '26 Nov 2026 13:00', date: '2026-11-26', state: 'Not started', assignee: 'Minna S.', alert: true, href: 'Shifts.dc.html' },
+  { id: 'w5', view: 'scheduled', source: 'booking', customer: 'Jonas Berg', reference: 'B-1043', when: '1 Dec 2026 10:00', date: '2026-12-01', state: 'Confirmed', assignee: 'Ville R.', alert: false, href: '' },
+  { id: 'w6', view: 'scheduled', source: 'shift', customer: 'Virtanen Oy', reference: 'Espoo, weekly clean, visit 1', when: '3 Dec 2026 09:00', date: '2026-12-03', state: 'Accepted', assignee: 'Minna S.', alert: false, href: 'Shifts.dc.html' },
+  { id: 'w7', view: 'in-progress', source: 'shift', customer: 'Hietaniemi office Oy', reference: 'Hietaniemi office, visit 1', when: '26 Nov 2026 10:00', date: '2026-11-26', state: 'In progress', assignee: 'Ville R.', alert: false, href: 'Shifts.dc.html' },
+  { id: 'w8', view: 'completed', source: 'booking', customer: 'Matti Virtanen', reference: 'B-1039', when: '25 Nov 2026 09:00', date: '2026-11-25', state: 'Completed', assignee: 'Anna K.', alert: false, href: '' },
+  { id: 'w9', view: 'cancelled', source: 'booking', customer: 'Liisa Koski', reference: 'B-1037', when: '22 Nov 2026 14:00', date: '2026-11-22', state: 'Cancelled', assignee: '', alert: false, href: '' },
+];
+const BOOKINGS = {
+  'B-1042': { status: 'New', contact: '040 123 4567 · eeva@example.fi', service: 'Kotisiivous, 180 min' },
+  'B-1043': { status: 'Confirmed', contact: '050 987 6543 · jonas@example.fi', service: 'Toimistosiivous, 240 min' },
+  'B-1039': { status: 'Completed', contact: '040 555 0101 · matti@example.fi', service: 'Kotisiivous, 120 min' },
+  'B-1037': { status: 'Cancelled', contact: '044 777 8888 · liisa@example.fi', service: 'Ikkunanpesu, 90 min' },
+};
+const VIEWS = [['needs-action', 'Needs action'], ['scheduled', 'Scheduled'], ['in-progress', 'In progress'], ['completed', 'Completed'], ['cancelled', 'Cancelled']];
+const SOURCE = { booking: 'Public booking', partner: 'Partner request', shift: 'Work order' };
+const PAGE_SIZE = 3;
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  statuses() { return this.st().statuses || {}; }
+  status(ref) { return this.statuses()[ref] || (BOOKINGS[ref] || {}).status; }
+  setStatus(ref, status, view) { this.setState({ statuses: { ...this.statuses(), [ref]: status }, moved: { ...(this.st().moved || {}), [ref]: view }, cancelAsk: false }); }
+  renderVals() {
+    const st = this.st();
+    const view = st.view || 'needs-action';
+    const source = st.source || 'all';
+    const q = (st.q || '').toLowerCase();
+    const from = st.from === undefined ? '2026-05-30' : st.from;
+    const to = st.to === undefined ? '2026-12-09' : st.to;
+    const assignee = st.assignee || '';
+    const moved = st.moved || {};
+    const all = ITEMS.map(it => ({ ...it, view: moved[it.reference] || it.view, state: it.source === 'booking' && this.statuses()[it.reference] ? this.statuses()[it.reference] : it.state }));
+    const match = it => (source === 'all' || it.source === source)
+      && (!q || (it.customer + ' ' + it.reference).toLowerCase().includes(q))
+      && (!from || it.date >= from) && (!to || it.date <= to)
+      && (!assignee || (assignee === 'unassigned' ? !it.assignee : it.assignee === assignee));
+    const filtered = all.filter(match);
+    const inView = filtered.filter(it => it.view === view);
+    const page = st.page || 1;
+    const pageCount = Math.max(1, Math.ceil(inView.length / PAGE_SIZE));
+    const pageItems = inView.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const bkRef = st.open || null;
+    const bkItem = bkRef ? all.find(it => it.reference === bkRef) : null;
+    const bkData = bkRef ? BOOKINGS[bkRef] : null;
+    const bkStatus = bkRef ? this.status(bkRef) : '';
+    return {
+      tabs: VIEWS.map(([value, label]) => ({ label: label, count: filtered.filter(it => it.view === value).length, on: view === value, pick: () => this.setState({ view: value, page: 1 }) })),
+      onSource: e => this.setState({ source: e.target.value, page: 1 }),
+      onSearch: e => this.setState({ q: e.target.value, page: 1 }),
+      onFrom: e => this.setState({ from: e.target.value, page: 1 }),
+      onTo: e => this.setState({ to: e.target.value, page: 1 }),
+      onAssignee: e => this.setState({ assignee: e.target.value, page: 1 }),
+      defaultWindow: from === '2026-05-30' && to === '2026-12-09',
+      showAll: () => this.setState({ from: '', to: '', assignee: '', page: 1 }),
+      partnerHidden: !!assignee && assignee !== 'unassigned',
+      isEmpty: pageItems.length === 0,
+      emptyText: q ? 'Nothing in this view matches “' + st.q + '”.' : 'Nothing in this view.',
+      items: pageItems.map(it => ({
+        cls: 'item' + (it.alert ? ' alert' : ''),
+        customer: it.customer, reference: it.reference, when: it.when, state: it.state,
+        stateChip: 'chip ' + (it.alert ? 'chip-alert' : 'chip-state'),
+        unassigned: it.source === 'shift' && it.state === 'Overdue · not started' && !it.assignee,
+        sourceLabel: SOURCE[it.source], assignee: it.assignee,
+        isBooking: it.source === 'booking', isLink: it.source !== 'booking', href: it.href,
+        open: () => this.setState({ open: it.reference, cancelAsk: false }),
+      })),
+      pageText: inView.length ? 'Showing ' + ((page - 1) * PAGE_SIZE + 1) + '–' + Math.min(inView.length, page * PAGE_SIZE) + ' of ' + inView.length : 'Showing 0 of 0',
+      page: page, pageCount: pageCount, firstPage: page <= 1, lastPage: page >= pageCount,
+      prevPage: () => this.setState({ page: Math.max(1, page - 1) }),
+      nextPage: () => this.setState({ page: Math.min(pageCount, page + 1) }),
+      drawerOpen: !!bkItem,
+      bk: bkItem ? { number: bkRef, customer: bkItem.customer, contact: bkData.contact, service: bkData.service, when: bkItem.when, status: bkStatus, assignee: bkItem.assignee || 'Unassigned', isNew: bkStatus === 'New', isConfirmed: bkStatus === 'Confirmed' } : {},
+      closeDrawer: () => this.setState({ open: null, cancelAsk: false }),
+      confirmIt: () => this.setStatus(bkRef, 'Confirmed', 'scheduled'),
+      completeIt: () => this.setStatus(bkRef, 'Completed', 'completed'),
+      askCancel: () => this.setState({ cancelAsk: true }),
+      cancelAsk: !!st.cancelAsk,
+      keep: () => this.setState({ cancelAsk: false }),
+      cancelIt: () => this.setStatus(bkRef, 'Cancelled', 'cancelled'),
+    };
+  }
+}
+</script>
+</body>
+</html>
