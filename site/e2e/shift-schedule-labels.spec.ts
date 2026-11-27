@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 // The shift list names each schedule in words a person can act on: varied times list their weekdays, and the
-// property's visit shift says it holds numbered visits rather than reading as an on-call shift.
+// property's main shift reads as On-call / flexible, the design's name for this schedule type.
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 
-test('the shift list shows the weekdays of a varied-times shift and marks the visit shift as numbered visits', async ({ page }) => {
+test('the shift list shows the weekdays of a varied-times shift and names the main shift On-call / flexible', async ({ page }) => {
   await setupAdminMocks(page);
   const shifts = [
     { id: 'varied', name: 'Cleaning - Varied 1, Helsinki', companyId: 'company', branchId: 'branch', isActive: true,
@@ -24,6 +24,6 @@ test('the shift list shows the weekdays of a varied-times shift and marks the vi
   const varied = page.getByRole('row').filter({ hasText: 'Cleaning - Varied 1' });
   await expect(varied).toContainText('Varied times: Tuesday, Thursday');
   const visits = page.getByRole('row').filter({ hasText: 'Cleaning - Visits 2' });
-  await expect(visits).toContainText('Visit shift (numbered visits)');
-  await expect(visits).not.toContainText('On-call');
+  await expect(visits).toContainText('On-call / flexible');
+  await expect(visits).not.toContainText('Visit shift');
 });

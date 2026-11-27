@@ -323,10 +323,8 @@ export default function ShiftsAdminPage() {
   const progressSeq = useRef(0);
   const loadProgress = (items: Shift[]) => {
     const seq = ++progressSeq.current;
-    const now = new Date();
-    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-    const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
-    void Promise.all(items.map(s => adminShifts.occurrences(s.id, from, to).then(list => {
+    // The ring counts every visit of the work order, from its start date to its end date (open-ended when there is none).
+    void Promise.all(items.map(s => adminShifts.occurrences(s.id, `${(s.validFrom ?? '2000-01-01').slice(0, 10)}T00:00:00Z`, `${(s.validUntil ?? '2100-12-31').slice(0, 10)}T23:59:59Z`).then(list => {
       const visits = list ?? [];
       const live = visits.filter(v => !v.isCancelledManualVisit);
       const cancelled = visits.length - live.length;
@@ -945,7 +943,7 @@ export default function ShiftsAdminPage() {
                 </div>
               </div>
               {drawerShift.isBranchMain && <>
-                <Select label="Default employee" description="Each new visit is offered to this employee. Visits already added keep their employee." placeholder="None: new visits start unassigned"
+                <Select aria-label="Default employee" placeholder="No default employee"
                   clearable searchable value={drawerShift.defaultEmployeeId ?? null} onChange={value => { void saveDefaultCleaner(value); }}
                   data={employees.filter(e => e.isActive && e.role !== 'partner').map(e => ({ value: e.id, label: employeeLabel(e, employees) }))} />
                 {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
@@ -977,9 +975,9 @@ export default function ShiftsAdminPage() {
                     <tbody>
                       {shownVisits.map((item) => (
                         <tr key={item.exceptionId ?? item.startUtc} className="border-t border-accent-100 align-top">
-                          <td className="px-3 py-2">{visitLabel(item, timeZoneId) && <span data-testid="visit-name" className="mb-1 block text-sm font-semibold text-accent-950">{visitLabel(item, timeZoneId)}</span>}<span className="block font-semibold">{new Date(item.startUtc).toLocaleDateString(undefined, { timeZone: timeZoneId, day: 'numeric', month: 'short' })}</span><span className="block text-gray-600">{new Date(item.startUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })} to {new Date(item.endUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })}</span>{highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <span className="block text-xs font-semibold text-orange-700">Overlapping visit</span>}</td>
+                          <td className="px-3 py-2"><span className="block font-semibold">{new Date(item.startUtc).toLocaleDateString(undefined, { timeZone: timeZoneId, day: 'numeric', month: 'short' })}</span><span className="block text-gray-600">{new Date(item.startUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })} to {new Date(item.endUtc).toLocaleTimeString(undefined, { timeZone: timeZoneId, hour: '2-digit', minute: '2-digit' })}</span>{highlightUtc && Date.parse(item.startUtc) === Date.parse(highlightUtc) && <span className="block text-xs font-semibold text-orange-700">Overlapping visit</span>}</td>
                           <td className="px-3 py-2"><span className="block">{(item.assigneeIds ?? []).map(employeeName).join(', ') || (item.offeredEmployeeId ? `Offer sent to ${employeeName(item.offeredEmployeeId)}` : 'Not assigned')}</span><span className="block text-xs text-gray-500">{item.visitNumber ? (item.isPartnerBooking ? 'Partner booking' : item.offeredEmployeeId ? 'Waiting for the employee to accept' : (item.assigneeIds ?? []).length ? 'Accepted' : 'No employee yet') : item.assignmentSource ?? 'Recurring'}</span>{item.isPartnerBooking && <span className="block text-xs text-gray-500">Managed under Partner requests</span>}{item.visitNumber && item.offeredEmployeeId && Date.parse(item.endUtc) < Date.now() && <span data-testid="past-offer-note" className="block text-xs text-orange-700">This visit has already ended. The employee can still accept the offer. To change the employee, delete this visit and add it again.</span>}</td>
-                          <td className="px-3 py-2 text-sm text-gray-600">{item.visitCleaningType ?? 'Normal'}<span data-testid="occurrence-status" className="block text-xs text-gray-500">{item.visitNumber && item.workStatus ? WORK_STATUS_LABEL[item.workStatus] ?? item.workStatus : item.status ? OCCURRENCE_STATUSES.find(x => x.value === String(item.status))?.label : 'Scheduled'}</span></td>
+                          <td className="px-3 py-2 text-sm text-gray-600">{item.visitCleaningType ?? 'Normal'}</td>
                           <td className="px-3 py-2">
                             <Menu shadow="md" width={230} position="bottom-end" withinPortal>
                               <Menu.Target>
