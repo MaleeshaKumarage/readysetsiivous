@@ -29,7 +29,7 @@ a{color:var(--muted)}
 .seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
 .seg button{min-height:40px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
 .seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
-.board{position:relative;overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.board{position:relative;overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
 .grid{display:grid;min-width:640px}
 .gutter{position:relative;border-right:1px solid var(--line)}
 .gutter span{position:absolute;left:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;transform:translateY(-8px)}
@@ -93,11 +93,9 @@ a{color:var(--muted)}
         <p>{{ rangeLabel }}. Drag a visit to change its time{{ dragHint }}. Click a visit for its details and work times. Work times can be recorded for past dates only.</p>
       </div>
       <div>
-        <button type="button" class="btn btn-primary" onClick="{{ openNew }}">Schedule work order on this day</button>
         <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
         <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
         <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
-        <button type="button" class="btn btn-ghost" onClick="{{ refresh }}">Refresh</button>
       </div>
     </header>
 
@@ -115,11 +113,7 @@ a{color:var(--muted)}
     <div>
       <label>{{ dateLabel }}<select onChange="{{ onDate }}"><option value="0">Mon 30 Nov 2026</option><option value="1">Tue 1 Dec 2026</option><option value="2">Wed 2 Dec 2026</option><option value="3">Thu 3 Dec 2026</option><option value="4">Fri 4 Dec 2026</option><option value="5">Sat 5 Dec 2026</option><option value="6">Sun 6 Dec 2026</option></select></label>
       <sc-if value="{{ isDay }}" hint-placeholder-val="{{ true }}">
-      <fieldset>
-        <legend>Employees</legend>
-        <sc-for list="{{ empChoices }}" as="ec" hint-placeholder-count="3"><label><input type="checkbox" checked="{{ ec.on }}" onChange="{{ ec.toggle }}">{{ ec.name }}</label></sc-for>
-        <button type="button" class="btn btn-ghost" onClick="{{ showAllEmps }}">Show all employees</button>
-      </fieldset>
+      <label>Employees<select onChange="{{ onEmpPick }}"><option value="all">All employees</option><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
       </sc-if>
       <label><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}">Show 24 h</label>
       <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}">Show weekends</label></sc-if>
@@ -520,15 +514,13 @@ class Component extends DCLogic {
       prev: () => this.setState(isWeek ? {} : { day: Math.max(0, day - 1), msg: '' }),
       next: () => this.setState(isWeek ? {} : { day: Math.min(6, day + 1), msg: '' }),
       today: () => this.setState({ day: TODAY, msg: '' }),
-      refresh: () => this.setState({ msg: 'Scheduler refreshed.' }),
       showDay: () => this.setState({ view: 'day', msg: '' }),
       showWeek: () => this.setState({ view: 'week', msg: '' }),
       onWeekEmployee: e => this.setState({ weekEmp: e.target.value, msg: '' }),
       closeSel: () => this.setState({ sel: null }),
       dateLabel: isWeek ? 'Week starting' : 'Date',
       onDate: e => this.setState({ day: Number(e.target.value), msg: '' }),
-      empChoices: EMPLOYEES.map(e => ({ name: e.name, on: !st.chosen || st.chosen.includes(e.id), toggle: () => { const cur = st.chosen || EMPLOYEES.map(x => x.id); this.setState({ chosen: cur.includes(e.id) ? cur.filter(x => x !== e.id) : cur.concat([e.id]) }); } })),
-      showAllEmps: () => this.setState({ chosen: null }),
+      onEmpPick: e => this.setState({ chosen: e.target.value === 'all' ? null : [e.target.value], msg: '' }),
       fullDay: !!st.full,
       onFullDay: e => this.setState({ full: !!e.target.checked }),
       weekends: !!st.weekends,
@@ -548,7 +540,6 @@ class Component extends DCLogic {
       onNewTitle: e => this.setState({ newTitle: e.target.value }),
       closeNewVisit: () => this.setState({ newOpen: false }),
       saveNewVisit: () => this.saveNewVisit(),
-      openNew: () => this.setState({ newOpen: true, newEmp: null, newDay: String(day), newStart: '08:00', newDur: '60', newTitle: 'Kallio, Lindqvist flat', msg: '' }),
       recOpen: !!dl && dl.kind === 'rec',
       recTitle: dv && dv.actual ? 'Correct work times' : 'Record work',
       recWho: dv ? (dv.emp ? EMP_BY_ID[dv.emp] : 'Unassigned') + ' · ' + dvName : '',
