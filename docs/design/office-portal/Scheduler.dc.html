@@ -29,7 +29,7 @@ a{color:var(--muted)}
 .seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
 .seg button{min-height:40px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
 .seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
-.board{position:relative;overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.board{position:relative;overflow:auto;max-height:600px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
 .grid{display:grid;min-width:640px}
 .gutter{position:relative;border-right:1px solid var(--line)}
 .gutter span{position:absolute;left:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;transform:translateY(-8px)}
@@ -59,10 +59,27 @@ a{color:var(--muted)}
 .blk-cancelled{background:var(--wash);color:var(--muted);border-style:dashed;text-decoration:line-through}
 .blk-unassigned{border-style:dashed}
 .chip-mute{background:var(--line);color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.check{display:flex;align-items:center;gap:8px;min-height:44px}
+.check input{width:20px;height:20px}
+.note{margin:0;font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.x{min-width:44px;padding:0 12px}
+.dlg{position:fixed;inset:0;z-index:60;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg section{display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(480px,100%);max-height:calc(100vh - 32px);overflow-y:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.dlg-head strong{font-size:18px}
+.dlg-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.colhead{position:sticky;top:0;z-index:2}
+.gutter span:first-child{transform:none}
+.blk{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
+.seg button{min-height:36px}
 @media (max-width:900px){.panel{width:100%}}
 </style>
 </helmet>
-<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+<div style="display:flex;flex-wrap:wrap;min-height:100vh">
   <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line)">
     <strong>ReadySetSiivous Office</strong>
     <a href="Main.dc.html">Dashboard</a>
@@ -86,20 +103,18 @@ a{color:var(--muted)}
     <a href="Inventory.dc.html">Inventory</a>
   </aside>
 
-  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:18px">
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
     <header>
-      <div>
-        <h1>Scheduler</h1>
-        <p>{{ rangeLabel }}. Drag a visit to change its time{{ dragHint }}. Click a visit for its details and work times. Work times can be recorded for past dates only.</p>
-      </div>
+      <h1 style="margin:0;font-size:28px;line-height:1.2">Scheduler</h1>
+      <p class="note" style="margin-top:4px">{{ rangeLabel }}. Drag a visit to change its time{{ dragHint }}. Click a visit for its details and work times. Work times can be recorded for past dates only.</p>
     </header>
 
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
       <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
-      <label class="field">{{ dateLabel }}<select class="input" onChange="{{ onDate }}"><option value="0">Mon 30 Nov 2026</option><option value="1">Tue 1 Dec 2026</option><option value="2">Wed 2 Dec 2026</option><option value="3">Thu 3 Dec 2026</option><option value="4">Fri 4 Dec 2026</option><option value="5">Sat 5 Dec 2026</option><option value="6">Sun 6 Dec 2026</option></select></label>
+      <label class="field">{{ dateLabel }}<select class="input" onChange="{{ onDate }}"><option value="0">Mon 30 Nov 2026</option><option value="1" selected>Tue 1 Dec 2026 (today)</option><option value="2">Wed 2 Dec 2026</option><option value="3">Thu 3 Dec 2026</option><option value="4">Fri 4 Dec 2026</option><option value="5">Sat 5 Dec 2026</option><option value="6">Sun 6 Dec 2026</option></select></label>
       <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
       <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
-      <div class="seg" role="group" aria-label="View">
+      <div class="seg" role="group" aria-label="View" style="margin-left:8px">
         <button type="button" aria-pressed="{{ isDay }}" onClick="{{ showDay }}">Day</button>
         <button type="button" aria-pressed="{{ isWeek }}" onClick="{{ showWeek }}">Week</button>
       </div>
@@ -110,62 +125,63 @@ a{color:var(--muted)}
       <label class="field">Employee<select class="input" onChange="{{ onWeekEmployee }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
       </sc-if>
     </div>
+
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
       <strong>{{ reviewText }}</strong>
-      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
-        <label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}" style="width:20px;height:20px">Show 24 h</label>
-        <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}" style="width:20px;height:20px">Show weekends</label></sc-if>
-        <label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" onChange="{{ onReviewOnly }}" style="width:20px;height:20px">Show only visits that need review</label>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
+        <label class="check"><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}">Show 24 h</label>
+        <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label class="check"><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}">Show weekends</label></sc-if>
+        <label class="check"><input type="checkbox" onChange="{{ onReviewOnly }}">Show only visits that need review</label>
       </div>
     </div>
 
     <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}">
-    <div role="status">
+    <div role="status" class="msg" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
       <span>{{ msg }}</span>
-      <span><sc-if value="{{ canUndo }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ undo }}">Undo</button></sc-if><button type="button" class="btn btn-ghost" aria-label="Dismiss message" onClick="{{ dismissMsg }}">×</button></span>
+      <span style="display:flex;gap:8px"><sc-if value="{{ canUndo }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ undo }}">Undo</button></sc-if><button type="button" class="btn btn-ghost x" aria-label="Dismiss message" onClick="{{ dismissMsg }}">×</button></span>
     </div>
     </sc-if>
-    <sc-if value="{{ noVisits }}" hint-placeholder-val="{{ false }}"><p>No visits on this day.</p></sc-if>
-    <sc-if value="{{ filteredOut }}" hint-placeholder-val="{{ false }}"><p>Turn off the review filter to see every visit.</p></sc-if>
+    <sc-if value="{{ noVisits }}" hint-placeholder-val="{{ false }}"><p style="margin:0">No visits on this day.</p></sc-if>
+    <sc-if value="{{ filteredOut }}" hint-placeholder-val="{{ false }}"><p style="margin:0">Turn off the review filter to see every visit.</p></sc-if>
 
     <div class="board" role="region" aria-label="Schedule grid" tabindex="0">
       <div class="grid" style="{{ gridStyle }}">
-        <div class="colhead">Time</div>
+        <div class="colhead" style="font-size:13px;color:var(--muted)">Time</div>
         <sc-for list="{{ cols }}" as="c" hint-placeholder-count="3">
-        <div class="colhead"><span>{{ c.name }}<small>{{ c.sub }}</small><small>{{ c.hours }} · {{ c.count }}</small></span><button type="button" class="btn btn-ghost" onClick="{{ c.addVisit }}" aria-label="Add visit for {{ c.name }}">+ Visit</button></div>
+        <div class="colhead" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>{{ c.name }}<small>{{ c.sub }}</small><small>{{ c.hours }} · {{ c.count }}</small></span><button type="button" class="btn btn-ghost" onClick="{{ c.addVisit }}" aria-label="Add visit for {{ c.name }}" style="min-height:40px;padding:0 10px;font-size:13px">+ Visit</button></div>
         </sc-for>
 
-        <div class="gutter"><sc-for list="{{ hourLabels }}" as="h" hint-placeholder-count="12"><span>{{ h.t }}</span></sc-for></div>
+        <div class="gutter" style="{{ colStyle }}"><sc-for list="{{ hourLabels }}" as="h" hint-placeholder-count="12"><span style="{{ h.pos }}">{{ h.t }}</span></sc-for></div>
         <sc-for list="{{ cols }}" as="c" hint-placeholder-count="3">
-        <div class="col{{ c.overClass }}" onDragOver="{{ c.dragOver }}" onDrop="{{ c.drop }}" aria-label="{{ c.name }} {{ c.sub }}">
+        <div class="col{{ c.overClass }}" style="{{ colStyle }}" onDragOver="{{ c.dragOver }}" onDrop="{{ c.drop }}" aria-label="{{ c.name }} {{ c.sub }}">
           <sc-for list="{{ c.blocks }}" as="b" hint-placeholder-count="2">
-          <button type="button" class="blk {{ b.cls }}" draggable="{{ b.draggable }}" onDragStart="{{ b.dragStart }}" onClick="{{ b.open }}" aria-pressed="{{ b.selected }}" aria-label="{{ b.label }}">
+          <button type="button" class="blk {{ b.cls }}" style="{{ b.box }}" draggable="{{ b.draggable }}" onDragStart="{{ b.dragStart }}" onClick="{{ b.open }}" aria-pressed="{{ b.selected }}" aria-label="{{ b.label }}">
             <strong>{{ b.title }}</strong>
             <span>{{ b.time }}</span>
             <span>{{ b.statusText }}</span>
           </button>
-          <sc-if value="{{ b.canResize }}" hint-placeholder-val="{{ true }}"><div class="handle" role="separator" aria-label="Drag to change the end time" draggable="true" onDragStart="{{ b.resizeStart }}"></div></sc-if>
+          <sc-if value="{{ b.canResize }}" hint-placeholder-val="{{ true }}"><div class="handle" role="separator" aria-label="Drag to change the end time" draggable="true" style="{{ b.handleBox }}" onDragStart="{{ b.resizeStart }}"></div></sc-if>
           </sc-for>
         </div>
         </sc-for>
       </div>
     </div>
-    <p>Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same cleaner.</p>
+    <p class="note">Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same cleaner.</p>
   </main>
 </div>
 
 <sc-if value="{{ newOpen }}" hint-placeholder-val="{{ false }}">
-<div role="dialog" aria-modal="true" aria-label="{{ newTitle }}">
+<div role="dialog" aria-modal="true" aria-label="New visit" class="dlg">
   <section>
-    <div><strong>{{ newTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeNewVisit }}">×</button></div>
-    <p>{{ newWho }}</p>
-    <label>Work order<select onChange="{{ onNewTitle }}"><option value="Kallio, Lindqvist flat" selected>Kallio, Lindqvist flat</option><option value="Töölö, move-out">Töölö, move-out</option><option value="Hietaniemi office">Hietaniemi office</option><option value="Espoo, weekly clean">Espoo, weekly clean</option><option value="Helsinki showroom">Helsinki showroom</option></select></label>
-    <div>
-      <label>Start<select onChange="{{ onNewStart }}"><option value="07:00">07:00</option><option value="07:15">07:15</option><option value="07:30">07:30</option><option value="07:45">07:45</option><option value="08:00" selected>08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="16:00">16:00</option></select></label>
-      <label>Length<select onChange="{{ onNewDur }}"><option value="30">0 h 30 min</option><option value="60" selected>1 h</option><option value="90">1 h 30 min</option><option value="120">2 h</option><option value="150">2 h 30 min</option><option value="180">3 h</option><option value="240">4 h</option></select></label>
+    <div class="dlg-head"><strong>New visit</strong><button type="button" class="btn btn-ghost x" aria-label="Close" onClick="{{ closeNewVisit }}">×</button></div>
+    <p class="note">{{ newWho }}</p>
+    <label class="field">Work order<select class="input" onChange="{{ onNewTitle }}"><option value="Kallio, Lindqvist flat" selected>Kallio, Lindqvist flat</option><option value="Töölö, move-out">Töölö, move-out</option><option value="Hietaniemi office">Hietaniemi office</option><option value="Espoo, weekly clean">Espoo, weekly clean</option><option value="Helsinki showroom">Helsinki showroom</option></select></label>
+    <div class="two">
+      <label class="field">Start<select class="input" onChange="{{ onNewStart }}"><option value="07:00">07:00</option><option value="07:15">07:15</option><option value="07:30">07:30</option><option value="07:45">07:45</option><option value="08:00" selected>08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="16:00">16:00</option></select></label>
+      <label class="field">Length<select class="input" onChange="{{ onNewDur }}"><option value="30">0 h 30 min</option><option value="60" selected>1 h</option><option value="90">1 h 30 min</option><option value="120">2 h</option><option value="150">2 h 30 min</option><option value="180">3 h</option><option value="240">4 h</option></select></label>
     </div>
-    <p>{{ newSummary }}</p>
-    <div>
+    <p class="note">{{ newSummary }}</p>
+    <div class="dlg-foot">
       <button type="button" class="btn btn-ghost" onClick="{{ closeNewVisit }}">Cancel</button>
       <button type="button" class="btn btn-primary" onClick="{{ saveNewVisit }}">Save visit</button>
     </div>
@@ -175,89 +191,86 @@ a{color:var(--muted)}
 
 <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
 <aside class="panel" aria-label="Visit details">
-  <div>
-    <div>
-      <span class="{{ sel.chip }}">{{ sel.statusText }}</span>
-      <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><span class="chip">Overlap</span></sc-if>
-      <sc-if value="{{ sel.unassigned }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Unassigned</span></sc-if>
-      <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">{{ sel.reviewKind }}</span></sc-if>
-      <h2>{{ sel.title }}</h2>
-      <p>{{ sel.place }}</p>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+    <div style="min-width:0">
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <span class="{{ sel.chip }}">{{ sel.statusText }}</span>
+        <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Overlap</span></sc-if>
+        <sc-if value="{{ sel.unassigned }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Unassigned</span></sc-if>
+        <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">{{ sel.reviewKind }}</span></sc-if>
+      </div>
+      <h2 style="margin:10px 0 0;font-size:18px">{{ sel.title }}</h2>
+      <p class="note" style="margin-top:4px">{{ sel.place }}</p>
     </div>
-    <button type="button" class="btn btn-ghost" aria-label="Close visit details" onClick="{{ closeSel }}">×</button>
+    <button type="button" class="btn btn-ghost x" aria-label="Close visit details" onClick="{{ closeSel }}">×</button>
   </div>
-  <dl>
-    <dt>Visit</dt><dd>{{ sel.when }}</dd>
-    <dt>Number</dt><dd>Visit {{ sel.number }}</dd>
-    <dt>Cleaner</dt><dd>{{ sel.cleanerName }}</dd>
-    <dt>Duration</dt><dd>{{ sel.duration }}</dd>
-    <dt>Actual</dt><dd>{{ sel.actualText }}</dd>
-    <dt>Checklist</dt><dd>{{ sel.checklist }}</dd>
-    <dt>Notes</dt><dd>{{ sel.notes }}</dd>
-    <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><dt>Review</dt><dd>{{ sel.reviewLabel }}</dd></sc-if>
+  <dl style="display:grid;grid-template-columns:auto 1fr;gap:10px 16px;font-size:14px;margin:16px 0">
+    <dt style="color:var(--muted)">Visit</dt><dd style="margin:0;font-weight:600;font-variant-numeric:tabular-nums">{{ sel.when }}</dd>
+    <dt style="color:var(--muted)">Number</dt><dd style="margin:0">Visit {{ sel.number }}</dd>
+    <dt style="color:var(--muted)">Cleaner</dt><dd style="margin:0;font-weight:600">{{ sel.cleanerName }}</dd>
+    <dt style="color:var(--muted)">Duration</dt><dd style="margin:0">{{ sel.duration }}</dd>
+    <dt style="color:var(--muted)">Actual</dt><dd style="margin:0;font-variant-numeric:tabular-nums">{{ sel.actualText }}</dd>
+    <dt style="color:var(--muted)">Checklist</dt><dd style="margin:0">{{ sel.checklist }}</dd>
+    <dt style="color:var(--muted)">Notes</dt><dd style="margin:0">{{ sel.notes }}</dd>
+    <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><dt style="color:var(--muted)">Review</dt><dd style="margin:0">{{ sel.reviewLabel }}</dd></sc-if>
   </dl>
-  <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><p>This visit overlaps another visit for {{ sel.cleanerName }}. Move or reassign one of them.</p></sc-if>
-  <sc-if value="{{ sel.locked }}" hint-placeholder-val="{{ false }}"><p>This visit is {{ sel.statusText }}. Its time and cleaner cannot be changed now.</p></sc-if>
-  <div>
-    <div>
-      <button type="button" class="btn btn-ghost" onClick="{{ sel.earlier }}" disabled="{{ sel.locked }}">Earlier by 15 min</button>
-      <button type="button" class="btn btn-ghost" onClick="{{ sel.later }}" disabled="{{ sel.locked }}">Later by 15 min</button>
+  <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><p style="margin:0 0 12px;padding:12px;border:1px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);font-size:14px">This visit overlaps another visit by the same cleaner. Move or reassign one of them.</p></sc-if>
+  <sc-if value="{{ sel.locked }}" hint-placeholder-val="{{ false }}"><p class="note" style="margin-bottom:12px">Status: {{ sel.statusText }}. The time and cleaner cannot be changed now.</p></sc-if>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;gap:8px">
+      <button type="button" class="btn btn-ghost" onClick="{{ sel.earlier }}" disabled="{{ sel.locked }}" style="flex:1;min-width:0;padding:0 8px">15 min earlier</button>
+      <button type="button" class="btn btn-ghost" onClick="{{ sel.later }}" disabled="{{ sel.locked }}" style="flex:1;min-width:0;padding:0 8px">15 min later</button>
     </div>
-    <label>Move to cleaner
-      <select onChange="{{ sel.onReassign }}" disabled="{{ sel.locked }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select>
-    </label>
-    <div>
-      <button type="button" class="btn btn-ghost" onClick="{{ sel.openOrder }}">Work order details</button>
-      <sc-if value="{{ sel.canRecord }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ sel.record }}">{{ sel.recordLabel }}</button></sc-if>
-      <sc-if value="{{ sel.canPhoto }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}">Add photos</button></sc-if>
-    </div>
-    <a href="Shifts.dc.html" class="btn btn-ghost">Open in work orders</a>
+    <label class="field">Move to cleaner<select class="input" value="{{ sel.empValue }}" onChange="{{ sel.onReassign }}" disabled="{{ sel.locked }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
+    <sc-if value="{{ sel.canRecord }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ sel.record }}">{{ sel.recordLabel }}</button></sc-if>
+    <sc-if value="{{ sel.canPhoto }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}">Add photos</button></sc-if>
+    <button type="button" class="btn btn-ghost" onClick="{{ sel.openOrder }}">Work order details</button>
+    <a href="Shifts.dc.html" class="btn btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">Open in work orders</a>
   </div>
 </aside>
 </sc-if>
 
 <sc-if value="{{ recOpen }}" hint-placeholder-val="{{ false }}">
-<div role="dialog" aria-modal="true" aria-label="{{ recTitle }}">
+<div role="dialog" aria-modal="true" aria-label="{{ recTitle }}" class="dlg">
   <section>
-    <div><strong>{{ recTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close work times" onClick="{{ closeDlg }}">×</button></div>
+    <div class="dlg-head"><strong>{{ recTitle }}</strong><button type="button" class="btn btn-ghost x" aria-label="Close work times" onClick="{{ closeDlg }}">×</button></div>
     <strong>{{ recWho }}</strong>
-    <span>Scheduled: {{ recScheduled }}</span>
-    <p>Confirm actual times in Europe/Helsinki. Scheduled times are prefilled for new records. Saving records this past visit as completed. Checklist evidence is kept.</p>
-    <div>
-      <label>Actual start<select onChange="{{ onRecStart }}"><option value="07:45">07:45</option><option value="08:00" selected>08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="10:00">10:00</option></select></label>
-      <label>Actual end<select onChange="{{ onRecEnd }}"><option value="10:30">10:30</option><option value="10:45">10:45</option><option value="11:00" selected>11:00</option><option value="11:15">11:15</option><option value="12:00">12:00</option><option value="14:00">14:00</option></select></label>
+    <span style="font-size:14px;font-variant-numeric:tabular-nums">Scheduled: {{ recScheduled }}</span>
+    <p class="note">Confirm actual times in Europe/Helsinki. Scheduled times are prefilled for new records. Saving records this past visit as completed. Checklist evidence is kept.</p>
+    <div class="two">
+      <label class="field">Actual start<select class="input" onChange="{{ onRecStart }}"><option value="07:45">07:45</option><option value="08:00" selected>08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="10:00">10:00</option></select></label>
+      <label class="field">Actual end<select class="input" onChange="{{ onRecEnd }}"><option value="10:30">10:30</option><option value="10:45">10:45</option><option value="11:00" selected>11:00</option><option value="11:15">11:15</option><option value="12:00">12:00</option><option value="14:00">14:00</option></select></label>
     </div>
-    <span>Work duration: {{ recDuration }} hours</span>
-    <label>Reason<input type="text" maxlength="2000" onChange="{{ onRecReason }}"></label>
-    <sc-if value="{{ recMsg }}" hint-placeholder-val="{{ false }}"><p role="alert">{{ recMsg }}</p></sc-if>
-    <div><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveRec }}">Save work times</button></div>
+    <span style="font-size:14px">Work duration: {{ recDuration }} hours</span>
+    <label class="field">Reason<input class="input" type="text" maxlength="2000" onChange="{{ onRecReason }}"></label>
+    <sc-if value="{{ recMsg }}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin:0;color:var(--gold-ink);font-weight:600">{{ recMsg }}</p></sc-if>
+    <div class="dlg-foot"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveRec }}">Save work times</button></div>
   </section>
 </div>
 </sc-if>
 
 <sc-if value="{{ photoOpen }}" hint-placeholder-val="{{ false }}">
-<div role="dialog" aria-modal="true" aria-label="Add photos">
+<div role="dialog" aria-modal="true" aria-label="Add photos" class="dlg">
   <section>
-    <div><strong>Add photos</strong><button type="button" class="btn btn-ghost" aria-label="Close photos" onClick="{{ closeDlg }}">×</button></div>
+    <div class="dlg-head"><strong>Add photos</strong><button type="button" class="btn btn-ghost x" aria-label="Close photos" onClick="{{ closeDlg }}">×</button></div>
     <strong>{{ photoWho }}</strong>
-    <p>Each photo needs a note. Photos are kept with the visit's checklist evidence.</p>
-    <sc-for list="{{ photoList }}" as="ph" hint-placeholder-count="0"><label>Photo {{ ph.n }} note<input type="text" maxlength="500" onChange="{{ ph.onNote }}"></label></sc-for>
+    <p class="note">For photos the employee sent you outside the app. Each photo needs its own note, and the reason is kept with the visit.</p>
     <button type="button" class="btn btn-ghost" onClick="{{ addPhoto }}">Add a photo</button>
-    <label>Reason<input type="text" maxlength="500" onChange="{{ onPhotoReason }}"></label>
-    <sc-if value="{{ photoMsg }}" hint-placeholder-val="{{ false }}"><p role="alert">{{ photoMsg }}</p></sc-if>
-    <div><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ savePhotos }}">Save photos</button></div>
+    <sc-for list="{{ photoList }}" as="ph" hint-placeholder-count="0"><label class="field">Note for photo {{ ph.n }}<input class="input" type="text" maxlength="500" onChange="{{ ph.onNote }}"></label></sc-for>
+    <label class="field">Reason<input class="input" type="text" maxlength="500" onChange="{{ onPhotoReason }}"></label>
+    <sc-if value="{{ photoMsg }}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin:0;color:var(--gold-ink);font-weight:600">{{ photoMsg }}</p></sc-if>
+    <div class="dlg-foot"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ savePhotos }}">Save photos</button></div>
   </section>
 </div>
 </sc-if>
 
 <sc-if value="{{ orderOpen }}" hint-placeholder-val="{{ false }}">
-<div role="dialog" aria-modal="true" aria-label="Work order details">
+<div role="dialog" aria-modal="true" aria-label="Work order details" class="dlg">
   <section>
-    <div><strong>Work order details</strong><button type="button" class="btn btn-ghost" aria-label="Close details" onClick="{{ closeDlg }}">×</button></div>
-    <strong>{{ orderName }}</strong>
-    <span>{{ orderPlace }}</span>
-    <span>Scheduled: {{ orderWhen }}</span>
-    <div><button type="button" class="btn btn-primary" onClick="{{ closeDlg }}">Close</button></div>
+    <div class="dlg-head"><strong>{{ orderName }}</strong><button type="button" class="btn btn-ghost x" aria-label="Close details" onClick="{{ closeDlg }}">×</button></div>
+    <span class="note">{{ orderPlace }}</span>
+    <span style="font-variant-numeric:tabular-nums">Scheduled: {{ orderWhen }}</span>
+    <div class="dlg-foot"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Close</button><a href="Shifts.dc.html" class="btn btn-primary" style="display:inline-flex;align-items:center;text-decoration:none">Open work order</a></div>
   </section>
 </div>
 </sc-if>
@@ -481,6 +494,7 @@ class Component extends DCLogic {
           locked: s.locked,
           when: DAYS[sel.day] + ', ' + fmt(sel.start) + '–' + fmt(sel.end),
           cleanerName: sel.emp ? EMP_BY_ID[sel.emp] : 'Unassigned',
+          empValue: sel.emp || 'anna',
           duration: ((sel.end - sel.start) / 60) + ' h',
           actualText: sel.actual ? sel.actual + (sel.hours == null ? '' : ' · ' + sel.hours.toFixed(2) + ' hours') : 'Not recorded',
           checklist: sel.checklist,
@@ -499,11 +513,12 @@ class Component extends DCLogic {
     }
     const weekday = DAYS[day];
     return Object.assign({
-      rangeLabel: isWeek ? 'Week of 30 November, ' + EMP_BY_ID[this.weekEmp()] : 'Day view, ' + weekday,
+      rangeLabel: isWeek ? 'Week of 30 November for ' + EMP_BY_ID[this.weekEmp()].replace(/\.$/, '') : 'Day view, ' + weekday,
       dragHint: isWeek ? ' or day' : ' or cleaner',
       isDay: !isWeek,
       isWeek: isWeek,
       gridStyle: { gridTemplateColumns: '56px repeat(' + cols.length + ', minmax(150px, 1fr))' },
+      colStyle: { height: ((LAST - FIRST) / 60) * HOUR_PX + 'px' },
       cols: cols,
       hasMsg: !!st.msg,
       msg: st.msg || '',
@@ -516,7 +531,7 @@ class Component extends DCLogic {
       showWeek: () => this.setState({ view: 'week', msg: '' }),
       onWeekEmployee: e => this.setState({ weekEmp: e.target.value, msg: '' }),
       closeSel: () => this.setState({ sel: null }),
-      dateLabel: isWeek ? 'Week starting' : 'Date',
+      dateLabel: 'Date',
       onDate: e => this.setState({ day: Number(e.target.value), msg: '' }),
       onEmpPick: e => this.setState({ chosen: e.target.value === 'all' ? null : [e.target.value], msg: '' }),
       fullDay: !!st.full,
