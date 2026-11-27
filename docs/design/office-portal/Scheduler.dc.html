@@ -129,7 +129,7 @@ a{color:var(--muted)}
       </div>
     </div>
 
-    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
+    <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:12px">
       <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
         <label class="check"><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}">Show 24 h</label>
         <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label class="check"><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}">Show weekends</label></sc-if>
