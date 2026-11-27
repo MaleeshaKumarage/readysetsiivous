@@ -92,33 +92,31 @@ a{color:var(--muted)}
         <h1>Scheduler</h1>
         <p>{{ rangeLabel }}. Drag a visit to change its time{{ dragHint }}. Click a visit for its details and work times. Work times can be recorded for past dates only.</p>
       </div>
-      <div>
-        <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
-        <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
-        <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
-      </div>
     </header>
 
-    <div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+      <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
+      <label class="field">{{ dateLabel }}<select class="input" onChange="{{ onDate }}"><option value="0">Mon 30 Nov 2026</option><option value="1">Tue 1 Dec 2026</option><option value="2">Wed 2 Dec 2026</option><option value="3">Thu 3 Dec 2026</option><option value="4">Fri 4 Dec 2026</option><option value="5">Sat 5 Dec 2026</option><option value="6">Sun 6 Dec 2026</option></select></label>
+      <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
+      <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
       <div class="seg" role="group" aria-label="View">
         <button type="button" aria-pressed="{{ isDay }}" onClick="{{ showDay }}">Day</button>
         <button type="button" aria-pressed="{{ isWeek }}" onClick="{{ showWeek }}">Week</button>
       </div>
+      <sc-if value="{{ isDay }}" hint-placeholder-val="{{ true }}">
+      <label class="field">Employees<select class="input" onChange="{{ onEmpPick }}"><option value="all">All employees</option><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
+      </sc-if>
       <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
-      <label>Employee
-        <select onChange="{{ onWeekEmployee }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select>
-      </label>
+      <label class="field">Employee<select class="input" onChange="{{ onWeekEmployee }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
       </sc-if>
     </div>
-    <div>
-      <label>{{ dateLabel }}<select onChange="{{ onDate }}"><option value="0">Mon 30 Nov 2026</option><option value="1">Tue 1 Dec 2026</option><option value="2">Wed 2 Dec 2026</option><option value="3">Thu 3 Dec 2026</option><option value="4">Fri 4 Dec 2026</option><option value="5">Sat 5 Dec 2026</option><option value="6">Sun 6 Dec 2026</option></select></label>
-      <sc-if value="{{ isDay }}" hint-placeholder-val="{{ true }}">
-      <label>Employees<select onChange="{{ onEmpPick }}"><option value="all">All employees</option><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
-      </sc-if>
-      <label><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}">Show 24 h</label>
-      <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}">Show weekends</label></sc-if>
-      <label><input type="checkbox" onChange="{{ onReviewOnly }}">Show only visits that need review</label>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
       <strong>{{ reviewText }}</strong>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+        <label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}" style="width:20px;height:20px">Show 24 h</label>
+        <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}" style="width:20px;height:20px">Show weekends</label></sc-if>
+        <label style="display:flex;align-items:center;gap:8px;min-height:44px"><input type="checkbox" onChange="{{ onReviewOnly }}" style="width:20px;height:20px">Show only visits that need review</label>
+      </div>
     </div>
 
     <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}">
