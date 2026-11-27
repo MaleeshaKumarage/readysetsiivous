@@ -194,14 +194,14 @@ a{color:var(--muted)}
 <aside class="panel" aria-label="Visit details">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
     <div style="min-width:0">
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <h2 style="margin:0;font-size:18px">{{ sel.title }}</h2>
+      <p class="note" style="margin-top:4px">{{ sel.place }}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
         <span class="{{ sel.chip }}">{{ sel.statusText }}</span>
         <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Overlap</span></sc-if>
         <sc-if value="{{ sel.unassigned }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Unassigned</span></sc-if>
         <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">{{ sel.reviewKind }}</span></sc-if>
       </div>
-      <h2 style="margin:10px 0 0;font-size:18px">{{ sel.title }}</h2>
-      <p class="note" style="margin-top:4px">{{ sel.place }}</p>
     </div>
     <button type="button" class="btn btn-ghost x" aria-label="Close visit details" onClick="{{ closeSel }}">×</button>
   </div>
@@ -216,17 +216,10 @@ a{color:var(--muted)}
     <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><dt style="color:var(--muted)">Review</dt><dd style="margin:0">{{ sel.reviewLabel }}</dd></sc-if>
   </dl>
   <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><p style="margin:0 0 12px;padding:12px;border:1px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);font-size:14px">This visit overlaps another visit by the same assignee. Move or reassign one of them.</p></sc-if>
-  <sc-if value="{{ sel.locked }}" hint-placeholder-val="{{ false }}"><p class="note" style="margin-bottom:12px">Status: {{ sel.statusText }}. The time and assignee cannot be changed now.</p></sc-if>
+  <sc-if value="{{ sel.locked }}" hint-placeholder-val="{{ false }}"><p class="note" style="margin-bottom:12px">Status: {{ sel.statusText }}. It cannot be moved or reassigned now.</p></sc-if>
   <div style="display:flex;flex-direction:column;gap:10px">
-    <div style="display:flex;gap:8px">
-      <button type="button" class="btn btn-ghost" onClick="{{ sel.earlier }}" disabled="{{ sel.locked }}" style="flex:1;min-width:0;padding:0 8px">15 min earlier</button>
-      <button type="button" class="btn btn-ghost" onClick="{{ sel.later }}" disabled="{{ sel.locked }}" style="flex:1;min-width:0;padding:0 8px">15 min later</button>
-    </div>
-    <label class="field">Move to assignee<select class="input" value="{{ sel.empValue }}" onChange="{{ sel.onReassign }}" disabled="{{ sel.locked }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select></label>
     <sc-if value="{{ sel.canRecord }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ sel.record }}">{{ sel.recordLabel }}</button></sc-if>
     <sc-if value="{{ sel.canPhoto }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}">Add photos</button></sc-if>
-    <button type="button" class="btn btn-ghost" onClick="{{ sel.openOrder }}">Work order details</button>
-    <a href="Shifts.dc.html" class="btn btn-ghost" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">Open in work orders</a>
   </div>
 </aside>
 </sc-if>
@@ -265,16 +258,6 @@ a{color:var(--muted)}
 </div>
 </sc-if>
 
-<sc-if value="{{ orderOpen }}" hint-placeholder-val="{{ false }}">
-<div role="dialog" aria-modal="true" aria-label="Work order details" class="dlg">
-  <section>
-    <div class="dlg-head"><strong>{{ orderName }}</strong><button type="button" class="btn btn-ghost x" aria-label="Close details" onClick="{{ closeDlg }}">×</button></div>
-    <span class="note">{{ orderPlace }}</span>
-    <span style="font-variant-numeric:tabular-nums">Scheduled: {{ orderWhen }}</span>
-    <div class="dlg-foot"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Close</button><a href="Shifts.dc.html" class="btn btn-primary" style="display:inline-flex;align-items:center;text-decoration:none">Open work order</a></div>
-  </section>
-</div>
-</sc-if>
 
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
@@ -503,12 +486,11 @@ class Component extends DCLogic {
           checklist: sel.checklist,
           notes: sel.notes || 'No notes',
           canRecord: canRecord,
-          recordLabel: sel.actual ? 'Correct times' : 'Record work',
+          recordLabel: sel.actual ? 'Edit work times' : 'Record start and end',
           canPhoto: !!sel.version,
           earlier: () => this.move(sel.id, -15),
           later: () => this.move(sel.id, 15),
           onReassign: e => this.reassign(sel.id, e.target.value),
-          openOrder: () => this.openDlg('order', sel.id),
           record: () => this.openDlg('rec', sel.id, { recStart: '08:00', recEnd: '11:00', recReason: '', recMsg: '' }),
           photos: () => this.openDlg('photo', sel.id, { photos: [], photoReason: '', photoMsg: '' }),
         },
@@ -557,7 +539,7 @@ class Component extends DCLogic {
       closeNewVisit: () => this.setState({ newOpen: false }),
       saveNewVisit: () => this.saveNewVisit(),
       recOpen: !!dl && dl.kind === 'rec',
-      recTitle: dv && dv.actual ? 'Correct work times' : 'Record work',
+      recTitle: dv && dv.actual ? 'Edit work times' : 'Record start and end',
       recWho: dv ? (dv.emp ? EMP_BY_ID[dv.emp] : 'Unassigned') + ' · ' + dvName : '',
       recScheduled: dv ? DAYS[dv.day] + ', ' + fmt(dv.start) + ' – ' + fmt(dv.end) : '',
       recDuration: ((toMinL(recEnd) - toMinL(recStart)) / 60).toFixed(2),
