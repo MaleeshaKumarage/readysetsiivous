@@ -73,6 +73,7 @@ a{color:var(--muted)}
 .dlg-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
 .colhead{position:sticky;top:0;z-index:2}
+.blk .tag{align-self:flex-start;margin-top:4px;padding:2px 8px;border-radius:999px;background:var(--gold);color:var(--ink);font-style:normal;font-size:12px;font-weight:700}
 .gutter span:first-child{transform:none}
 .blk{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}
 .seg button{min-height:36px}
@@ -126,11 +127,9 @@ a{color:var(--muted)}
     </div>
 
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
-      <strong>{{ reviewText }}</strong>
       <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
         <label class="check"><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}">Show 24 h</label>
         <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label class="check"><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}">Show weekends</label></sc-if>
-        <label class="check"><input type="checkbox" onChange="{{ onReviewOnly }}">Show only visits that need review</label>
       </div>
     </div>
 
@@ -141,7 +140,6 @@ a{color:var(--muted)}
     </div>
     </sc-if>
     <sc-if value="{{ noVisits }}" hint-placeholder-val="{{ false }}"><p style="margin:0">No visits on this day.</p></sc-if>
-    <sc-if value="{{ filteredOut }}" hint-placeholder-val="{{ false }}"><p style="margin:0">Turn off the review filter to see every visit.</p></sc-if>
 
     <div class="board" role="region" aria-label="Schedule grid" tabindex="0">
       <div class="grid" style="{{ gridStyle }}">
@@ -158,6 +156,7 @@ a{color:var(--muted)}
             <strong>{{ b.title }}</strong>
             <span>{{ b.time }}</span>
             <span>{{ b.statusText }}</span>
+            <sc-if value="{{ b.review }}" hint-placeholder-val="{{ false }}"><em class="tag">{{ b.reviewTag }}</em></sc-if>
           </button>
           <sc-if value="{{ b.canResize }}" hint-placeholder-val="{{ true }}"><div class="handle" role="separator" aria-label="Drag to change the end time" draggable="true" style="{{ b.handleBox }}" onDragStart="{{ b.resizeStart }}"></div></sc-if>
           </sc-for>
@@ -427,7 +426,9 @@ class Component extends DCLogic {
         id: v.id,
         title: v.title,
         time: fmt(v.start) + '–' + fmt(v.end),
-        statusText: s.text + (v.review ? ' · review' : ''),
+        statusText: s.text,
+        review: !!v.review,
+        reviewTag: v.review ? 'Needs review' : '',
         cls: s.cls + (over ? ' blk-over' : '') + (v.emp === null ? ' blk-unassigned' : ''),
         box: box(v),
         draggable: !s.locked ? 'true' : 'false',
