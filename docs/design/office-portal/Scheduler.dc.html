@@ -218,8 +218,9 @@ a{color:var(--muted)}
   <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><p style="margin:0 0 12px;padding:12px;border:1px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);font-size:14px">This visit overlaps another visit by the same assignee. Move or reassign one of them.</p></sc-if>
   <sc-if value="{{ sel.locked }}" hint-placeholder-val="{{ false }}"><p class="note" style="margin-bottom:12px">Status: {{ sel.statusText }}. It cannot be moved or reassigned now.</p></sc-if>
   <div style="display:flex;flex-direction:column;gap:10px">
-    <sc-if value="{{ sel.canRecord }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ sel.record }}">{{ sel.recordLabel }}</button></sc-if>
-    <sc-if value="{{ sel.canPhoto }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}">Add photos</button></sc-if>
+    <button type="button" class="btn btn-primary" onClick="{{ sel.record }}" disabled="{{ sel.noRecord }}">{{ sel.recordLabel }}</button>
+    <button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}" disabled="{{ sel.noPhoto }}">Add photos</button>
+    <sc-if value="{{ sel.hasActionNote }}" hint-placeholder-val="{{ false }}"><p class="note">{{ sel.actionNote }}</p></sc-if>
   </div>
 </aside>
 </sc-if>
@@ -380,7 +381,7 @@ class Component extends DCLogic {
     if (!st.recReason) { this.setState({ recMsg: 'Enter both times and a reason.' }); return; }
     if (toMin(end) <= toMin(start)) { this.setState({ recMsg: 'End must be after start.' }); return; }
     const hours = (toMin(end) - toMin(start)) / 60;
-    const visits = this.visits().map(v => (v.id !== dl.vid ? v : { ...v, status: 'done', actual: start + ' – ' + end, hours: hours, review: null }));
+    const visits = this.visits().map(v => (v.id !== dl.vid ? v : { ...v, status: 'done', actual: start + ' – ' + end, hours: hours, review: null, version: true }));
     this.setState({ visits: visits, dlg: null, recMsg: '', recReason: '', msg: 'Work times saved.' });
   }
   savePhotos() {
@@ -488,6 +489,10 @@ class Component extends DCLogic {
           canRecord: canRecord,
           recordLabel: sel.actual ? 'Edit work times' : 'Record start and end',
           canPhoto: !!sel.version,
+          noRecord: !canRecord,
+          noPhoto: !sel.version,
+          hasActionNote: !canRecord || !sel.version,
+          actionNote: sel.status === 'cancelled' ? 'Cancelled visits have no work times or photos.' : !canRecord ? 'Start and end times and photos can be added once the visit day has passed, if the assignee did not record them.' : 'Photos can be added once start and end times are recorded.',
           earlier: () => this.move(sel.id, -15),
           later: () => this.move(sel.id, 15),
           onReassign: e => this.reassign(sel.id, e.target.value),
