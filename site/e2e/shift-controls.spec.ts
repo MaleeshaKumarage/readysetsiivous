@@ -54,10 +54,18 @@ test('the company and type filters send their choice to the server', async ({ pa
   await expect.poll(() => pageUrls.some(url => url.includes('scheduleType=0'))).toBe(true);
 });
 
-test('Export shows the export notice in the page status', async ({ page }) => {
+test('Export downloads the work orders on this page as a CSV file', async ({ page }) => {
   await setup(page);
+  const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Export is not connected in this prototype. Nothing was exported.');
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('work-orders-active.csv');
+  const path = await file.path();
+  const text = require('fs').readFileSync(path, 'utf8') as string;
+  expect(text.split('\n')[0]).toBe('Property,Address,Company,Schedule,Tab');
+  expect(text).toContain('"Morning clean"');
+  expect(text).toContain('"Evening clean"');
+  await expect(page.getByRole('status')).toHaveText('Exported 2 work orders.');
 });
 
 test('the Visits button opens the visits panel and a second press closes it', async ({ page }) => {

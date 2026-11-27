@@ -25,6 +25,8 @@ test('work order rows show the address and size, and the Visits button opens the
   const row = page.getByRole('row').filter({ hasText: 'Lake apartment' }).or(page.getByRole('row').filter({ hasText: 'Lakeside 4' }));
   await expect(row.getByText('Lakeside 4, 00100 Helsinki', { exact: true })).toBeVisible();
   await expect(row.getByText('34 m²', { exact: true })).toBeVisible();
+  await expect(row.getByText('3 rooms', { exact: true })).toBeVisible();
+  await expect(row.getByText('5 beds', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('shift-rows.png'), fullPage: true });
 
   await expect(page.getByTestId('row-visits')).toHaveCount(0);

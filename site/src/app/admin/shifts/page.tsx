@@ -769,6 +769,21 @@ export default function ShiftsAdminPage() {
     action(workspaceShift);
   };
 
+  // Downloads the work orders shown on this page as a CSV file (property, company, schedule, tab).
+  const exportWorkOrders = () => {
+    const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const rows = visibleRows.map(s => {
+      const branch = propertyById[s.branchId];
+      const address = branch ? [branch.street?.trim(), [branch.postalCode?.trim(), branch.city?.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
+      return [s.name, address, companyChoices.find(c => c.value === s.companyId)?.label ?? '', scheduleLabel(s), lifecycle === 'inactive' ? 'Inactive' : 'Active'].map(quote).join(',');
+    });
+    const csv = ['Property,Address,Company,Schedule,Tab', ...rows].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = `work-orders-${lifecycle}.csv`; link.click();
+    URL.revokeObjectURL(url);
+    setShiftNotice(`Exported ${rows.length} work order${rows.length === 1 ? '' : 's'}.`);
+  };
   const visibleRows = pageRows.filter(s => {
     const q = propertySearch.trim().toLowerCase();
     if (!q) return true;
@@ -784,7 +799,7 @@ export default function ShiftsAdminPage() {
           <Text c="dimmed">One work order per property. Its visits are the cleanings. {pageRows.length} of {pageTotal} shown.</Text>
         </div>
         <Group gap="xs" wrap="wrap">
-          <Button variant="subtle" onClick={() => setShiftNotice('Export is not connected in this prototype. Nothing was exported.')}>Export</Button>
+          <Button variant="subtle" disabled={visibleRows.length === 0} onClick={() => exportWorkOrders()}>Export</Button>
           <Button leftSection={<Plus size={16} />} disabled={!schedulingReady} onClick={openCreate}>New work order</Button>
         </Group>
       </Group>
@@ -834,6 +849,8 @@ export default function ShiftsAdminPage() {
                             <Group gap={6}>
                               <Badge variant="subtle">{scheduleLabel(s)}</Badge>
                               {time && <Badge variant="subtle">{time}</Badge>}
+                              {branch?.roomCount != null && <Badge variant="subtle">{branch.roomCount} {branch.roomCount === 1 ? 'room' : 'rooms'}</Badge>}
+                              {branch?.bedCount != null && <Badge variant="subtle">{branch.bedCount} {branch.bedCount === 1 ? 'bed' : 'beds'}</Badge>}
                             </Group>
                             <Text size="sm" c="dimmed">{checklist ? `Checklist template: ${checklist}` : 'Checklist template: none'}</Text>
                           </Stack>

@@ -274,6 +274,8 @@ test('populated shifts table shows address and size readably at 375px', async ({
   const row = page.getByRole('row').filter({ hasText: 'Kivikatu 2 B 2' }).first();
   await expect(row).toBeVisible();
   await expect(row.getByText('45 m²', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 rooms', { exact: true })).toBeVisible();
+  await expect(row.getByText('2 beds', { exact: true })).toBeVisible();
   await expectGridLaidOut(page, testInfo, 'shifts-375px');
   await expect(row.getByRole('button', { name: /^Actions for / })).toBeVisible();
 });
