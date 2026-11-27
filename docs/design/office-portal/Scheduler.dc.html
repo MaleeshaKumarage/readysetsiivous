@@ -108,7 +108,7 @@ a{color:var(--muted)}
   <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
     <header>
       <h1 style="margin:0;font-size:28px;line-height:1.2">Scheduler</h1>
-      <p class="note" style="margin-top:4px">{{ rangeLabel }}. Drag a visit to change its time{{ dragHint }}. Click a visit for its details and work times. Work times can be recorded for past dates only.</p>
+      <p class="note" style="margin-top:4px">{{ rangeLabel }}. Assigned visits only; unassigned work is in the <a href="Work-queue.dc.html">Work queue</a>. Drag a visit to change its time{{ dragHint }}. Click a visit for its details and work times. Work times can be recorded for past dates only.</p>
     </header>
 
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
@@ -199,7 +199,6 @@ a{color:var(--muted)}
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
         <span class="{{ sel.chip }}">{{ sel.statusText }}</span>
         <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Overlap</span></sc-if>
-        <sc-if value="{{ sel.unassigned }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Unassigned</span></sc-if>
         <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">{{ sel.reviewKind }}</span></sc-if>
       </div>
     </div>
@@ -276,7 +275,7 @@ const WORK_HOURS = { anna: '08:00–16:00', ville: '07:00–15:00', minna: 'No h
 const HOUR_PX = 56;
 const SNAP = 15;
 // One visit model for the whole Scheduler: time, cleaner and day for the grid; actual times, review, photos
-// and the work order for the side panel. A visit with no cleaner (emp null) sits in the Unassigned column.
+// and the work order for the side panel. Only assigned visits are shown; unassigned work lives in the Work queue.
 const SEED = [
   { id: 'v1', emp: 'anna', day: 0, start: 8 * 60, end: 11 * 60, title: 'Kallio, Lindqvist flat', place: 'Kallio · Virtanen Oy', number: 3, status: 'done', checklist: '12 of 12 done', actual: '08:05 – 11:02', hours: 2.95, version: true, review: null },
   { id: 'v2', emp: 'minna', day: 0, start: 13 * 60, end: 15 * 60 + 30, title: 'Töölö, move-out', place: 'Töölö · Aurora clinic', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
@@ -287,7 +286,6 @@ const SEED = [
   { id: 'v7', emp: 'anna', day: 3, start: 13 * 60, end: 16 * 60, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 2, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'v8', emp: 'minna', day: 4, start: 8 * 60, end: 11 * 60, title: 'Töölö, Minna S.', place: 'Töölö · Aurora clinic', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'v9', emp: 'minna', day: 1, start: 7 * 60 + 30, end: 9 * 60 + 30, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 3, status: 'needs', checklist: 'No checklist yet', notes: 'Not started. Call the assignee.', actual: '', hours: null, version: false, review: { kind: 'Missing completion', label: 'No start or end recorded' } },
-  { id: 'u1', emp: null, day: 1, start: 15 * 60, end: 17 * 60, title: 'Töölö, move-out', place: 'Töölö · Aurora clinic', number: 2, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'c1', emp: 'ville', day: 2, start: 9 * 60, end: 12 * 60, title: 'Helsinki showroom', place: 'Virtanen Oy · Helsinki showroom', number: 1, status: 'cancelled', checklist: 'Not needed', actual: '', hours: null, version: false, review: null },
 ];
 const STATUS = {
@@ -430,8 +428,7 @@ class Component extends DCLogic {
     };
     const colsFor = isWeek
       ? DAYS_SHORT.map((d, i) => ({ key: 'w' + i, emp: this.weekEmp(), day: i, name: d, sub: DAYS[i].slice(4) })).filter(c => st.weekends || c.day < 5)
-      : EMPLOYEES.filter(e => !st.chosen || st.chosen.includes(e.id)).map(e => ({ key: e.id, emp: e.id, day: day, name: e.name, sub: DAYS[day] }))
-          .concat(visits.some(v => v.emp === null && v.day === day) ? [{ key: 'none', emp: null, day: day, name: 'Unassigned', sub: DAYS[day] }] : []);
+      : EMPLOYEES.filter(e => !st.chosen || st.chosen.includes(e.id)).map(e => ({ key: e.id, emp: e.id, day: day, name: e.name, sub: DAYS[day] }));
     const cols = colsFor.map(c => {
       const list = visits.filter(v => v.emp === c.emp && v.day === c.day && visible(v));
       return {
