@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Scheduler for the cleaning company: employee grid with drag, resize and visit details, plus work order actions for each visit.">
+<title>Scheduler</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+.btn,button{white-space:nowrap}
+a{color:var(--muted)}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.board{position:relative;overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.grid{display:grid;min-width:640px}
+.gutter{position:relative;border-right:1px solid var(--line)}
+.gutter span{position:absolute;left:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;transform:translateY(-8px)}
+.colhead{padding:12px 12px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-size:14px;font-weight:700;background:var(--wash)}
+.colhead small{display:block;font-weight:400;color:var(--muted)}
+.col{position:relative;border-right:1px solid var(--line);background-image:repeating-linear-gradient(to bottom,var(--line) 0 1px,transparent 1px 56px)}
+.col.over{background-color:var(--gold-wash)}
+.blk{position:absolute;left:4px;right:4px;box-sizing:border-box;padding:8px 8px;border-radius:10px;border:1px solid var(--line-2);background:var(--line);color:var(--ink);text-align:left;font:inherit;font-size:13px;overflow:hidden;cursor:grab}
+.blk strong{display:block;font-size:13px}
+.blk span{display:block;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.blk-done{background:var(--wash);border-color:var(--line-2)}
+.blk-progress{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.blk-progress span{color:var(--line-2)}
+.blk-sched{background:var(--line)}
+.blk-over{border:2px solid var(--gold-ink)}
+.blk-needs{background:var(--gold-wash);border-color:var(--gold)}
+.chip-needs{background:var(--gold-wash);color:var(--gold-ink)}
+.blk[aria-pressed='true']{outline:3px solid var(--gold-ink);outline-offset:1px}
+.blk:disabled{cursor:not-allowed}
+.handle{position:absolute;height:10px;cursor:ns-resize;border-radius:6px;background:var(--line-3);opacity:.8}
+.handle:hover{opacity:1;background:var(--ink-2)}
+.panel{position:fixed;top:0;right:0;bottom:0;width:340px;max-width:100%;box-sizing:border-box;overflow-y:auto;padding:20px;border-left:2px solid var(--line-2);background:var(--wash);z-index:40}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.chip-done{background:var(--line);color:var(--ink)}
+.chip-progress{background:var(--ink);color:var(--surface)}
+.chip-sched{background:var(--gold-wash);color:var(--gold-ink)}
+.blk-cancelled{background:var(--wash);color:var(--muted);border-style:dashed;text-decoration:line-through}
+.blk-unassigned{border-style:dashed}
+.chip-mute{background:var(--line);color:var(--muted)}
+@media (max-width:900px){.panel{width:100%}}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line)">
+    <strong>ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html" aria-current="page">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:18px">
+    <header>
+      <div>
+        <h1>Scheduler</h1>
+        <p>{{ rangeLabel }}. Drag a visit to change its time{{ dragHint }}. Click a visit for its details and work times. Work times can be recorded for past dates only.</p>
+      </div>
+      <div>
+        <button type="button" class="btn btn-primary" onClick="{{ openNew }}">Schedule work order on this day</button>
+        <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
+        <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
+        <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
+        <button type="button" class="btn btn-ghost" onClick="{{ refresh }}">Refresh</button>
+      </div>
+    </header>
+
+    <div>
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" aria-pressed="{{ isDay }}" onClick="{{ showDay }}">Day</button>
+        <button type="button" aria-pressed="{{ isWeek }}" onClick="{{ showWeek }}">Week</button>
+      </div>
+      <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+      <label>Employee
+        <select onChange="{{ onWeekEmployee }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select>
+      </label>
+      </sc-if>
+    </div>
+    <div>
+      <label>{{ dateLabel }}<select onChange="{{ onDate }}"><option value="0">Mon 30 Nov 2026</option><option value="1">Tue 1 Dec 2026</option><option value="2">Wed 2 Dec 2026</option><option value="3">Thu 3 Dec 2026</option><option value="4">Fri 4 Dec 2026</option><option value="5">Sat 5 Dec 2026</option><option value="6">Sun 6 Dec 2026</option></select></label>
+      <sc-if value="{{ isDay }}" hint-placeholder-val="{{ true }}">
+      <fieldset>
+        <legend>Employees</legend>
+        <sc-for list="{{ empChoices }}" as="ec" hint-placeholder-count="3"><label><input type="checkbox" checked="{{ ec.on }}" onChange="{{ ec.toggle }}">{{ ec.name }}</label></sc-for>
+        <button type="button" class="btn btn-ghost" onClick="{{ showAllEmps }}">Show all employees</button>
+      </fieldset>
+      </sc-if>
+      <label><input type="checkbox" checked="{{ fullDay }}" onChange="{{ onFullDay }}">Show 24 h</label>
+      <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}"><label><input type="checkbox" checked="{{ weekends }}" onChange="{{ onWeekends }}">Show weekends</label></sc-if>
+      <label><input type="checkbox" onChange="{{ onReviewOnly }}">Show only visits that need review</label>
+      <strong>{{ reviewText }}</strong>
+    </div>
+
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}">
+    <div role="status">
+      <span>{{ msg }}</span>
+      <span><sc-if value="{{ canUndo }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ undo }}">Undo</button></sc-if><button type="button" class="btn btn-ghost" aria-label="Dismiss message" onClick="{{ dismissMsg }}">×</button></span>
+    </div>
+    </sc-if>
+    <sc-if value="{{ noVisits }}" hint-placeholder-val="{{ false }}"><p>No visits on this day.</p></sc-if>
+    <sc-if value="{{ filteredOut }}" hint-placeholder-val="{{ false }}"><p>Turn off the review filter to see every visit.</p></sc-if>
+
+    <div class="board" role="region" aria-label="Schedule grid" tabindex="0">
+      <div class="grid" style="{{ gridStyle }}">
+        <div class="colhead">Time</div>
+        <sc-for list="{{ cols }}" as="c" hint-placeholder-count="3">
+        <div class="colhead"><span>{{ c.name }}<small>{{ c.sub }}</small><small>{{ c.hours }} · {{ c.count }}</small></span><button type="button" class="btn btn-ghost" onClick="{{ c.addVisit }}" aria-label="Add visit for {{ c.name }}">+ Visit</button></div>
+        </sc-for>
+
+        <div class="gutter"><sc-for list="{{ hourLabels }}" as="h" hint-placeholder-count="12"><span>{{ h.t }}</span></sc-for></div>
+        <sc-for list="{{ cols }}" as="c" hint-placeholder-count="3">
+        <div class="col{{ c.overClass }}" onDragOver="{{ c.dragOver }}" onDrop="{{ c.drop }}" aria-label="{{ c.name }} {{ c.sub }}">
+          <sc-for list="{{ c.blocks }}" as="b" hint-placeholder-count="2">
+          <button type="button" class="blk {{ b.cls }}" draggable="{{ b.draggable }}" onDragStart="{{ b.dragStart }}" onClick="{{ b.open }}" aria-pressed="{{ b.selected }}" aria-label="{{ b.label }}">
+            <strong>{{ b.title }}</strong>
+            <span>{{ b.time }}</span>
+            <span>{{ b.statusText }}</span>
+          </button>
+          <sc-if value="{{ b.canResize }}" hint-placeholder-val="{{ true }}"><div class="handle" role="separator" aria-label="Drag to change the end time" draggable="true" onDragStart="{{ b.resizeStart }}"></div></sc-if>
+          </sc-for>
+        </div>
+        </sc-for>
+      </div>
+    </div>
+    <p>Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same cleaner.</p>
+  </main>
+</div>
+
+<sc-if value="{{ newOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="{{ newTitle }}">
+  <section>
+    <div><strong>{{ newTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeNewVisit }}">×</button></div>
+    <p>{{ newWho }}</p>
+    <label>Work order<select onChange="{{ onNewTitle }}"><option value="Kallio, Lindqvist flat" selected>Kallio, Lindqvist flat</option><option value="Töölö, move-out">Töölö, move-out</option><option value="Hietaniemi office">Hietaniemi office</option><option value="Espoo, weekly clean">Espoo, weekly clean</option><option value="Helsinki showroom">Helsinki showroom</option></select></label>
+    <div>
+      <label>Start<select onChange="{{ onNewStart }}"><option value="07:00">07:00</option><option value="07:15">07:15</option><option value="07:30">07:30</option><option value="07:45">07:45</option><option value="08:00" selected>08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="16:00">16:00</option></select></label>
+      <label>Length<select onChange="{{ onNewDur }}"><option value="30">0 h 30 min</option><option value="60" selected>1 h</option><option value="90">1 h 30 min</option><option value="120">2 h</option><option value="150">2 h 30 min</option><option value="180">3 h</option><option value="240">4 h</option></select></label>
+    </div>
+    <p>{{ newSummary }}</p>
+    <div>
+      <button type="button" class="btn btn-ghost" onClick="{{ closeNewVisit }}">Cancel</button>
+      <button type="button" class="btn btn-primary" onClick="{{ saveNewVisit }}">Save visit</button>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+<aside class="panel" aria-label="Visit details">
+  <div>
+    <div>
+      <span class="{{ sel.chip }}">{{ sel.statusText }}</span>
+      <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><span class="chip">Overlap</span></sc-if>
+      <sc-if value="{{ sel.unassigned }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Unassigned</span></sc-if>
+      <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">{{ sel.reviewKind }}</span></sc-if>
+      <h2>{{ sel.title }}</h2>
+      <p>{{ sel.place }}</p>
+    </div>
+    <button type="button" class="btn btn-ghost" aria-label="Close visit details" onClick="{{ closeSel }}">×</button>
+  </div>
+  <dl>
+    <dt>Visit</dt><dd>{{ sel.when }}</dd>
+    <dt>Number</dt><dd>Visit {{ sel.number }}</dd>
+    <dt>Cleaner</dt><dd>{{ sel.cleanerName }}</dd>
+    <dt>Duration</dt><dd>{{ sel.duration }}</dd>
+    <dt>Actual</dt><dd>{{ sel.actualText }}</dd>
+    <dt>Checklist</dt><dd>{{ sel.checklist }}</dd>
+    <dt>Notes</dt><dd>{{ sel.notes }}</dd>
+    <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><dt>Review</dt><dd>{{ sel.reviewLabel }}</dd></sc-if>
+  </dl>
+  <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><p>This visit overlaps another visit for {{ sel.cleanerName }}. Move or reassign one of them.</p></sc-if>
+  <sc-if value="{{ sel.locked }}" hint-placeholder-val="{{ false }}"><p>This visit is {{ sel.statusText }}. Its time and cleaner cannot be changed now.</p></sc-if>
+  <div>
+    <div>
+      <button type="button" class="btn btn-ghost" onClick="{{ sel.earlier }}" disabled="{{ sel.locked }}">Earlier by 15 min</button>
+      <button type="button" class="btn btn-ghost" onClick="{{ sel.later }}" disabled="{{ sel.locked }}">Later by 15 min</button>
+    </div>
+    <label>Move to cleaner
+      <select onChange="{{ sel.onReassign }}" disabled="{{ sel.locked }}"><option value="anna">Anna K.</option><option value="ville">Ville R.</option><option value="minna">Minna S.</option></select>
+    </label>
+    <div>
+      <button type="button" class="btn btn-ghost" onClick="{{ sel.openOrder }}">Work order details</button>
+      <sc-if value="{{ sel.canRecord }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ sel.record }}">{{ sel.recordLabel }}</button></sc-if>
+      <sc-if value="{{ sel.canPhoto }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}">Add photos</button></sc-if>
+    </div>
+    <a href="Shifts.dc.html" class="btn btn-ghost">Open in work orders</a>
+  </div>
+</aside>
+</sc-if>
+
+<sc-if value="{{ recOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="{{ recTitle }}">
+  <section>
+    <div><strong>{{ recTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close work times" onClick="{{ closeDlg }}">×</button></div>
+    <strong>{{ recWho }}</strong>
+    <span>Scheduled: {{ recScheduled }}</span>
+    <p>Confirm actual times in Europe/Helsinki. Scheduled times are prefilled for new records. Saving records this past visit as completed. Checklist evidence is kept.</p>
+    <div>
+      <label>Actual start<select onChange="{{ onRecStart }}"><option value="07:45">07:45</option><option value="08:00" selected>08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="10:00">10:00</option></select></label>
+      <label>Actual end<select onChange="{{ onRecEnd }}"><option value="10:30">10:30</option><option value="10:45">10:45</option><option value="11:00" selected>11:00</option><option value="11:15">11:15</option><option value="12:00">12:00</option><option value="14:00">14:00</option></select></label>
+    </div>
+    <span>Work duration: {{ recDuration }} hours</span>
+    <label>Reason<input type="text" maxlength="2000" onChange="{{ onRecReason }}"></label>
+    <sc-if value="{{ recMsg }}" hint-placeholder-val="{{ false }}"><p role="alert">{{ recMsg }}</p></sc-if>
+    <div><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveRec }}">Save work times</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ photoOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Add photos">
+  <section>
+    <div><strong>Add photos</strong><button type="button" class="btn btn-ghost" aria-label="Close photos" onClick="{{ closeDlg }}">×</button></div>
+    <strong>{{ photoWho }}</strong>
+    <p>Each photo needs a note. Photos are kept with the visit's checklist evidence.</p>
+    <sc-for list="{{ photoList }}" as="ph" hint-placeholder-count="0"><label>Photo {{ ph.n }} note<input type="text" maxlength="500" onChange="{{ ph.onNote }}"></label></sc-for>
+    <button type="button" class="btn btn-ghost" onClick="{{ addPhoto }}">Add a photo</button>
+    <label>Reason<input type="text" maxlength="500" onChange="{{ onPhotoReason }}"></label>
+    <sc-if value="{{ photoMsg }}" hint-placeholder-val="{{ false }}"><p role="alert">{{ photoMsg }}</p></sc-if>
+    <div><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ savePhotos }}">Save photos</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ orderOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Work order details">
+  <section>
+    <div><strong>Work order details</strong><button type="button" class="btn btn-ghost" aria-label="Close details" onClick="{{ closeDlg }}">×</button></div>
+    <strong>{{ orderName }}</strong>
+    <span>{{ orderPlace }}</span>
+    <span>Scheduled: {{ orderWhen }}</span>
+    <div><button type="button" class="btn btn-primary" onClick="{{ closeDlg }}">Close</button></div>
+  </section>
+</div>
+</sc-if>
+
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const EMPLOYEES = [
+  { id: 'anna', name: 'Anna K.' },
+  { id: 'ville', name: 'Ville R.' },
+  { id: 'minna', name: 'Minna S.' },
+];
+const DAYS = ['Mon 30 Nov', 'Tue 1 Dec', 'Wed 2 Dec', 'Thu 3 Dec', 'Fri 4 Dec', 'Sat 5 Dec', 'Sun 6 Dec'];
+const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const TODAY = 1;
+let FIRST = 7 * 60;
+let LAST = 19 * 60;
+const WORK_HOURS = { anna: '08:00–16:00', ville: '07:00–15:00', minna: 'No hours set' };
+const HOUR_PX = 56;
+const SNAP = 15;
+// One visit model for the whole Scheduler: time, cleaner and day for the grid; actual times, review, photos
+// and the work order for the side panel. A visit with no cleaner (emp null) sits in the Unassigned column.
+const SEED = [
+  { id: 'v1', emp: 'anna', day: 0, start: 8 * 60, end: 11 * 60, title: 'Kallio, Lindqvist flat', place: 'Kallio · Virtanen Oy', number: 3, status: 'done', checklist: '12 of 12 done', actual: '08:05 – 11:02', hours: 2.95, version: true, review: null },
+  { id: 'v2', emp: 'minna', day: 0, start: 13 * 60, end: 15 * 60 + 30, title: 'Töölö, move-out', place: 'Töölö · Aurora clinic', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
+  { id: 'v3', emp: 'ville', day: 1, start: 10 * 60, end: 14 * 60, title: 'Hietaniemi office', place: 'Hietaniemi · Hietaniemi office Oy', number: 1, status: 'sched', checklist: '0 of 9 done', actual: '', hours: null, version: false, review: null },
+  { id: 'v4', emp: 'ville', day: 1, start: 12 * 60, end: 14 * 60, title: 'Kallio, Ville R.', place: 'Kallio · Virtanen Oy', number: 2, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
+  { id: 'v5', emp: 'anna', day: 1, start: 9 * 60, end: 12 * 60, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 1, status: 'progress', checklist: '4 of 10 done', actual: '09:02 – Not ended', hours: null, version: true, review: { kind: 'Missing completion', label: 'Started but never ended' } },
+  { id: 'v6', emp: 'ville', day: 2, start: 9 * 60, end: 12 * 60, title: 'Kallio, Ville R.', place: 'Kallio · Virtanen Oy', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
+  { id: 'v7', emp: 'anna', day: 3, start: 13 * 60, end: 16 * 60, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 2, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
+  { id: 'v8', emp: 'minna', day: 4, start: 8 * 60, end: 11 * 60, title: 'Töölö, Minna S.', place: 'Töölö · Aurora clinic', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
+  { id: 'v9', emp: 'minna', day: 1, start: 7 * 60 + 30, end: 9 * 60 + 30, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 3, status: 'needs', checklist: 'No checklist yet', notes: 'Not started. Call the cleaner.', actual: '', hours: null, version: false, review: { kind: 'Missing completion', label: 'No start or end recorded' } },
+  { id: 'u1', emp: null, day: 1, start: 15 * 60, end: 17 * 60, title: 'Töölö, move-out', place: 'Töölö · Aurora clinic', number: 2, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
+  { id: 'c1', emp: 'ville', day: 2, start: 9 * 60, end: 12 * 60, title: 'Helsinki showroom', place: 'Virtanen Oy · Helsinki showroom', number: 1, status: 'cancelled', checklist: 'Not needed', actual: '', hours: null, version: false, review: null },
+];
+const STATUS = {
+  done: { text: 'Done', cls: 'blk-done', chip: 'chip chip-done', locked: true },
+  progress: { text: 'In progress', cls: 'blk-progress', chip: 'chip chip-progress', locked: true },
+  sched: { text: 'Scheduled', cls: 'blk-sched', chip: 'chip chip-sched', locked: false },
+  needs: { text: 'Needs action', cls: 'blk-needs', chip: 'chip chip-needs', locked: false },
+  cancelled: { text: 'Cancelled', cls: 'blk-cancelled', chip: 'chip chip-mute', locked: true },
+};
+const PLACE = { 'Kallio, Lindqvist flat': 'Kallio · Virtanen Oy', 'Töölö, move-out': 'Töölö · Aurora clinic', 'Hietaniemi office': 'Hietaniemi · Hietaniemi office Oy', 'Espoo, weekly clean': 'Espoo · Virtanen Oy', 'Helsinki showroom': 'Virtanen Oy · Helsinki showroom' };
+const EMP_BY_ID = Object.fromEntries(EMPLOYEES.map(e => [e.id, e.name]));
+
+function fmt(min) { return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0'); }
+function toMin(hhmm) { const p = hhmm.split(':').map(Number); return p[0] * 60 + p[1]; }
+function overlaps(a, b) { return a.emp === b.emp && a.day === b.day && a.id !== b.id && a.start < b.end && b.start < a.end && a.status !== 'cancelled' && b.status !== 'cancelled'; }
+const needsReview = v => !!v.review;
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  visits() { return this.st().visits || SEED; }
+  view() { return this.st().view || 'day'; }
+  dayIdx() { return typeof this.st().day === 'number' ? this.st().day : TODAY; }
+  weekEmp() { return this.st().weekEmp || 'anna'; }
+  say(msg, patch) { this.setState({ ...(patch || {}), msg: msg }); }
+  change(id, patch, msg) {
+    const prev = this.visits();
+    const visits = prev.map(v => (v.id === id ? { ...v, ...patch } : v));
+    this.setState({ visits: visits, prevVisits: prev, msg: msg });
+  }
+  move(id, delta) {
+    const v = this.visits().find(x => x.id === id);
+    if (!v || STATUS[v.status].locked) return;
+    const len = v.end - v.start;
+    let start = v.start + delta;
+    if (start < FIRST || start + len > LAST) { this.say('That is outside the working day.'); return; }
+    const clash = this.visits().some(o => overlaps({ ...v, start }, o));
+    this.change(id, { start: start, end: start + len }, v.title + ' moved to ' + fmt(start) + '.' + (clash ? ' It now overlaps another visit.' : ''));
+  }
+  reassign(id, emp) {
+    const v = this.visits().find(x => x.id === id);
+    if (!v || STATUS[v.status].locked || v.emp === emp) return;
+    this.change(id, { emp: emp }, v.title + ' moved to ' + EMP_BY_ID[emp] + '.');
+  }
+  dropAt(id, emp, day, e) {
+    const v = this.visits().find(x => x.id === id);
+    if (!v || STATUS[v.status].locked) { this.say('This visit is ' + STATUS[v.status].text.toLowerCase() + ' and cannot be moved.'); return; }
+    let start = v.start;
+    if (e && e.clientY != null && e.currentTarget && e.currentTarget.getBoundingClientRect) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      start = FIRST + Math.round((((e.clientY - rect.top) / HOUR_PX) * 60) / 15) * 15;
+    }
+    const len = v.end - v.start;
+    start = Math.max(FIRST, Math.min(LAST - len, start));
+    this.change(id, { emp: emp, day: day, start: start, end: start + len }, v.title + ' moved to ' + DAYS[day] + ', ' + fmt(start) + ' with ' + EMP_BY_ID[emp] + '.');
+  }
+  resizeAt(id, emp, day, e) {
+    const v = this.visits().find(x => x.id === id);
+    if (!v || STATUS[v.status].locked) { this.say('This visit cannot be changed.'); return; }
+    if (v.emp !== emp || v.day !== day) { this.say('Drop the end on the same cleaner and day as the visit.'); return; }
+    if (!(e && e.clientY != null && e.currentTarget && e.currentTarget.getBoundingClientRect)) { this.say('Drop the end on the column to set it.'); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    let end = FIRST + Math.round((((e.clientY - rect.top) / HOUR_PX) * 60) / SNAP) * SNAP;
+    end = Math.max(v.start + SNAP, Math.min(LAST, end));
+    if (end === v.end) return;
+    const clash = this.visits().some(o => overlaps({ ...v, end: end }, o));
+    this.change(id, { end: end }, v.title + ' now ends at ' + fmt(end) + ' (' + ((end - v.start) / 60) + ' h).' + (clash ? ' It now overlaps another visit.' : ''));
+  }
+  saveNewVisit() {
+    const st = this.st();
+    const start = toMin(st.newStart || '08:00');
+    const dur = Number(st.newDur || '60');
+    const end = start + dur;
+    if (start < FIRST || end > LAST) { this.say('A visit must start and end within the working day.'); return; }
+    const emp = st.newEmp || null;
+    const day = Number(st.newDay || 0);
+    const title = st.newTitle || 'Kallio, Lindqvist flat';
+    const v = { id: 'n' + Date.now(), emp: emp, day: day, start: start, end: end, title: title, place: PLACE[title], number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null };
+    const prev = this.visits();
+    const clash = prev.some(o => overlaps(v, o));
+    const who = emp ? EMP_BY_ID[emp] : 'no cleaner yet';
+    this.setState({ visits: prev.concat([v]), prevVisits: prev, newOpen: false, msg: 'Scheduled ' + title + ' for ' + who + ' on ' + DAYS[day] + ', ' + fmt(start) + '–' + fmt(end) + '.' + (clash ? ' It overlaps another visit for the same cleaner.' : '') });
+  }
+  undo() { if (this.st().prevVisits) this.setState({ visits: this.st().prevVisits, prevVisits: null, msg: 'Change undone.' }); }
+  openDlg(kind, vid, extra) { this.setState({ dlg: { kind: kind, vid: vid }, ...(extra || {}), msg: '' }); }
+  saveRec() {
+    const st = this.st();
+    const dl = st.dlg;
+    if (!dl || dl.kind !== 'rec') return;
+    const start = st.recStart || '08:00';
+    const end = st.recEnd || '11:00';
+    if (!st.recReason) { this.setState({ recMsg: 'Enter both times and a reason.' }); return; }
+    if (toMin(end) <= toMin(start)) { this.setState({ recMsg: 'End must be after start.' }); return; }
+    const hours = (toMin(end) - toMin(start)) / 60;
+    const visits = this.visits().map(v => (v.id !== dl.vid ? v : { ...v, status: 'done', actual: start + ' – ' + end, hours: hours, review: null }));
+    this.setState({ visits: visits, dlg: null, recMsg: '', recReason: '', msg: 'Work times saved.' });
+  }
+  savePhotos() {
+    const st = this.st();
+    const photos = st.photos || [];
+    if (!photos.length) { this.setState({ photoMsg: 'Choose at least one photo.' }); return; }
+    if (photos.some(p => !p.note.trim())) { this.setState({ photoMsg: 'Each photo needs a note.' }); return; }
+    if (!st.photoReason) { this.setState({ photoMsg: 'Enter a reason.' }); return; }
+    this.setState({ dlg: null, photoMsg: '', photos: [], photoReason: '', msg: 'Photos added to the visit.' });
+  }
+  renderVals() {
+    const st = this.st();
+    FIRST = st.full ? 0 : 7 * 60;
+    LAST = st.full ? 24 * 60 : 19 * 60;
+    const isWeek = this.view() === 'week';
+    const day = this.dayIdx();
+    const past = (d) => d < TODAY;
+    const visits = this.visits();
+    const selId = st.sel || null;
+    const sel = visits.find(v => v.id === selId);
+    const reviewOnly = !!st.reviewOnly;
+    const visible = v => !reviewOnly || needsReview(v);
+    const hasOverlap = v => visits.some(o => overlaps(v, o));
+    const box = v => ({ top: ((v.start - FIRST) / 60) * HOUR_PX + 2, height: ((v.end - v.start) / 60) * HOUR_PX - 4, position: 'absolute', left: '4px', right: '4px' });
+    const blockOf = v => {
+      const s = STATUS[v.status];
+      const over = hasOverlap(v) && v.status !== 'cancelled';
+      return {
+        id: v.id,
+        title: v.title,
+        time: fmt(v.start) + '–' + fmt(v.end),
+        statusText: s.text + (v.review ? ' · review' : ''),
+        cls: s.cls + (over ? ' blk-over' : '') + (v.emp === null ? ' blk-unassigned' : ''),
+        box: box(v),
+        draggable: !s.locked ? 'true' : 'false',
+        selected: selId === v.id,
+        canResize: !s.locked,
+        handleBox: { position: 'absolute', left: '4px', right: '4px', top: (((v.end - FIRST) / 60) * HOUR_PX - 8) + 'px' },
+        resizeStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', v.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ resizing: v.id }); },
+        label: v.title + ', ' + fmt(v.start) + ' to ' + fmt(v.end) + ', ' + s.text,
+        open: () => this.setState({ sel: v.id, msg: '' }),
+        dragStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', v.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ dragging: v.id }); },
+      };
+    };
+    const colsFor = isWeek
+      ? DAYS_SHORT.map((d, i) => ({ key: 'w' + i, emp: this.weekEmp(), day: i, name: d, sub: DAYS[i].slice(4) })).filter(c => st.weekends || c.day < 5)
+      : EMPLOYEES.filter(e => !st.chosen || st.chosen.includes(e.id)).map(e => ({ key: e.id, emp: e.id, day: day, name: e.name, sub: DAYS[day] }))
+          .concat(visits.some(v => v.emp === null && v.day === day) ? [{ key: 'none', emp: null, day: day, name: 'Unassigned', sub: DAYS[day] }] : []);
+    const cols = colsFor.map(c => {
+      const list = visits.filter(v => v.emp === c.emp && v.day === c.day && visible(v));
+      return {
+        name: c.name,
+        sub: c.sub,
+        overClass: '',
+        hours: c.emp === null ? 'No cleaner' : c.day >= 5 ? 'No hours set' : WORK_HOURS[c.emp],
+        count: list.length + (list.length === 1 ? ' visit' : ' visits'),
+        addVisit: () => this.setState({ newOpen: true, newTitle2: null, newEmp: c.emp || 'anna', newDay: String(c.day), newStart: '08:00', newDur: '60', newTitle: 'Kallio, Lindqvist flat', msg: '' }),
+        blocks: list.map(blockOf),
+        dragOver: e => { if (e && e.preventDefault) e.preventDefault(); },
+        drop: e => {
+          if (e && e.preventDefault) e.preventDefault();
+          if (st.resizing) { const rid = st.resizing; this.setState({ resizing: null }); this.resizeAt(rid, c.emp, c.day, e); return; }
+          const id = st.dragging || (e && e.dataTransfer ? e.dataTransfer.getData('text/plain') : '');
+          this.setState({ dragging: null });
+          if (id) this.dropAt(id, c.emp || 'anna', c.day, e);
+        },
+      };
+    });
+    const reviewCount = visits.filter(v => v.day === day && needsReview(v)).length;
+    const dayCount = visits.filter(v => v.day === day).length;
+    const dl = st.dlg || null;
+    const dv = dl ? visits.find(v => v.id === dl.vid) : null;
+    const dvName = dv ? dv.title : '';
+    const recStart = st.recStart || '08:00';
+    const recEnd = st.recEnd || '11:00';
+    const toMinL = t => toMin(t);
+    let selOut = { hasSel: false };
+    if (sel) {
+      const s = STATUS[sel.status];
+      const canRecord = past(sel.day) && sel.status !== 'cancelled';
+      selOut = {
+        hasSel: true,
+        sel: {
+          id: sel.id,
+          title: sel.title,
+          place: sel.place,
+          number: sel.number,
+          statusText: s.text,
+          chip: s.chip,
+          overlap: hasOverlap(sel),
+          unassigned: sel.emp === null,
+          hasReview: !!sel.review,
+          reviewKind: sel.review ? sel.review.kind : '',
+          reviewLabel: sel.review ? sel.review.label : '',
+          locked: s.locked,
+          when: DAYS[sel.day] + ', ' + fmt(sel.start) + '–' + fmt(sel.end),
+          cleanerName: sel.emp ? EMP_BY_ID[sel.emp] : 'Unassigned',
+          duration: ((sel.end - sel.start) / 60) + ' h',
+          actualText: sel.actual ? sel.actual + (sel.hours == null ? '' : ' · ' + sel.hours.toFixed(2) + ' hours') : 'Not recorded',
+          checklist: sel.checklist,
+          notes: sel.notes || 'No notes',
+          canRecord: canRecord,
+          recordLabel: sel.actual ? 'Correct times' : 'Record work',
+          canPhoto: !!sel.version,
+          earlier: () => this.move(sel.id, -15),
+          later: () => this.move(sel.id, 15),
+          onReassign: e => this.reassign(sel.id, e.target.value),
+          openOrder: () => this.openDlg('order', sel.id),
+          record: () => this.openDlg('rec', sel.id, { recStart: '08:00', recEnd: '11:00', recReason: '', recMsg: '' }),
+          photos: () => this.openDlg('photo', sel.id, { photos: [], photoReason: '', photoMsg: '' }),
+        },
+      };
+    }
+    const weekday = DAYS[day];
+    return Object.assign({
+      rangeLabel: isWeek ? 'Week of 30 November, ' + EMP_BY_ID[this.weekEmp()] : 'Day view, ' + weekday,
+      dragHint: isWeek ? ' or day' : ' or cleaner',
+      isDay: !isWeek,
+      isWeek: isWeek,
+      gridStyle: { gridTemplateColumns: '56px repeat(' + cols.length + ', minmax(150px, 1fr))' },
+      cols: cols,
+      hasMsg: !!st.msg,
+      msg: st.msg || '',
+      canUndo: !!st.prevVisits,
+      undo: () => this.undo(),
+      prev: () => this.setState(isWeek ? {} : { day: Math.max(0, day - 1), msg: '' }),
+      next: () => this.setState(isWeek ? {} : { day: Math.min(6, day + 1), msg: '' }),
+      today: () => this.setState({ day: TODAY, msg: '' }),
+      refresh: () => this.setState({ msg: 'Scheduler refreshed.' }),
+      showDay: () => this.setState({ view: 'day', msg: '' }),
+      showWeek: () => this.setState({ view: 'week', msg: '' }),
+      onWeekEmployee: e => this.setState({ weekEmp: e.target.value, msg: '' }),
+      closeSel: () => this.setState({ sel: null }),
+      dateLabel: isWeek ? 'Week starting' : 'Date',
+      onDate: e => this.setState({ day: Number(e.target.value), msg: '' }),
+      empChoices: EMPLOYEES.map(e => ({ name: e.name, on: !st.chosen || st.chosen.includes(e.id), toggle: () => { const cur = st.chosen || EMPLOYEES.map(x => x.id); this.setState({ chosen: cur.includes(e.id) ? cur.filter(x => x !== e.id) : cur.concat([e.id]) }); } })),
+      showAllEmps: () => this.setState({ chosen: null }),
+      fullDay: !!st.full,
+      onFullDay: e => this.setState({ full: !!e.target.checked }),
+      weekends: !!st.weekends,
+      onWeekends: e => this.setState({ weekends: !!e.target.checked }),
+      onReviewOnly: e => this.setState({ reviewOnly: !!e.target.checked }),
+      reviewText: reviewCount === 0 ? 'No visits need review on this day.' : reviewCount + (reviewCount === 1 ? ' visit needs' : ' visits need') + ' review.',
+      noVisits: !isWeek && dayCount === 0,
+      filteredOut: !isWeek && dayCount > 0 && cols.every(c => c.blocks.length === 0),
+      dismissMsg: () => this.setState({ msg: '' }),
+      hourLabels: Array.from({ length: (LAST - FIRST) / 60 + 1 }, (_, i) => ({ t: String(FIRST / 60 + i).padStart(2, '0') + ':00', pos: { top: Math.max(0, i * HOUR_PX - 4) + 'px' } })),
+      newOpen: !!st.newOpen,
+      newTitle: 'Schedule work order',
+      newWho: st.newOpen ? (st.newEmp ? EMP_BY_ID[st.newEmp] : 'No cleaner yet') + ', ' + DAYS[Number(st.newDay || 0)] : '',
+      newSummary: st.newOpen ? 'Ends at ' + fmt(toMin(st.newStart || '08:00') + Number(st.newDur || '60')) + '. Visit 1 for this work order.' : '',
+      onNewStart: e => this.setState({ newStart: e.target.value }),
+      onNewDur: e => this.setState({ newDur: e.target.value }),
+      onNewTitle: e => this.setState({ newTitle: e.target.value }),
+      closeNewVisit: () => this.setState({ newOpen: false }),
+      saveNewVisit: () => this.saveNewVisit(),
+      openNew: () => this.setState({ newOpen: true, newEmp: null, newDay: String(day), newStart: '08:00', newDur: '60', newTitle: 'Kallio, Lindqvist flat', msg: '' }),
+      recOpen: !!dl && dl.kind === 'rec',
+      recTitle: dv && dv.actual ? 'Correct work times' : 'Record work',
+      recWho: dv ? (dv.emp ? EMP_BY_ID[dv.emp] : 'Unassigned') + ' · ' + dvName : '',
+      recScheduled: dv ? DAYS[dv.day] + ', ' + fmt(dv.start) + ' – ' + fmt(dv.end) : '',
+      recDuration: ((toMinL(recEnd) - toMinL(recStart)) / 60).toFixed(2),
+      recMsg: st.recMsg || '',
+      onRecStart: e => this.setState({ recStart: e.target.value }),
+      onRecEnd: e => this.setState({ recEnd: e.target.value }),
+      onRecReason: e => this.setState({ recReason: e.target.value }),
+      saveRec: () => this.saveRec(),
+      photoOpen: !!dl && dl.kind === 'photo',
+      photoWho: dv ? dvName : '',
+      photoList: (st.photos || []).map((p, i) => ({ n: i + 1, onNote: e => this.setState({ photos: (st.photos || []).map((x, j) => (j === i ? { note: e.target.value } : x)) }) })),
+      addPhoto: () => this.setState({ photos: (st.photos || []).concat([{ note: '' }]) }),
+      onPhotoReason: e => this.setState({ photoReason: e.target.value }),
+      photoMsg: st.photoMsg || '',
+      savePhotos: () => this.savePhotos(),
+      orderOpen: !!dl && dl.kind === 'order',
+      orderName: dv ? dv.title : '',
+      orderPlace: dv ? dv.place : '',
+      orderWhen: dv ? DAYS[dv.day] + ', ' + fmt(dv.start) + ' – ' + fmt(dv.end) : '',
+      closeDlg: () => this.setState({ dlg: null, recMsg: '', photoMsg: '' }),
+      hasSel: selOut.hasSel,
+      sel: selOut.sel,
+    });
+  }
+}
+</script>
+</body>
+</html>
