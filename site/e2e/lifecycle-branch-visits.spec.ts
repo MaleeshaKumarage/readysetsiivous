@@ -224,7 +224,7 @@ test('admin sets the default employee and changes the employee of one visit', as
   await expect(page.getByRole('option', { name: 'Second Employee', exact: true })).toBeAttached();
   await cleanerField.fill('Second Employee'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
   await expect(list.getByRole('textbox', { name: 'Default employee', exact: true })).toHaveValue('Second Employee');
-  expect(state.defaultWrites).toEqual([{ employeeId: 'second' }]);
+  await expect.poll(() => state.defaultWrites).toEqual([{ employeeId: 'second' }]);
 
   await menuAction(page, list, '#1 ·', 'Assign employees');
   const editor = page.getByRole('dialog', { name: 'Change employee', exact: true });
@@ -430,5 +430,5 @@ test('assign employees on a main shift saves the default employee that new visit
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
-  expect(state.defaultWrites).toEqual([{ employeeId: 'second' }]);
+  await expect.poll(() => state.defaultWrites).toEqual([{ employeeId: 'second' }]);
 });

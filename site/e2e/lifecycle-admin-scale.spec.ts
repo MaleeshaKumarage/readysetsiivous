@@ -43,7 +43,7 @@ test('shifts list pages through every generated active shift', async ({ page }) 
   await setupAdminMocks(page);
   await installScaleRoutes(page, data);
   await page.goto('/admin/shifts/');
-  const pager = page.getByRole('navigation', { name: 'Shifts pages' });
+  const pager = page.getByRole('navigation', { name: 'Work orders pages' });
   await expect(pager.getByText(`Showing 1–25 of ${active}`)).toBeVisible({ timeout: 15000 });
   await expect(pager.getByText(`Page 1 of ${Math.ceil(active / 25)}`)).toBeVisible();
   await pager.getByRole('button', { name: 'Next', exact: true }).click();

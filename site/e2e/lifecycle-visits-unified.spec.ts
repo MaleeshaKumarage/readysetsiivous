@@ -52,44 +52,54 @@ async function setup(page: Page, options: { failCancel?: boolean } = {}) {
 }
 
 function rowFor(page: Page, text: string) {
-  return page.getByRole('dialog', { name: /^Visits/ }).getByRole('row').filter({ hasText: text });
+  return page.getByRole('dialog', { name: /^Visits of/ }).getByRole('row').filter({ hasText: text });
+}
+
+/** Opens the visit row's Actions menu and clicks one item (the design keeps visit actions in the menu). */
+async function visitMenu(page: Page, rowText: string, label: string) {
+  const target = rowFor(page, rowText).getByRole('button', { name: /^Actions for visit/ });
+  await target.click();
+  await page.locator(`[id="${await target.getAttribute('aria-controls')}"]`).getByRole('menuitem', { name: label, exact: true }).click();
 }
 
 test('the shift menu opens one Visits list with generated and manual visits', async ({ page }) => {
   await setup(page);
   await shiftAction(page, 'Per visit clean', 'Visits');
-  const list = page.getByRole('dialog', { name: 'Visits — Per visit clean', exact: true });
+  const list = page.getByRole('dialog', { name: 'Visits of Per visit clean', exact: true });
   await expect(list).toBeVisible();
-  await expect(list.getByText('11/2/2026, 8:00:00 AM')).toBeVisible();
-  await expect(list.getByText('11/5/2026, 8:00:00 AM')).toBeVisible();
+  await expect(rowFor(page, 'Nov 2')).toBeVisible();
+  await expect(rowFor(page, 'Nov 5')).toBeVisible();
 });
 
-test('only a manual visit can be deleted; a generated visit offers Change and Cancel', async ({ page }) => {
+test('only a manual visit can be deleted; a generated visit offers Change time and Cancel visit', async ({ page }) => {
   await setup(page);
   await shiftAction(page, 'Per visit clean', 'Visits');
-  const generatedRow = rowFor(page, '11/2/2026, 8:00:00 AM'); const manualRow = rowFor(page, '11/5/2026, 8:00:00 AM');
-  await expect(generatedRow.getByRole('button', { name: 'Change', exact: true })).toBeVisible();
-  await expect(generatedRow.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
-  await expect(generatedRow.getByRole('button', { name: 'Delete visit' })).toHaveCount(0);
-  await expect(manualRow.getByRole('button', { name: 'Delete visit' })).toBeVisible();
-  await expect(manualRow.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+  await rowFor(page, 'Nov 2').getByRole('button', { name: /^Actions for visit/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Change time', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Cancel visit', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Delete visit', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await rowFor(page, 'Nov 5').getByRole('button', { name: /^Actions for visit/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Delete visit', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Cancel visit', exact: true })).toBeVisible();
 });
 
 test('a per-visit shift offers a visit price; a monthly-fee shift does not', async ({ page }) => {
   await setup(page);
   await shiftAction(page, 'Per visit clean', 'Visits');
-  await expect(rowFor(page, '11/2/2026, 8:00:00 AM').getByRole('button', { name: 'Visit price' })).toBeVisible();
+  await rowFor(page, 'Nov 2').getByRole('button', { name: /^Actions for visit/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Visit price', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: /^Visits/ })).toHaveCount(0);
+  await page.getByRole('dialog', { name: 'Visits of Per visit clean', exact: true }).getByRole('button', { name: 'Close visits', exact: true }).click();
   await shiftAction(page, 'Monthly clean', 'Visits');
-  await expect(page.getByRole('dialog', { name: 'Visits — Monthly clean', exact: true }).getByText('11/2/2026, 8:00:00 AM')).toBeVisible();
-  await expect(page.getByRole('dialog', { name: /^Visits/ }).getByRole('button', { name: 'Visit price' })).toHaveCount(0);
+  await rowFor(page, 'Nov 2').getByRole('button', { name: /^Actions for visit/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Visit price', exact: true })).toHaveCount(0);
 });
 
 test('editing a visit prefills its notes and saves changed notes', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Per visit clean', 'Visits');
-  await rowFor(page, '11/5/2026, 8:00:00 AM').getByRole('button', { name: 'Change', exact: true }).click();
+  await visitMenu(page, 'Nov 5', 'Change time');
   const editor = page.getByRole('dialog', { name: 'Change visit', exact: true });
   const notes = editor.getByLabel('Notes for the employee (optional)');
   await expect(notes).toHaveValue('Bring ladder');
@@ -102,13 +112,13 @@ test('editing a visit prefills its notes and saves changed notes', async ({ page
 test('clearing the notes sends an empty value; a visit with no notes sends none', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Per visit clean', 'Visits');
-  await rowFor(page, '11/5/2026, 8:00:00 AM').getByRole('button', { name: 'Change', exact: true }).click();
+  await visitMenu(page, 'Nov 5', 'Change time');
   let editor = page.getByRole('dialog', { name: 'Change visit', exact: true });
   await editor.getByLabel('Notes for the employee (optional)').fill('');
   await editor.getByRole('button', { name: 'Save visit' }).click();
   await expect(editor).toBeHidden();
   expect(state.writes[0].notes).toBe('');
-  await rowFor(page, '11/2/2026, 8:00:00 AM').getByRole('button', { name: 'Change', exact: true }).click();
+  await visitMenu(page, 'Nov 2', 'Change time');
   editor = page.getByRole('dialog', { name: 'Change visit', exact: true });
   await expect(editor.getByLabel('Notes for the employee (optional)')).toHaveValue('');
   await editor.getByLabel('Reason').fill('Moved by customer');
@@ -120,32 +130,32 @@ test('clearing the notes sends an empty value; a visit with no notes sends none'
 test('cancelling a manual visit asks who cancelled and why, then it can be restored', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Per visit clean', 'Visits');
-  await rowFor(page, '11/5/2026, 8:00:00 AM').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await visitMenu(page, 'Nov 5', 'Cancel visit');
   const dialog = page.getByRole('dialog', { name: 'Cancel visit', exact: true });
-  await dialog.getByRole('button', { name: 'Cancel visit' }).click();
+  await dialog.getByRole('button', { name: 'Cancel visit', exact: true }).click();
   await expect(dialog.getByRole('alert')).toHaveText('Enter a reason.');
   expect(state.cancels).toHaveLength(0);
   await dialog.getByLabel('Cancelled by').click();
   await page.getByRole('option', { name: 'Customer cancelled' }).click();
   await dialog.getByLabel('Reason').fill('Office closed');
-  await dialog.getByRole('button', { name: 'Cancel visit' }).click();
+  await dialog.getByRole('button', { name: 'Cancel visit', exact: true }).click();
   await expect(dialog).toBeHidden();
   expect(state.cancels).toEqual([{ status: 2, reason: 'Office closed' }]);
-  const list = page.getByRole('dialog', { name: /^Visits/ });
-  await expect(list.getByText('Visit cancelled. You can restore it from this list.')).toBeVisible();
-  const cancelled = rowFor(page, '11/5/2026, 8:00:00 AM');
-  await expect(cancelled.getByRole('button', { name: 'Delete visit' })).toHaveCount(0);
-  await expect(cancelled.getByRole('button', { name: 'Change', exact: true })).toHaveCount(0);
-  await cancelled.getByRole('button', { name: 'Restore' }).click();
-  await expect(list.getByText('Visit restored.')).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Visit cancelled. You can restore it from this list.');
+  await rowFor(page, 'Nov 5').getByRole('button', { name: /^Actions for visit/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Delete visit', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Change time', exact: true })).toBeDisabled();
+  await page.getByRole('menuitem', { name: 'Restore visit', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Visit restored.');
   expect(state.restores).toEqual(['manual-1']);
-  await expect(rowFor(page, '11/5/2026, 8:00:00 AM').getByRole('button', { name: 'Delete visit' })).toBeVisible();
+  await rowFor(page, 'Nov 5').getByRole('button', { name: /^Actions for visit/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Delete visit', exact: true })).toBeVisible();
 });
 
 test('Keep visit closes the cancel dialog without sending anything', async ({ page }) => {
   const state = await setup(page);
   await shiftAction(page, 'Per visit clean', 'Visits');
-  await rowFor(page, '11/5/2026, 8:00:00 AM').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await visitMenu(page, 'Nov 5', 'Cancel visit');
   const dialog = page.getByRole('dialog', { name: 'Cancel visit', exact: true });
   await dialog.getByLabel('Reason').fill('Changed my mind');
   await dialog.getByRole('button', { name: 'Keep visit' }).click();
@@ -156,10 +166,10 @@ test('Keep visit closes the cancel dialog without sending anything', async ({ pa
 test('a refused cancel shows the reason and keeps the dialog open', async ({ page }) => {
   await setup(page, { failCancel: true });
   await shiftAction(page, 'Per visit clean', 'Visits');
-  await rowFor(page, '11/5/2026, 8:00:00 AM').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await visitMenu(page, 'Nov 5', 'Cancel visit');
   const dialog = page.getByRole('dialog', { name: 'Cancel visit', exact: true });
   await dialog.getByLabel('Reason').fill('Office closed');
-  await dialog.getByRole('button', { name: 'Cancel visit' }).click();
+  await dialog.getByRole('button', { name: 'Cancel visit', exact: true }).click();
   await expect(dialog.getByRole('alert')).toBeVisible();
   await expect(dialog.getByLabel('Reason')).toHaveValue('Office closed');
 });
@@ -167,7 +177,7 @@ test('a refused cancel shows the reason and keeps the dialog open', async ({ pag
 test('a branch main shift visit is edited without a replacement employee field', async ({ page }) => {
   await setup(page);
   await shiftAction(page, 'Branch main', 'Visits');
-  await rowFor(page, '11/5/2026, 8:00:00 AM').getByRole('button', { name: 'Change', exact: true }).click();
+  await visitMenu(page, 'Nov 5', 'Change time');
   const editor = page.getByRole('dialog', { name: 'Change visit', exact: true });
   await expect(editor.getByLabel('Notes for the employee (optional)')).toBeVisible();
   await expect(editor.getByLabel('Replacement employee (optional)')).toHaveCount(0);

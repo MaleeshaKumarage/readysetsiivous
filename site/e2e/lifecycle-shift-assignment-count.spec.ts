@@ -2,8 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import { shiftRowAction } from './shift-actions';
 
-// The Employees column names the active assignees. Names come from one bulk request for the page's shifts,
-// and opening Assign employees fills in that shift's names from the freshly loaded roster.
+// The work orders list has no Employees column (the design keeps assignees in Assign employees).
+// Missing cleaner comes from the assignment counts; Assign employees lists the active assignees.
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' };
 const company = { id: 'c-1', name: 'CleanTech Oy', businessId: '1111111-1', isActive: true };
 const employees = [
@@ -21,55 +21,52 @@ const roster = [
   { id: 'a-2', shiftId: 's-1', employeeId: 'e-2', assignedAtUtc: '2026-10-01T08:00:00Z', isActive: false },
 ];
 
-async function mockShifts(page: Page, names: { status: number; json?: unknown }, assignments: unknown[] = []) {
+async function mockShifts(page: Page, counts: { status: number; json?: unknown }, assignments: unknown[] = []) {
   await setupAdminMocks(page, { authenticated: true });
   await page.route('**/api/v1/admin/companies**', route => route.fulfill({ status: 200, headers: CORS, json: { items: [company], total: 1 } }));
   await page.route('**/api/v1/admin/employees**', route => route.fulfill({ status: 200, headers: CORS, json: employees }));
-  const calls = { names: 0, perShift: 0 };
+  const calls = { counts: 0, perShift: 0, names: 0 };
   await page.route('**/api/v1/admin/shifts**', route => {
     const url = route.request().url();
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers: CORS });
-    if (url.includes('/assignee-names')) { calls.names++; return route.fulfill({ status: names.status, headers: CORS, json: names.json ?? {} }); }
+    if (url.includes('/assignee-names')) { calls.names++; return route.fulfill({ status: 200, headers: CORS, json: {} }); }
+    if (url.includes('/assignment-counts')) { calls.counts++; return route.fulfill({ status: counts.status, headers: CORS, json: counts.json ?? {} }); }
     if (/\/shifts\/[^/]+\/assignments/.test(url)) { calls.perShift++; return route.fulfill({ status: 200, headers: CORS, json: assignments }); }
     return route.fulfill({ status: 200, headers: CORS, json: shiftsResponse(shifts, url) });
   });
   return calls;
 }
 
-test('Employees column names the active assignees from one bulk request after reload', async ({ page }) => {
-  const calls = await mockShifts(page, { status: 200, json: { 's-1': ['Liisa Lakaisija', 'Sami Siivooja'], 's-2': [] } });
+test('the work orders list has no Employees column and does not request assignee names', async ({ page }) => {
+  const calls = await mockShifts(page, { status: 200, json: { 's-1': 1, 's-2': 1 } });
   await page.goto('/admin/shifts/');
-  await page.reload();
-  const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
-  const evening = page.getByRole('row').filter({ hasText: 'Evening shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('Liisa Lakaisija, Sami Siivooja');
-  await expect(evening.getByRole('cell').nth(2)).toHaveText('None');
-  expect(calls.perShift).toBe(0);
-  expect(calls.names).toBeGreaterThan(0);
+  await expect(page.getByRole('region', { name: 'Work orders table' }).getByRole('columnheader')).toHaveText(['Property', '', 'Visits', 'Actions']);
+  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' })).toBeVisible();
+  expect(calls.names).toBe(0);
 });
 
-test('Employees column reports a failed names load instead of showing zero', async ({ page }) => {
-  await mockShifts(page, { status: 500 });
+test('a shift with no active cleaner shows the Missing cleaner tag', async ({ page }) => {
+  await mockShifts(page, { status: 200, json: { 's-1': 0, 's-2': 1 } });
   await page.goto('/admin/shifts/');
-  const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('—');
-  await expect(page.getByRole('alert').filter({ hasText: 'Could not load employee names. Refresh the page to retry.' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).getByText('Missing cleaner', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Evening shift' }).getByText('Missing cleaner', { exact: true })).toHaveCount(0);
 });
 
-test('opening Assign employees fills the names from the freshly loaded roster, naming only active rows', async ({ page }) => {
-  await mockShifts(page, { status: 200, json: { 's-1': ['Liisa Lakaisija'], 's-2': [] } }, roster);
+test('Assign employees lists the active assignees and leaves out inactive ones', async ({ page }) => {
+  await mockShifts(page, { status: 200, json: { 's-1': 1, 's-2': 0 } }, roster);
   await page.goto('/admin/shifts/');
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('Liisa Lakaisija');
   await shiftRowAction(page, morning, 'Assign employees');
-  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('cell').nth(2)).toHaveText('Sami Siivooja');
+  await expect(page.getByRole('heading', { name: 'Assign employees — Morning shift' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Sami Siivooja' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unassign Liisa Lakaisija' })).toHaveCount(0);
 });
 
-test('when the names load fails, an opened roster still fills that shift\'s names', async ({ page }) => {
+test('a failed assignment count load leaves the list and Assign employees usable', async ({ page }) => {
   await mockShifts(page, { status: 500 }, roster);
   await page.goto('/admin/shifts/');
   const morning = page.getByRole('row').filter({ hasText: 'Morning shift' });
-  await expect(morning.getByRole('cell').nth(2)).toHaveText('—');
+  await expect(morning).toBeVisible();
   await shiftRowAction(page, morning, 'Assign employees');
-  await expect(page.getByRole('row').filter({ hasText: 'Morning shift' }).first().getByRole('cell').nth(2)).toHaveText('Sami Siivooja');
+  await expect(page.getByRole('button', { name: 'Unassign Sami Siivooja' })).toBeVisible();
 });

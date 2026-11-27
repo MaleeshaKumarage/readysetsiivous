@@ -128,7 +128,7 @@ test('changing the month reloads the visits of that month', async ({ page }) => 
   await expect.poll(() => state.occurrenceQueries.length).toBe(before + 1);
   expect(state.occurrenceQueries.at(-1)?.get('from')).toBe('2026-11-30T22:00:00.000Z');
   expect(state.occurrenceQueries.at(-1)?.get('to')).toBe('2026-12-31T21:59:59.999Z');
-  await expect(list.locator('strong', { hasText: 'December 2026' })).toBeVisible();
+  await expect(list.getByRole('combobox', { name: 'Month', exact: true })).toHaveValue('2026-12');
 });
 
 test('admin cancels occurrence editing without saving', async ({ page }) => {

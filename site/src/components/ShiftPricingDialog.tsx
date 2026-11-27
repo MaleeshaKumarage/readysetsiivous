@@ -1,4 +1,5 @@
 'use client';
+import { errorMessage } from '@/lib/errorMessage';
 
 import { useEffect, useState } from 'react';
 import { Button, Group, Loader, Modal, NumberInput, Select, Stack, Table, Text, TextInput } from '@mantine/core';
@@ -7,7 +8,7 @@ import type { Shift, ShiftOccurrence } from '@/lib/adminApi';
 
 // Legacy on-call and one-time visits are priced per completed visit.
 const isVisitBased = (shift: Shift) => shift.schedule.type === 4 || shift.schedule.type === 6;
-const modeLabel: Record<string, string> = { Monthly: 'Fixed monthly fee', Hourly: 'Per scheduled hour', PerOccurrence: 'Per completed visit' };
+export const modeLabel: Record<string, string> = { Monthly: 'Fixed monthly fee', Hourly: 'Per scheduled hour', PerOccurrence: 'Per completed visit' };
 const byDate = (a: BranchPriceVersion, b: BranchPriceVersion) => a.effectiveFrom.localeCompare(b.effectiveFrom);
 export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shift; occurrence?: ShiftOccurrence; onClose: () => void }) {
   const [pricing, setPricing] = useState<ShiftPricing | null>(null);
@@ -26,7 +27,7 @@ export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shif
       if (latest) setPlan(latest);
       const override = value.overrides.find(item => item.occurrenceStartUtc === occurrence?.startUtc);
       if (override) { setPlan(current => ({ ...current, rateNet: override.rateNet })); setReason(override.reason); }
-    }).catch(failure => active && setError(failure.message));
+    }).catch(failure => active && setError(errorMessage(failure, 'Could not load pricing.')));
     return () => { active = false; };
   }, [shift.id, occurrence?.startUtc]);
   const save = async () => {
@@ -36,7 +37,7 @@ export function ShiftPricingDialog({ shift, occurrence, onClose }: { shift: Shif
       else if (linked) await invoiceBillingApi.selectBranchPrice(shift.id, versionFrom);
       else await invoiceBillingApi.savePricing(shift.id, plan);
       onClose();
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not save pricing.'); }
+    } catch (failure) { setError(errorMessage(failure, 'Could not save pricing.')); }
     finally { setBusy(false); }
   };
   return <Modal opened onClose={() => !busy && onClose()} title={`${occurrence ? 'Visit price' : 'Shift pricing'} — ${shift.name}`} size="lg">

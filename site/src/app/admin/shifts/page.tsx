@@ -1,16 +1,17 @@
 'use client';
+import { errorMessage } from '@/lib/errorMessage';
 
 import { showError } from '@/lib/toast';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   Title, Button, Table, Modal, TextInput, Textarea, Select, MultiSelect, Group, Stack, Text, Loader, ActionIcon, NumberInput, Menu,
 } from '@mantine/core';
-import { Plus, Trash2, Pencil, MoreHorizontal, Eye, UserPlus, CalendarDays, CalendarPlus, ListChecks, Receipt, PauseCircle, PlayCircle, ChevronDown, ChevronRight, Sparkles, UserRound, CircleCheck, Clock } from 'lucide-react';
+import { Plus, Trash2, Pencil, MoreHorizontal, Eye, UserPlus, CalendarDays, CalendarPlus, ListChecks, Receipt, History, PauseCircle, PlayCircle, ChevronDown, ChevronRight, Sparkles, UserRound, CircleCheck, Clock } from 'lucide-react';
 import {
   adminShifts, adminBranchVisits, adminCompanies, adminEmployees, adminTenant,
   type Shift, type Branch, type Employee, type ShiftAssignment, type ShiftOccurrence,
 } from '@/lib/adminApi';
-import { ShiftPricingDialog } from '@/components/ShiftPricingDialog';
+import { ShiftPricingDialog, modeLabel } from '@/components/ShiftPricingDialog';
 import { VisitAssigneesDialog } from '@/components/VisitAssigneesDialog';
 import { isAdmin } from '@/lib/auth';
 import { adminQualityCycle, type QualityCycleTemplate } from '@/lib/qualityCycleApi';
@@ -143,6 +144,7 @@ const shiftView = (shift: Shift): LifecycleStatus => (!shift.isActive ? 'inactiv
 
 export default function ShiftsAdminPage() {
   const [pricingShift, setPricingShift] = useState<Shift | null>(null);
+  const [priceHistoryFor, setPriceHistoryFor] = useState<Shift | null>(null);
   const [pricingOccurrence, setPricingOccurrence] = useState<ShiftOccurrence | undefined>();
   const [shiftPage, setShiftPage] = useState(1);
   const [pageRows, setPageRows] = useState<Shift[]>([]);
@@ -306,16 +308,11 @@ export default function ShiftsAdminPage() {
   // Every freshly loaded roster also updates that shift's count, so the column always shows the newest
   // of the two sources: a later bulk reload (after another admin's change) replaces an older roster count.
   const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number> | null>(null);
-  const [assigneeNames, setAssigneeNames] = useState<Record<string, string[]>>({});
   const [countError, setCountError] = useState('');
   const storeRoster = (id: string, roster: ShiftAssignment[]) => {
     setAssignments(m => ({ ...m, [id]: roster }));
     setAssignmentCounts(c => c && { ...c, [id]: roster.filter(a => a.isActive).length });
-    setAssigneeNames(n => ({ ...n, [id]: roster.filter(a => a.isActive).map(a => assigneeName(a.employeeId)) }));
   };
-  const loadAssigneeNames = (ids: string[]) => adminShifts.assigneeNames(ids)
-    .then(names => { setAssigneeNames(names); setCountError(''); })
-    .catch(() => { setAssigneeNames({}); setCountError('Could not load employee names. Refresh the page to retry.'); });
   const assigneeName = (id: string) => { const person = employees.find(e => e.id === id); return person ? `${person.firstName} ${person.lastName}`.trim() : 'Unknown employee'; };
   const loadAssignmentCounts = () => adminShifts.assignmentCounts()
     .then(counts => { setAssignmentCounts(counts); setCountError(''); })
@@ -347,7 +344,7 @@ export default function ShiftsAdminPage() {
     if (seq !== loadSeq.current) return;
     // A reply without the paged shape cannot be shown; say so and keep the retry path instead of crashing the screen.
     if (!r || !Array.isArray(r.items) || typeof r.total !== 'number' || !r.counts) throw new Error('The shift list could not be read. Refresh the page to retry.');
-    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts(); void loadAssigneeNames(r.items.map(s => s.id)); loadProgress(r.items);
+    setPageRows(r.items); setPageTotal(r.total); setTabCounts(r.counts); setListError(''); void loadAssignmentCounts(); loadProgress(r.items);
     setLoading(false);
   }).catch((failure: Error) => { if (seq !== loadSeq.current) return; setListError(failure.message); setLoading(false); }); };
   // Reload the current tab and page whenever either changes, and once on mount.
@@ -528,7 +525,7 @@ export default function ShiftsAdminPage() {
   const deleteShift = async (shift: Shift) => {
     setRestoring(shift.id); setListError('');
     try { await adminShifts.deleteInactive(shift.id); await load(); }
-    catch (failure) { setListError(failure instanceof Error ? failure.message : 'Could not delete shift. Please retry.'); }
+    catch (failure) { setListError(errorMessage(failure, 'Could not delete shift. Please retry.')); }
     finally { setRestoring(null); }
   };
 
@@ -617,7 +614,7 @@ export default function ShiftsAdminPage() {
       const result = await adminShifts.occurrences(shift.id, fromUtc, toUtc);
       if (!result) throw new Error('The visits could not be loaded. Close this window and open it again to retry.');
       if (version === occurrenceGeneration.current) setOccurrences(result);
-    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(failure instanceof Error ? failure.message : 'The visits could not be loaded. Close this window and open it again to retry.'); }
+    } catch (failure) { if (version === occurrenceGeneration.current) setOccurrenceError(errorMessage(failure, 'The visits could not be loaded. Close this window and open it again to retry.')); }
     finally { if (version === occurrenceGeneration.current) setOccurrenceLoading(false); }
   };
 
@@ -693,7 +690,7 @@ export default function ShiftsAdminPage() {
         setOccurrenceFrom(from); setOccurrenceTo(to);
         await loadOccurrences(occurrenceShift, from, to);
       } else await loadOccurrences();
-    } catch (failure) { setOccurrenceEditError(failure instanceof Error ? failure.message : 'Could not update this visit.'); }
+    } catch (failure) { setOccurrenceEditError(errorMessage(failure, 'Could not update this visit.')); }
     finally { setOccurrenceSaving(false); }
   };
 
@@ -706,14 +703,14 @@ export default function ShiftsAdminPage() {
       await adminShifts.cancelVisit(occurrenceShift.id, cancellingVisit.exceptionId, { status: Number(cancelVisitStatus), reason: cancelVisitReason.trim() });
       setCancellingVisit(null); setShiftNotice('Visit cancelled. You can restore it from this list.');
       await loadOccurrences();
-    } catch (failure) { setCancelVisitError(failure instanceof Error ? failure.message : 'Could not cancel this visit.'); }
+    } catch (failure) { setCancelVisitError(errorMessage(failure, 'Could not cancel this visit.')); }
     finally { setOccurrenceSaving(false); }
   };
   const restoreManualVisit = async (item: ShiftOccurrence) => {
     if (!occurrenceShift || !item.exceptionId) return;
     setOccurrenceSaving(true); setOccurrenceError('');
     try { await adminShifts.restoreVisit(occurrenceShift.id, item.exceptionId); setShiftNotice('Visit restored.'); await loadOccurrences(); }
-    catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not restore this visit.'); }
+    catch (failure) { setOccurrenceError(errorMessage(failure, 'Could not restore this visit.')); }
     finally { setOccurrenceSaving(false); }
   };
 
@@ -760,7 +757,7 @@ export default function ShiftsAdminPage() {
     if (!occurrenceShift || !occurrence.exceptionId) return;
     setOccurrenceSaving(true); setOccurrenceError('');
     try { await adminShifts.deleteOccurrenceException(occurrenceShift.id, occurrence.exceptionId); await loadOccurrences(); }
-    catch (failure) { setOccurrenceError(failure instanceof Error ? failure.message : 'Could not restore this occurrence.'); }
+    catch (failure) { setOccurrenceError(errorMessage(failure, 'Could not restore this occurrence.')); }
     finally { setOccurrenceSaving(false); }
   };
 
@@ -886,6 +883,7 @@ export default function ShiftsAdminPage() {
                           <Menu.Dropdown>
                             <Menu.Item leftSection={<Eye size={13} />} onClick={() => setWorkspaceId(s.id)}>View details</Menu.Item>
                             {isAdmin() && !s.isBranchMain && <Menu.Item leftSection={<Receipt size={13} />} onClick={() => { setPricingShift(s); setPricingOccurrence(undefined); }}>Pricing</Menu.Item>}
+                            {isAdmin() && <Menu.Item leftSection={<History size={13} />} onClick={() => setPriceHistoryFor(s)}>Price history</Menu.Item>}
                             {isAdmin() && <Menu.Item leftSection={<Pencil size={13} />} onClick={() => openEdit(s)}>Edit schedule</Menu.Item>}
                             {s.isActive && !s.isBranchMain && <Menu.Item disabled={assignBusy} leftSection={<UserPlus size={13} />} onClick={() => openAssign(s.id)}>Assign employees</Menu.Item>}
                             {s.isActive && s.isBranchMain && <Menu.Item leftSection={<UserPlus size={13} />} onClick={() => { setDefaultCleanerError(''); setDefaultCleanerPick(s.defaultEmployeeId ?? null); setDefaultCleanerFor(s); }}>Assign employees</Menu.Item>}
@@ -936,16 +934,14 @@ export default function ShiftsAdminPage() {
                 {defaultCleanerError && <Text role="alert" c="red">{defaultCleanerError}</Text>}
               </>}
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <strong className="text-accent-950">{monthLabelOf(expandedMonth)}</strong>
                 <select aria-label="Month" value={expandedMonth} onChange={(e) => changeExpandedMonth(e.currentTarget.value)}
                   className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
                   {panelMonthChoices().map(choice => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
                 </select>
-              </div>
-              <div role="group" aria-label="Show visits" className="flex flex-wrap gap-2">
-                {VISIT_FILTERS.map(([key, label]) => (
-                  <Button key={key} size="xs" variant={expandedFilter === key ? 'filled' : 'light'} aria-pressed={expandedFilter === key} onClick={() => setExpandedFilter(key)}>{label}</Button>
-                ))}
+                <select aria-label="Show visits" value={expandedFilter} onChange={(e) => setExpandedFilter(e.currentTarget.value as VisitFilter)}
+                  className="min-h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                  {VISIT_FILTERS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
               </div>
               {occurrenceLoading && <p className="text-sm text-gray-500">Loading visits…</p>}
               {occurrenceError && <p role="alert" className="text-sm text-red-600">{occurrenceError}</p>}
@@ -976,10 +972,10 @@ export default function ShiftsAdminPage() {
                                 <Menu.Item disabled={item.canAssign === false || visitStatusOf(item) === 'completed' || visitStatusOf(item) === 'cancelled' || item.isPartnerBooking} onClick={() => { if (drawerShift.isBranchMain) { setCleanerMode('employee'); setCleanerVisit(item); setCleanerChoice(item.assigneeIds?.[0] ?? item.offeredEmployeeId ?? null); setCleanerError(''); setCleaningTypeChoice(null); setCleaningTypeError(''); } else setAssigningVisit(item); }}>Assign employees</Menu.Item>
                                 <Menu.Item disabled={visitStatusOf(item) !== 'scheduled'} onClick={() => openOccurrenceEditor(item, '1', drawerShift)}>Change time</Menu.Item>
                                 <Menu.Item onClick={() => { setCleanerMode('type'); setCleanerVisit(item); setCleaningTypeChoice(null); setCleaningTypeError(''); }}>Change cleaning type</Menu.Item>
-                                <Menu.Item onClick={() => { setPricingShift(drawerShift); setPricingOccurrence(item); }}>Visit price</Menu.Item>
+                                {drawerShift.pricingMode !== 0 && (drawerShift.pricingMode === 1 || drawerShift.schedule.type === 4 || drawerShift.schedule.type === 6) && <Menu.Item onClick={() => { setPricingShift(drawerShift); setPricingOccurrence(item); }}>Visit price</Menu.Item>}
                                 {!item.isCancelledManualVisit && <Menu.Item color="red" disabled={visitStatusOf(item) === 'completed' || visitStatusOf(item) === 'ongoing'} onClick={() => { if (item.exceptionId) { openCancelVisit(item); return; } openOccurrenceEditor(item, '3', drawerShift); setOccurrenceStatus('3'); }}>Cancel visit</Menu.Item>}
                                 {item.isCancelledManualVisit && <Menu.Item onClick={() => void restoreManualVisit(item)}>Restore visit</Menu.Item>}
-                                {item.exceptionId && item.status === 4 && <Menu.Item color="red" onClick={() => void restoreOccurrence(item)}>Delete visit</Menu.Item>}
+                                {item.exceptionId && item.status === 4 && !item.isCancelledManualVisit && <Menu.Item color="red" onClick={() => void restoreOccurrence(item)}>Delete visit</Menu.Item>}
                                 {item.exceptionId && item.status !== 4 && !item.isCancelledManualVisit && <Menu.Item onClick={() => void restoreOccurrence(item)}>Restore original time</Menu.Item>}
                                 {visitStatusOf(item) !== 'scheduled' && <span className="block px-3 py-2 text-xs text-gray-500">{VISIT_NOTES[visitStatusOf(item)]}</span>}
                               </Menu.Dropdown>
@@ -1046,11 +1042,11 @@ export default function ShiftsAdminPage() {
           <Text size="sm" c="dimmed">Overlapping shifts are checked when you assign employees. Any conflict will be shown here.</Text>
           {assignError && <Text role="alert" aria-label="Assignment error" c="red">{assignError}</Text>}
           {assignStatus && <Text role="status">{assignStatus}</Text>}
-          {assignLoading ? <Text>Loading assignments…</Text> : !assignments[assignOpen] ? <Text>Assignments could not be loaded. Use Refresh assignments to retry.</Text> : assignments[assignOpen].length === 0 ? (
+          {assignLoading ? <Text>Loading assignments…</Text> : !assignments[assignOpen] ? <Text>Assignments could not be loaded. Use Refresh assignments to retry.</Text> : assignments[assignOpen].filter(a => a.isActive).length === 0 ? (
             <Text size="sm" c="dimmed">No employees assigned.</Text>
           ) : (
             <Stack gap={4}>
-              {(assignments[assignOpen] ?? []).map((a) => (
+              {(assignments[assignOpen] ?? []).filter(a => a.isActive).map((a) => (
                 <Group key={a.id} justify="space-between" wrap="wrap" gap="xs">
                   <Text size="sm">{employeeName(a.employeeId)}</Text>
                   <ActionIcon variant="subtle" color="red" size="sm" disabled={assignBusy || assignLoading} aria-label={`Unassign ${employeeName(a.employeeId)}`} onClick={() => doUnassign(assignOpen, a.employeeId)}><Trash2 size={14} /></ActionIcon>
@@ -1089,6 +1085,22 @@ export default function ShiftsAdminPage() {
           <Group justify="flex-end"><Button variant="default" loading={cleaningTypeSaving} onClick={saveCleaningType}>Save cleaning type</Button></Group>
         </Stack>
       </Modal>
+      {priceHistoryFor && <Modal opened onClose={() => setPriceHistoryFor(null)} title={`Price history — ${priceHistoryFor.name}`} size="lg" radius="md">
+        {(() => {
+          const branch = propertyById[priceHistoryFor.branchId];
+          if (!branch) return <Text c="dimmed">Loading price history…</Text>;
+          const versions = [...(branch.priceVersions ?? [])].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+          if (versions.length === 0) return <Text c="dimmed">No price history yet.</Text>;
+          return (
+            <Table.ScrollContainer minWidth={560}><Table striped withTableBorder>
+              <Table.Thead><Table.Tr><Table.Th>From</Table.Th><Table.Th>Pricing basis</Table.Th><Table.Th>Price before VAT</Table.Th><Table.Th>VAT</Table.Th><Table.Th>Duration</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>{versions.map(v => (
+                <Table.Tr key={v.effectiveFrom}><Table.Td>{v.effectiveFrom}</Table.Td><Table.Td>{modeLabel[v.mode] ?? v.mode}</Table.Td><Table.Td>€{v.priceNet.toFixed(2)}</Table.Td><Table.Td>{v.vatRatePercent}%</Table.Td><Table.Td>{v.durationMinutes} min</Table.Td></Table.Tr>
+              ))}</Table.Tbody>
+            </Table></Table.ScrollContainer>
+          );
+        })()}
+      </Modal>}
       {assigningVisit && occurrenceShift && <VisitAssigneesDialog key={`${assigningVisit.exceptionId ?? assigningVisit.startUtc}`}
         shiftId={occurrenceShift.id} visit={assigningVisit} employees={employees} timeZone={timeZoneId}
         onClose={() => setAssigningVisit(null)} onSaved={async () => { await loadOccurrences(); }} onOpenConflict={openClashingShift} />}
