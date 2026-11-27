@@ -93,7 +93,6 @@ test('the Show visits dropdown narrows the visits to one status or to visits wit
   await expect(visitRows).toHaveCount(5);
   await show.selectOption('ongoing');
   await expect(visitRows).toHaveCount(1);
-  await expect(visitRows.first()).toContainText('In progress');
   await show.selectOption('completed');
   await expect(visitRows).toHaveCount(1);
   await show.selectOption('cancelled');

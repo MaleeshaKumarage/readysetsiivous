@@ -20,7 +20,7 @@ export function scheduleLabel(shift: Shift) {
     : `${DAYS[s.weeklyDay ?? 0]} ${hm(s.weeklyStart)}–${hm(s.weeklyEnd)}`;
   if (s.type === 3) return `Bi-weekly ${DAYS[s.biWeeklyDay ?? 0]}${s.biWeeklyStart && s.biWeeklyEnd ? ` ${hm(s.biWeeklyStart)}–${hm(s.biWeeklyEnd)}` : ''}`;
   if (s.type === 5) return `Monthly day ${s.monthlyDay}${s.monthlyStart && s.monthlyEnd ? ` ${hm(s.monthlyStart)}–${hm(s.monthlyEnd)}` : ''}`;
-  if (s.type === 4) return shift.isBranchMain ? 'Visit shift (numbered visits)' : 'On-call';
+  if (s.type === 4) return 'On-call / flexible';
   if (s.type === 6) return `One-time ${s.oneTimeDate?.slice(0, 10)} ${hm(s.oneTimeStart)}–${hm(s.oneTimeEnd)}`;
   return '';
 }
