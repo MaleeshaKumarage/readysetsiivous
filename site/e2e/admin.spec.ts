@@ -55,7 +55,7 @@ test.describe('Admin Panel - Auth & Dashboard Navigation', () => {
     await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
 
     await page.goto('/admin/shifts/');
-    await expect(page.getByRole('heading', { name: 'Shifts' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Work orders' })).toBeVisible();
   });
 
   test('sign-out completes when removing the push device stalls', async ({ page, isMobile }) => {
@@ -769,10 +769,10 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.getByText('No shifts yet.')).toBeVisible();
 
     // Create shift
-    await page.getByRole('button', { name: 'Add shift' }).click();
+    await page.getByRole('button', { name: 'New work order' }).click();
 
     // Select company and branch
-    const modal = page.getByRole('dialog', { name: 'Add shift' });
+    const modal = page.getByRole('dialog', { name: 'New work order' });
 
     await modal.getByLabel('Company').click();
     await page.getByRole('option', { name: 'CleanTech Oy' }).click();
@@ -805,7 +805,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
 
     await expect(modal).not.toBeVisible();
-    await expect(page.getByRole('cell', { name: AAMUVUORO_NAME, exact: true })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: AAMUVUORO_NAME })).toBeVisible();
 
     // Assign employee
     await shiftAction(page, AAMUVUORO_NAME, 'Assign employees');
@@ -825,7 +825,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     await page.keyboard.press('Escape');
     // Deactivate shift
     await shiftAction(page, AAMUVUORO_NAME, 'Deactivate'); await confirmShiftPopup(page, 'Deactivate');
-    await expect(page.getByRole('button', { name: `More actions for ${AAMUVUORO_NAME}`, exact: true })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: `Actions for ${AAMUVUORO_NAME}`, exact: true })).not.toBeVisible();
   });
 
   test('worst path: required fields missing & specific days validation', async ({ page }) => {
@@ -845,14 +845,14 @@ test.describe('Admin Panel - Shifts Page', () => {
     });
 
     await page.goto('/admin/shifts/');
-    await page.getByRole('button', { name: 'Add shift' }).click();
+    await page.getByRole('button', { name: 'New work order' }).click();
 
     // Submit empty fields
     await selectDailyScheduleIfEmpty(page); await page.getByRole('button', { name: 'Create shift' }).click();
     await expect(page.getByText('Company and branch are required.')).toBeVisible();
 
     // Select company, branch, name, but choose Specific Days without selecting any day
-    const modal = page.getByRole('dialog', { name: 'Add shift' });
+    const modal = page.getByRole('dialog', { name: 'New work order' });
 
     await modal.getByLabel('Company').click();
     await page.getByRole('option', { name: 'CleanTech Oy' }).click();
@@ -913,8 +913,8 @@ test.describe('Admin Panel - Shifts Page', () => {
     await expect(page.getByText('No shifts yet.')).toBeVisible();
 
     // Create Bi-weekly shift
-    await page.getByRole('button', { name: 'Add shift' }).click();
-    const modal = page.getByRole('dialog', { name: 'Add shift' });
+    await page.getByRole('button', { name: 'New work order' }).click();
+    const modal = page.getByRole('dialog', { name: 'New work order' });
 
     await modal.getByLabel('Company').click();
     await page.getByRole('option', { name: 'CleanTech Oy' }).click();
@@ -943,7 +943,7 @@ test.describe('Admin Panel - Shifts Page', () => {
     expect(createdShifts[0].schedule.biWeeklyWeekParity).toBe(1);
 
     // Create Monthly shift
-    await page.getByRole('button', { name: 'Add shift' }).click();
+    await page.getByRole('button', { name: 'New work order' }).click();
     await modal.getByLabel('Company').click();
     await page.getByRole('option', { name: 'CleanTech Oy' }).click();
     await page.waitForTimeout(300);

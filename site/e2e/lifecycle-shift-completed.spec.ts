@@ -25,24 +25,19 @@ async function setup(page: Page, shifts: unknown[], options: { listDelay?: Promi
   });
 }
 
-test('one-time visits with a submitted checklist show under Completed, not Active', async ({ page }) => {
+test('the work orders page has only the Active and Inactive tabs, as in the design', async ({ page }) => {
   await setup(page, [oneTime('Done visit', 's-done', true), oneTime('Open visit', 's-open', false), weekly('Weekly team', 's-weekly')]);
   await page.goto('/admin/shifts/');
-  const active = page.getByRole('tab', { name: /^Active \(2\)/ });
-  await expect(active).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('row').filter({ hasText: 'Done visit' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: /^Active/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: /^Inactive/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /^Completed/ })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: 'Open visit' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Weekly team' })).toBeVisible();
-  await page.getByRole('tab', { name: /^Completed \(1\)/ }).click();
-  await expect(page.getByRole('row').filter({ hasText: 'Done visit' })).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: 'Open visit' })).toHaveCount(0);
-  await expect(page.getByRole('row').filter({ hasText: 'Weekly team' })).toHaveCount(0);
 });
 
 test('an inactive one-time visit stays under Inactive even if its checklist was submitted', async ({ page }) => {
   await setup(page, [oneTime('Archived visit', 's-archived', true, false)]);
   await page.goto('/admin/shifts/');
-  await expect(page.getByRole('tab', { name: /^Completed \(0\)/ })).toBeVisible();
   await page.getByRole('tab', { name: /^Inactive \(1\)/ }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Archived visit' })).toBeVisible();
 });
@@ -52,10 +47,10 @@ test('large shift lists page 25 rows at a time', async ({ page }) => {
   await page.goto('/admin/shifts/');
   await expect(page.getByRole('row').filter({ hasText: 'Team' })).toHaveCount(25);
   await expect(page.getByText('Showing 1–25 of 30', { exact: true })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Shifts pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Work orders pages' }).getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Team' })).toHaveCount(5);
   await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
-  const pager = page.getByRole('navigation', { name: 'Shifts pages' });
+  const pager = page.getByRole('navigation', { name: 'Work orders pages' });
   await expect(pager.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
   await pager.getByRole('button', { name: 'Previous', exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Team' })).toHaveCount(25);
@@ -68,26 +63,22 @@ test('short shift lists show no pager', async ({ page }) => {
   await setup(page, [weekly('Weekly team', 's-weekly'), oneTime('Done visit', 's-done', true)]);
   await page.goto('/admin/shifts/');
   await expect(page.getByRole('row').filter({ hasText: 'Weekly team' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Shifts pages' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Work orders pages' })).toHaveCount(0);
 });
 
-test('arrow keys, Home and End move between Active, Completed and Inactive, wrapping at the ends', async ({ page }) => {
-  await setup(page, [weekly('Weekly team', 's-weekly'), oneTime('Done visit', 's-done', true), oneTime('Archived visit', 's-archived', false, false)]);
+test('arrow keys, Home and End move between Active and Inactive, wrapping at the ends', async ({ page }) => {
+  await setup(page, [weekly('Weekly team', 's-weekly'), oneTime('Archived visit', 's-archived', false, false)]);
   await page.goto('/admin/shifts/');
   const tab = (name: string) => page.getByRole('tab', { name: new RegExp(`^${name} \\(`) });
   await expect(page.getByRole('row').filter({ hasText: 'Weekly team' })).toBeVisible();
   await tab('Active').focus();
   await page.keyboard.press('ArrowRight');
-  await expect(tab('Completed')).toHaveAttribute('aria-selected', 'true'); await expect(tab('Completed')).toBeFocused();
-  await expect(page.getByRole('row').filter({ hasText: 'Done visit' })).toBeVisible();
-  await page.keyboard.press('ArrowRight');
   await expect(tab('Inactive')).toHaveAttribute('aria-selected', 'true'); await expect(tab('Inactive')).toBeFocused();
+  await expect(page.getByRole('row').filter({ hasText: 'Archived visit' })).toBeVisible();
   await page.keyboard.press('ArrowRight');
   await expect(tab('Active')).toHaveAttribute('aria-selected', 'true'); await expect(tab('Active')).toBeFocused();
   await page.keyboard.press('ArrowLeft');
   await expect(tab('Inactive')).toHaveAttribute('aria-selected', 'true'); await expect(tab('Inactive')).toBeFocused();
-  await page.keyboard.press('ArrowLeft');
-  await expect(tab('Completed')).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Home');
   await expect(tab('Active')).toHaveAttribute('aria-selected', 'true'); await expect(tab('Active')).toBeFocused();
   await page.keyboard.press('End');
@@ -95,16 +86,16 @@ test('arrow keys, Home and End move between Active, Completed and Inactive, wrap
   await expect(page.getByRole('row').filter({ hasText: 'Archived visit' })).toBeVisible();
 });
 
-test('the Completed tab is present while the shift list is still loading', async ({ page }) => {
+test('both tabs are present while the shift list is still loading', async ({ page }) => {
   let release!: () => void;
   const listDelay = new Promise<void>(resolve => { release = resolve; });
   await setup(page, [oneTime('Done visit', 's-done', true)], { listDelay });
   await page.goto('/admin/shifts/');
-  // Counts are unknown while loading, but all three tabs are already shown.
-  await expect(page.getByRole('tab', { name: 'Completed', exact: true })).toBeVisible();
+  // Counts are unknown while loading, but both tabs are already shown.
+  await expect(page.getByRole('tab', { name: 'Inactive', exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Active', exact: true })).toHaveAttribute('aria-selected', 'true');
   release();
-  await expect(page.getByRole('tab', { name: /^Completed \(1\)/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /^Active \(1\)/ })).toBeVisible();
 });
 
 test('the shift page is clamped when the list shrinks, so later growth does not jump to a stale page', async ({ page }) => {
@@ -127,7 +118,7 @@ test('the shift page is clamped when the list shrinks, so later growth does not 
     return route.fulfill({ status: 200, headers: CORS, json: shiftsResponse(shifts, route.request().url()) });
   });
   await page.goto('/admin/shifts/');
-  const pager = page.getByRole('navigation', { name: 'Shifts pages' });
+  const pager = page.getByRole('navigation', { name: 'Work orders pages' });
   await pager.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
   // Deactivating the only row on page 2 leaves 25 active shifts: one page, no pager.
@@ -140,13 +131,13 @@ test('the shift page is clamped when the list shrinks, so later growth does not 
   await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();
 });
 
-test('switching to Completed and back to Active returns the list to page 1', async ({ page }) => {
-  await setup(page, [...Array.from({ length: 30 }, (_, index) => weekly(`Team ${String(index).padStart(2, '0')}`, `s-${index}`)), oneTime('Done visit', 's-done', true)]);
+test('switching to Inactive and back to Active returns the list to page 1', async ({ page }) => {
+  await setup(page, [...Array.from({ length: 30 }, (_, index) => weekly(`Team ${String(index).padStart(2, '0')}`, `s-${index}`)), oneTime('Archived visit', 's-archived', false, false)]);
   await page.goto('/admin/shifts/');
-  await page.getByRole('navigation', { name: 'Shifts pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Work orders pages' }).getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByText('Page 2 of 2', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: /^Completed \(1\)/ }).click();
-  await expect(page.getByRole('row').filter({ hasText: 'Done visit' })).toBeVisible();
+  await page.getByRole('tab', { name: /^Inactive \(1\)/ }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'Archived visit' })).toBeVisible();
   await page.getByRole('tab', { name: /^Active \(30\)/ }).click();
   await expect(page.getByRole('tab', { name: /^Active \(30\)/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Page 1 of 2', { exact: true })).toBeVisible();

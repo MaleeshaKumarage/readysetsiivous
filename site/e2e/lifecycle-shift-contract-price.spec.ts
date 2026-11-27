@@ -22,8 +22,8 @@ async function openCreate(page: Page) {
     return route.fulfill({ headers, json: shiftsResponse([], route.request().url()) });
   });
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const modal = page.getByRole('dialog', { name: 'Add shift' });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'New work order' });
   await modal.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe', exact: true }).click();
   await modal.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main', exact: true }).click();
   await selectDailyScheduleIfEmpty(page);
@@ -36,7 +36,7 @@ test('a shift with a monthly fee sends the fee, its VAT and the monthly mode', a
   await page.getByRole('option', { name: 'Monthly fee', exact: true }).click();
   await modal.getByLabel('Monthly fee excl. VAT (€)', { exact: true }).fill('300');
   await modal.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('dialog', { name: 'Add shift' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'New work order' })).toHaveCount(0);
   expect(created).toEqual([expect.objectContaining({ pricingMode: 0, rateNet: 300, vatRatePercent: 25.5 })]);
 });
 
@@ -46,14 +46,14 @@ test('a shift priced per completed visit sends the per-visit mode', async ({ pag
   await page.getByRole('option', { name: 'Price per completed visit', exact: true }).click();
   await modal.getByLabel('Price per visit excl. VAT (€)', { exact: true }).fill('40');
   await modal.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('dialog', { name: 'Add shift' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'New work order' })).toHaveCount(0);
   expect(created).toEqual([expect.objectContaining({ pricingMode: 1, rateNet: 40 })]);
 });
 
 test('a shift with the property price sends no shift price', async ({ page }) => {
   const { modal, created } = await openCreate(page);
   await modal.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('dialog', { name: 'Add shift' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'New work order' })).toHaveCount(0);
   expect(created).toEqual([expect.objectContaining({ pricingMode: null, rateNet: null, vatRatePercent: null })]);
 });
 

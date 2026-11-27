@@ -80,8 +80,8 @@ test('agreement company picker reaches later pages and preserves the document an
 
 test('shift company search finds a company beyond 100 and uses it for the new shift', async ({ page }) => {
   const { state, queries, writes } = await setup(page);
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await dialog.getByRole('textbox', { name: 'Company', exact: true }).click();
   await expect(page.getByText('50 of 130 companies', { exact: true })).toBeVisible();
   state.failMore = true;
@@ -135,7 +135,7 @@ test('editing an inactive shift hydrates its current company outside the first p
   const { queries } = await setup(page, { inactiveEdit: true });
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, 'Old shift', 'Edit schedule');
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Company 125 (inactive)');
   expect(queries.filter(query => query.take === 50)).toHaveLength(0);
   await expect(dialog.getByLabel('Branch', { exact: true })).toHaveValue('Property (inactive)');
@@ -145,7 +145,7 @@ test('editing a shift can return to its original inactive company after selectin
   const { writes } = await setup(page, { inactiveEdit: true });
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, 'Old shift', 'Edit schedule');
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
   const branch = dialog.getByLabel('Branch', { exact: true });
   await expect(company).toHaveValue('Company 125 (inactive)');
@@ -176,8 +176,8 @@ test('editing a shift can return to its original inactive company after selectin
 
 test('company changes cannot restore branches from a late previous-company response', async ({ page }) => {
   const { state, writes } = await setup(page); state.delayCompany = true;
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
   await company.click();
   const firstRequest = page.waitForRequest(request => request.url().endsWith('/companies/company-1'));
@@ -201,7 +201,7 @@ test('selected-company load failure retains the edit identity and can be retried
   const { state } = await setup(page, { inactiveEdit: true }); state.failSelection = true;
   await page.goto('/admin/shifts/'); await page.getByRole('tab', { name: /^Inactive/ }).click();
   await shiftAction(page, 'Old shift', 'Edit schedule');
-  const dialog = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(dialog.getByRole('alert').filter({ hasText: 'Your selection is kept' })).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Selected company (unavailable)');
   state.failSelection = false; await dialog.getByRole('button', { name: 'Retry selected company', exact: true }).click();
@@ -212,8 +212,8 @@ test('selected-company load failure retains the edit identity and can be retried
 test('a new shift cannot select an inactive company returned by server search', async ({ page }) => {
   const { writes } = await setup(page, { inactiveSearch: true });
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   const company = dialog.getByRole('textbox', { name: 'Company', exact: true });
   await company.click();
   await page.getByRole('textbox', { name: 'Search companies' }).fill('Company 130');

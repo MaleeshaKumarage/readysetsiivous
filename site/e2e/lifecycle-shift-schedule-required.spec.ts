@@ -13,8 +13,8 @@ test('the schedule picker cannot be cleared, so a shift never gets a schedule no
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   const schedule = dialog.getByLabel('Schedule', { exact: true });
   // The schedule is an explicit choice: a new shift starts with no schedule selected.
   await expect(schedule).toHaveValue('');

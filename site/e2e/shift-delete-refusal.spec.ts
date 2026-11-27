@@ -19,11 +19,11 @@ test('deleting an inactive shift with started visits is refused, explains why, a
   });
   await page.goto('/admin/shifts/');
   await page.getByRole('tab', { name: /^Inactive/ }).click();
-  await page.getByRole('button', { name: 'More actions for Morning clean' }).click();
+  await page.getByRole('button', { name: 'Actions for Morning clean' }).click();
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
   await confirmShiftPopup(page, 'Delete');
   await expect(page.getByText(REFUSAL).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'More actions for Morning clean' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Actions for Morning clean' })).toBeVisible();
   expect(deletes).toBe(1);
 });

@@ -1,6 +1,6 @@
 import { selectDailyScheduleIfEmpty } from './admin-helpers';
 import { test, expect, Locator, Page } from '@playwright/test';
-import { shiftAction } from './shift-actions';
+import { shiftAction, visitActionAt } from './shift-actions';
 import { setupAdminMocks, isShiftsRoute, shiftsResponse } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -70,8 +70,8 @@ async function mockAdmin(page: Page, seeded: any[] = [], options: { failFirstCre
 
 async function openAddShift(page: Page) {
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  return page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  return page.getByRole('dialog', { name: 'New work order', exact: true });
 }
 
 async function fillCommon(page: Page, dialog: Locator) {
@@ -99,10 +99,10 @@ test('one-time is retired for new shifts, on-call stays, and existing on-call sh
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 
   await shiftAction(page, 'Legacy on-call', 'Edit schedule');
-  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('On-call / flexible');
   await edit.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(edit).toHaveCount(0);
-  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^More actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
+  await page.getByRole('row').filter({ hasText: 'Legacy on-call' }).getByRole('button', { name: /^Actions for / }).click(); await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toBeVisible(); await page.keyboard.press('Escape');
 });
 
 test('admin adds a past visit from one form without a second visit popup', async ({ page }) => {
@@ -148,7 +148,7 @@ test('edit restores the one-time date and times and saves a changed end time', a
   const mock = await mockAdmin(page, [visitShift]);
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Past visit', 'Edit schedule');
-  const edit = page.getByRole('dialog', { name: 'Edit shift', exact: true });
+  const edit = page.getByRole('dialog', { name: 'Edit schedule', exact: true });
   await expect(edit.getByLabel('Schedule', { exact: true })).toHaveValue('One-time');
   await expect(edit.getByRole('textbox', { name: 'Date', exact: true })).toHaveValue('2026-10-01');
   await expect(edit.getByRole('textbox', { name: 'Start time', exact: true })).toHaveValue('09:00');
@@ -160,7 +160,8 @@ test('edit restores the one-time date and times and saves a changed end time', a
   await expect(edit).toHaveCount(0);
   expect(mock.writes).toHaveLength(1);
   expect(mock.writes[0]).toMatchObject({ schedule: { type: 6, oneTimeDate: '2026-10-01', oneTimeStart: '09:00', oneTimeEnd: '12:00' }, validFrom: '2026-10-01', validUntil: '2026-10-01' });
-  await expect(page.getByRole('row').filter({ hasText: 'Past visit' })).toContainText('One-time 2026-10-01 09:00–12:00');
+  // The list reloads after the save and shows the new one-time times on the shift's row.
+  await expect(page.getByRole('row').filter({ hasText: 'One-time 2026-10-01 09:00–12:00' })).toBeVisible();
 });
 
 test('a failed save keeps the draft and a retry creates the visit once', async ({ page }) => {
@@ -200,7 +201,7 @@ test('one-time visit price saves only that visit from the occurrences dialog', a
   });
   await page.goto('/admin/shifts/');
   await shiftAction(page, 'Past visit', 'Visits');
-  await page.getByRole('button', { name: 'Visit price', exact: true }).click();
+  await visitActionAt(page, 'Visit price');
   const dialog = page.getByRole('dialog').filter({ hasText: 'Visit price — Past visit' });
   await dialog.getByRole('textbox', { name: 'Visit price before VAT (€)', exact: true }).fill('75');
   await dialog.getByRole('textbox', { name: 'Reason for visit price override', exact: true }).fill('Extra cleaning requested');

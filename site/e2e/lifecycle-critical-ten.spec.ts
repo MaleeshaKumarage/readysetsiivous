@@ -41,8 +41,8 @@ test('schedule is explicit and on-call creation does not invent a daily visit', 
   // This multi-step scenario may be the first request that compiles the admin route in Next dev.
   test.setTimeout(60000);
   const writes = await setupShifts(page);
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await expect(dialog.getByRole('textbox', { name: /^Schedule/ })).toHaveValue('');
   await dialog.getByLabel('Company', { exact: true }).click();
   await page.getByRole('option', { name: 'Synthetic company', exact: true }).click();
@@ -57,21 +57,22 @@ test('schedule is explicit and on-call creation does not invent a daily visit', 
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0].schedule).toEqual({ type: 4 });
   await expect(page.getByRole('dialog', { name: /^Visits/ })).toBeVisible();
-  // Closing the occurrences window returns to the list, which now includes the shift just created.
-  await page.keyboard.press('Escape');
+  // Cancelling the visit editor keeps the shift without a scheduled visit; closing the panel returns to the list.
+  await page.getByRole('dialog', { name: 'Change visit', exact: true }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Close visits', exact: true }).click();
   await expect(page.getByRole('dialog', { name: /^Visits/ })).toHaveCount(0);
-  await expect(page.getByRole('cell', { name: ONCALL_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: ONCALL_NAME })).toBeVisible();
 });
 
 test('past unfinished one-time shift asks the admin to check completion', async ({ page }) => {
   await setupShifts(page);
-  await expect(page.getByRole('row').filter({ hasText: 'Past one-time visit' }).getByText('Past visit · check completion', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Past one-time visit' }).getByText('Check completion', { exact: true })).toBeVisible();
 });
 
 test('recurring schedules show HH:mm and retain biweekly and monthly times', async ({ page }) => {
   await setupShifts(page);
   for (const label of ['Daily 08:00–09:00', 'Monday, Wednesday 10:00–12:00', 'Bi-weekly Friday 14:00–15:00', 'Monthly day 15 13:00–14:00']) {
-    await expect(page.getByRole('cell', { name: label, exact: true })).toBeVisible();
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
 });
 

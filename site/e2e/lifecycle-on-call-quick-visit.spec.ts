@@ -75,7 +75,7 @@ test('quick visit uses "Quick visit" as the reason and no employee when the shif
 test('dated one-time shifts do not offer the quick visit action', async ({ page }) => {
   await mockAdmin(page, [datedShift]);
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'More actions for Dated shift', exact: true }).click();
+  await page.getByRole('button', { name: 'Actions for Dated shift', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Add visit', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
 });

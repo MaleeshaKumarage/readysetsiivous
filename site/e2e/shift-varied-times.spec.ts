@@ -20,14 +20,14 @@ async function setup(page: Page) {
     return route.fulfill({ status: 200, headers, json });
   });
   await page.goto('/admin/shifts/');
-  await expect(page.getByRole('button', { name: 'Add shift', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'New work order', exact: true })).toBeEnabled();
   return created;
 }
 
 test('a varied-times shift saves the default times of each chosen weekday', async ({ page }) => {
   const created = await setup(page);
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await dialog.getByLabel('Company').click();
   await page.getByRole('option', { name: 'Acme Hotels', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Branch', exact: true }).click();
@@ -51,8 +51,8 @@ test('a varied-times shift saves the default times of each chosen weekday', asyn
 
 test('a varied-times shift is refused when a chosen weekday has an end before its start', async ({ page }) => {
   const created = await setup(page);
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await dialog.getByLabel('Company').click();
   await page.getByRole('option', { name: 'Acme Hotels', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Branch', exact: true }).click();

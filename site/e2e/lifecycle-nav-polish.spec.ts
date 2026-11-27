@@ -66,7 +66,7 @@ test('phone tables explain sideways scrolling and can be reached from the keyboa
   await expect(page.getByText('Scroll sideways to see all columns.').first()).toBeVisible();
   await expect(page.getByRole('region', { name: 'Issued invoices table' })).toHaveAttribute('tabindex', '0');
   await openAdmin(page, '/admin/shifts/');
-  await expect(page.getByRole('region', { name: 'Shifts table' })).toHaveAttribute('tabindex', '0');
+  await expect(page.getByRole('region', { name: 'Work orders table' })).toHaveAttribute('tabindex', '0');
   await openAdmin(page, '/admin/companies/');
   await expect(page.getByRole('region', { name: 'Companies table' })).toHaveAttribute('tabindex', '0');
 });

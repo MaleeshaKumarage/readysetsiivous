@@ -22,8 +22,8 @@ async function createShift(page: Page, property: Record<string, unknown>) {
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
 
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveCount(0);
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
@@ -53,8 +53,8 @@ test('a property without size is refused, and the dialog says why', async ({ pag
       : path.endsWith('/companies') ? { items: [{ id: 'company', name: 'AAA', isActive: true }], total: 1 }
       : path.endsWith('/tenant') ? { timeZoneId: 'Europe/Helsinki' } : [] });
   });
-  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.goto('/admin/shifts/'); await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'AAA', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'AAA1', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Start date', exact: true }).fill('2026-11-01');
