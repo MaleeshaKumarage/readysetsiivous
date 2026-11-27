@@ -111,7 +111,6 @@ a{color:var(--muted)}
 
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
       <button type="button" class="btn btn-ghost" onClick="{{ prev }}" aria-label="Previous">Previous</button>
-      <label class="field">{{ dateLabel }}<select class="input" onChange="{{ onDate }}"><option value="0">Mon 30 Nov 2026</option><option value="1" selected>Tue 1 Dec 2026 (today)</option><option value="2">Wed 2 Dec 2026</option><option value="3">Thu 3 Dec 2026</option><option value="4">Fri 4 Dec 2026</option><option value="5">Sat 5 Dec 2026</option><option value="6">Sun 6 Dec 2026</option></select></label>
       <button type="button" class="btn btn-ghost" onClick="{{ next }}" aria-label="Next">Next</button>
       <button type="button" class="btn btn-ghost" onClick="{{ today }}">Today</button>
       <div class="seg" role="group" aria-label="View" style="margin-left:8px">
