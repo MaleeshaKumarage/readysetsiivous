@@ -264,8 +264,8 @@ test('a main shift assigns a default employee from its row; other shifts keep wh
 
 test('a new shift no longer offers One-time: single visits are added with Add visit', async ({ page }) => {
   await setup(page);
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await dialog.getByRole('textbox', { name: 'Schedule', exact: true }).click();
   await expect(page.getByRole('option', { name: 'Daily', exact: true })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Monthly', exact: true })).toBeVisible();

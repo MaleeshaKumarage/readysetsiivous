@@ -129,7 +129,6 @@ test('on-call workspace explains dated visits and offers one-time scheduling', a
 
 test('completed one-time shift shows Completed status and a no-further-visits next step', async ({ page }) => {
   await setup(page); await page.goto('/admin/shifts/');
-  await page.getByRole('tab', { name: /^Completed/ }).click();
   const row = page.getByRole('row').filter({ hasText: 'Workspace done' });
   await expect(row).toBeVisible();
   await openShiftWorkspace(page, 'Workspace done');

@@ -802,7 +802,7 @@ export default function ShiftsAdminPage() {
           onChange={(value) => { setFilterType(value); setShiftPage(1); }} />
       </Group>
       <LifecycleTabs value={lifecycle} onChange={changeLifecycle} label="Work order activity" disabled={assignBusy || templateSaving}
-        showCompleted activeCount={activeCount} completedCount={completedCount} inactiveCount={inactiveCount}>
+        activeCount={activeCount} inactiveCount={inactiveCount}>
       <TextInput placeholder="Search property" aria-label="Search work orders" mb="sm" value={propertySearch}
         onChange={(e) => setPropertySearch(e.currentTarget.value)} />
       {!loading && pageTotal > 0 && visibleRows.length === 0 && <Text c="dimmed" mb="sm">No work orders match this view.</Text>}
@@ -825,11 +825,12 @@ export default function ShiftsAdminPage() {
                         const address = branch ? [branch.street?.trim(), [branch.postalCode?.trim(), branch.city?.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
                         const size = branch?.sizeM2 != null ? `${branch.sizeM2} m²` : null;
                         const company = companyChoices.find(c => c.value === s.companyId)?.label;
-                        const time = s.schedule.dailyStart && s.schedule.dailyEnd ? `${s.schedule.dailyStart} to ${s.schedule.dailyEnd}` : null;
+                        const time = s.schedule.dailyStart && s.schedule.dailyEnd ? `${s.schedule.dailyStart.slice(0, 5)} to ${s.schedule.dailyEnd.slice(0, 5)}` : null;
                         const checklist = templates.find(t => t.id === s.qualityCycleTemplateId)?.title;
                         return (
                           <Stack gap={4}>
                             <strong className="text-accent-950">{address || s.name}</strong>
+                            {address && <span className="sr-only">{s.name}</span>}
                             {size && <Text size="sm" c="dimmed">{size}</Text>}
                             {company && <Text size="sm" c="dimmed">{company}</Text>}
                             <Group gap={6}>
@@ -848,6 +849,8 @@ export default function ShiftsAdminPage() {
                           assignmentCounts && assignmentCounts[s.id] === 0 ? 'Missing cleaner' : null,
                           !s.qualityCycleTemplateId ? 'Missing Quality Cycle' : null,
                           !branch?.pricingReady && s.isBranchMain !== false ? 'Missing price' : null,
+                          // A one-time shift whose day has passed still needs its completion checked.
+                          s.schedule.type === 6 && !s.isCompleted && s.schedule.oneTimeDate && s.schedule.oneTimeDate.slice(0, 10) < localInputValue(new Date().toISOString(), timeZoneId).slice(0, 10) ? 'Check completion' : null,
                         ].filter((m): m is string => !!m);
                         return <Group gap={6}>{missing.map(m => <Badge key={m} variant="gold">{m}</Badge>)}</Group>;
                       })()}
@@ -1060,6 +1063,8 @@ export default function ShiftsAdminPage() {
         </Stack>
       </Modal>
       {pricingShift && <ShiftPricingDialog key={`${pricingShift.id}-${pricingOccurrence?.startUtc ?? "plan"}`} shift={pricingShift} occurrence={pricingOccurrence} onClose={() => { setPricingShift(null); setPricingOccurrence(undefined); }} />}
+      <AddVisitDialog opened={Boolean(visitDialog)} preset={visitDialog?.preset ?? null} employees={employees} timeZoneId={timeZoneId}
+        onClose={() => setVisitDialog(null)} onAdded={(visit, propertyName) => { void visitAdded(visit, propertyName); }} />
       <Modal opened={Boolean(cleanerVisit)} onClose={() => { if (!cleanerSaving) setCleanerVisit(null); }} closeButtonProps={{ disabled: cleanerSaving }} title="Cleaning type">
         <Stack>
           <Text size="sm">{cleanerVisit && visitLabel(cleanerVisit, timeZoneId)}</Text>

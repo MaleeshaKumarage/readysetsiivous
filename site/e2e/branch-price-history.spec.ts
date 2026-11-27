@@ -103,8 +103,8 @@ test('create shift lets the admin pick an older branch price version', async ({ 
   });
 
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const modal = page.getByRole('dialog', { name: 'Add shift' });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'New work order' });
   await modal.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe', exact: true }).click();
   await modal.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main', exact: true }).click();
 
@@ -114,7 +114,7 @@ test('create shift lets the admin pick an older branch price version', async ({ 
   await picker.click(); await page.getByRole('option', { name: 'From 2020-01-01 · €100.00 excl. VAT', exact: true }).click();
 
   await selectDailyScheduleIfEmpty(page); await modal.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('dialog', { name: 'Add shift' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'New work order' })).toHaveCount(0);
   expect(created).toEqual([expect.objectContaining({ priceEffectiveFrom: '2020-01-01' })]);
   // The shift is named from the property, so the name sent is the generated one.
   expect(String(created[0].name)).toMatch(/Cleaning/);

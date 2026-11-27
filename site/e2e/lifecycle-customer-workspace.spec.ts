@@ -397,8 +397,8 @@ test('add shift link preselects this customer', async ({ page }) => {
   await page.goto(ws(CUSTOMER, 'work'));
   await page.getByRole('link', { name: 'Add shift' }).click();
   await expect(page).toHaveURL(new RegExp(`/admin/shifts/\\?company=${CUSTOMER}`));
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: 'Company', exact: true })).toHaveValue('Acme Oy');
 });

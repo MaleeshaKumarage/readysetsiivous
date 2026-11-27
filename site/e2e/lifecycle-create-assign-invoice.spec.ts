@@ -69,12 +69,12 @@ test('admin creates a shift, assigns an employee, and invoices its unstarted vis
 
   // 1. Create the shift.
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe Oy', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main branch', exact: true }).click();
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: FLOW_NAME })).toBeVisible();
   expect(state.shiftWrites).toHaveLength(1); expect(state.shiftWrites[0]).toMatchObject({ companyId: 'company', branchId: 'branch', name: FLOW_NAME });
 
   // 2. Assign an employee from the row's More actions.

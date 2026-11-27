@@ -50,7 +50,7 @@ for (const scheme of ['light', 'dark'] as const) test.describe(`admin with ${sch
       return route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, json: path.endsWith('/legacy-repairs') ? { agreements: [] } : path.endsWith('/companies') ? { items: [], total: 0 } : path.endsWith('/issuer') ? null : path.endsWith('/shifts/page') ? { items: [], total: 0, counts: { active: 0, completed: 0, inactive: 0 } } : [] });
     });
     await setupAdminMocks(page); await standaloneDarkSite(page);
-    for (const [path, title] of [['companies', 'Companies'], ['shifts', 'Shifts'], ['employees', 'Employees'], ['invoices', 'Invoices'], ['agreements', 'Agreements'], ['services', 'Services'], ['quality-cycle', 'Quality Cycle Management']]) {
+    for (const [path, title] of [['companies', 'Companies'], ['shifts', 'Work orders'], ['employees', 'Employees'], ['invoices', 'Invoices'], ['agreements', 'Agreements'], ['services', 'Services'], ['quality-cycle', 'Quality Cycle Management']]) {
       await page.goto(`/admin/${path}/`);
       await readable(page.getByRole('heading', { name: title, exact: true }));
     }
@@ -192,7 +192,7 @@ test('dashboard groups link to workspaces and sidebar brand returns home on phon
   await setupPopulatedWorkspace(page);
   await page.goto('/admin/');
   const burger = page.getByRole('button', { name: 'Toggle navigation' });
-  for (const [group, destination, heading] of [['Operations', 'shifts', 'Shifts'], ['Customers', 'companies', 'Companies'], ['Business administration', 'services', 'Services']]) {
+  for (const [group, destination, heading] of [['Operations', 'shifts', 'Work orders'], ['Customers', 'companies', 'Companies'], ['Business administration', 'services', 'Services']]) {
     await expect(page.getByRole('heading', { name: group, exact: true })).toBeVisible();
     const section = page.getByRole('main').locator('section').filter({ has: page.getByRole('heading', { name: group, exact: true }) });
     await section.locator(`a[href="/admin/${destination}/"]`).click();
@@ -254,7 +254,7 @@ test('populated quality checklist cards keep actions reachable at 375px', async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('populated shifts table shows address, size, rooms and beds readably at 375px', async ({ page }, testInfo) => {
+test('populated shifts table shows address and size readably at 375px', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 1000 });
   await setupPopulatedWorkspace(page);
   const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS' };
@@ -271,11 +271,9 @@ test('populated shifts table shows address, size, rooms and beds readably at 375
     branches: [{ id: 'branch-long', name: 'Kivikatu', street: 'Kivikatu 2 B 2', postalCode: '55100', city: 'Imatra', sizeM2: 45, roomCount: 2, bedCount: 2, isActive: true, priceVersions: [] }],
   } }));
   await page.goto('/admin/shifts/');
-  const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: /Kivikatu 2 B 2/ }) }).first();
+  const row = page.getByRole('row').filter({ hasText: 'Kivikatu 2 B 2' }).first();
   await expect(row).toBeVisible();
   await expect(row.getByText('45 m²', { exact: true })).toBeVisible();
-  await expect(row.getByText('2 rooms', { exact: true })).toBeVisible();
-  await expect(row.getByText('2 beds', { exact: true })).toBeVisible();
   await expectGridLaidOut(page, testInfo, 'shifts-375px');
   await expect(row.getByRole('button', { name: /^Actions for / })).toBeVisible();
 });

@@ -64,8 +64,8 @@ async function setup(page: Page, failures: Failures = {}) {
 }
 
 async function fillShiftDialog(page: Page) {
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New work order', exact: true });
   await dialog.getByLabel('Company', { exact: true }).click(); await page.getByRole('option', { name: 'Methehe Oy', exact: true }).click();
   await dialog.getByLabel('Branch', { exact: true }).click(); await page.getByRole('option', { name: 'Main branch', exact: true }).click();
   return dialog;
@@ -92,9 +92,9 @@ test('a refused shift save shows the reason in the dialog, keeps the company and
   await expect(dialog.getByLabel('Company', { exact: true })).toHaveValue('Methehe Oy');
   await expect(dialog.getByRole('textbox', { name: 'Start date', exact: true })).toHaveValue(/.+/);
   await expect(dialog.getByLabel('Branch', { exact: true })).toHaveValue('Main branch');
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: FLOW_NAME })).toHaveCount(0);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: FLOW_NAME })).toBeVisible();
   expect(state.creates).toBe(2);
 });
 
@@ -103,7 +103,7 @@ test('a failed assignment shows an assignment error, nothing is assigned, and a 
   await page.goto('/admin/shifts/');
   const dialog = await fillShiftDialog(page);
   await selectDailyScheduleIfEmpty(page); await dialog.getByRole('button', { name: 'Create shift' }).click();
-  await expect(page.getByRole('cell', { name: FLOW_NAME, exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: FLOW_NAME })).toBeVisible();
   await shiftAction(page, FLOW_NAME, 'Assign employees');
   await page.getByRole('textbox', { name: 'Assign employees', exact: true }).click();
   await page.getByRole('option', { name: 'Alice Employee', exact: true }).click();

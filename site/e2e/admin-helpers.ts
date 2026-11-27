@@ -112,14 +112,15 @@ export function shiftsResponse(list: any[], url: string): any[] | { items: any[]
   const tab = params.get('tab') ?? 'active';
   const skip = Number(params.get('skip') ?? 0);
   const take = Number(params.get('take') ?? 25);
-  const tabOf = (s: any) => (!s.isActive ? 'inactive' : s.isCompleted ? 'completed' : 'active');
+  // The work orders page has only Active and Inactive tabs; finished one-time shifts stay under Active.
+  const tabOf = (s: any) => (!s.isActive ? 'inactive' : 'active');
   const inTab = list.filter(s => tabOf(s) === tab);
   return {
     items: inTab.slice(skip, skip + take),
     total: inTab.length,
     counts: {
       active: list.filter(s => tabOf(s) === 'active').length,
-      completed: list.filter(s => tabOf(s) === 'completed').length,
+      completed: 0,
       inactive: list.filter(s => tabOf(s) === 'inactive').length,
     },
   };

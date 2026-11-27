@@ -70,8 +70,8 @@ async function mockAdmin(page: Page, seeded: any[] = [], options: { failFirstCre
 
 async function openAddShift(page: Page) {
   await page.goto('/admin/shifts/');
-  await page.getByRole('button', { name: 'Add shift', exact: true }).click();
-  return page.getByRole('dialog', { name: 'Add shift', exact: true });
+  await page.getByRole('button', { name: 'New work order', exact: true }).click();
+  return page.getByRole('dialog', { name: 'New work order', exact: true });
 }
 
 async function fillCommon(page: Page, dialog: Locator) {
