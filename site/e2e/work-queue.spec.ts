@@ -517,3 +517,18 @@ test('the partner key request fee is set on Services and confirmed in a toast', 
   await expect(toast(page, 'Key request fee saved: €30.00 excl. VAT. New key requests use this fee.')).toBeVisible();
   expect(state.saved.find(s => s.path === '/partner/key-request-fee')?.body).toEqual({ feeNet: 30 });
 });
+
+test('a key request fee that cannot be loaded says so in its box, with no toast, and Retry loads it', async ({ page }) => {
+  const state = await setupWorkQueue(page);
+  state.partnerDown = true;
+  await page.route(/\/api\/v1\/admin\/services(?:\?.*)?$/, route => route.fulfill({ headers: { 'Access-Control-Allow-Origin': '*' }, json: [] }));
+  await page.goto('/admin/services/');
+  const form = page.getByRole('form', { name: 'Key request fee' });
+  await expect(form.getByRole('alert')).toHaveText('The key request fee could not be loaded.');
+  await expect(form.getByLabel('Partner key request fee, excl. VAT (€)')).toBeDisabled();
+  await expect(page.locator('.mantine-Notification-root')).toHaveCount(0);
+  state.partnerDown = false;
+  await form.getByRole('button', { name: 'Retry' }).click();
+  await expect(form.getByLabel('Partner key request fee, excl. VAT (€)')).toHaveValue('25.00');
+  await expect(form.getByRole('alert')).toHaveCount(0);
+});

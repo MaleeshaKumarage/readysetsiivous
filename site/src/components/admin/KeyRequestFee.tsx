@@ -10,10 +10,15 @@ export function KeyRequestFee() {
   const [fee, setFee] = useState<number | string>('');
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
+  const [loadFailed, setLoadFailed] = useState(false);
+  // A failed read is shown in the box with a retry, not as a toast: nothing the user did failed, and a toast
+  // would sit over the page (on a phone, over the navigation) until it timed out.
+  const load = () => {
+    setLoadFailed(false);
     staffPartnerApi('admin').keyRequests().then(list => { setFee(list.feeNet ?? 0); setLoaded(true); })
-      .catch(() => showError('The key request fee could not be loaded. Refresh to try again.', 'Key request fee'));
-  }, []);
+      .catch(() => setLoadFailed(true));
+  };
+  useEffect(load, []);
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = Number(fee);
@@ -33,6 +38,7 @@ export function KeyRequestFee() {
         <Button type="submit" variant="default" disabled={!loaded} loading={busy}>Save fee</Button>
       </Group>
       <Text size="sm" c="dimmed" mt="xs">Charged for each key pickup or handover a partner requests. New requests use the new fee.</Text>
+      {loadFailed && <Group gap="xs" mt="xs"><Text size="sm" role="alert">The key request fee could not be loaded.</Text><Button size="xs" variant="subtle" onClick={load}>Retry</Button></Group>}
     </Paper>
   );
 }
