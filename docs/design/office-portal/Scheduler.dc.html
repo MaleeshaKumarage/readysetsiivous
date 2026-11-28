@@ -40,6 +40,10 @@ a{color:var(--muted)}
 .blk{position:absolute;left:4px;right:4px;box-sizing:border-box;padding:8px 8px;border-radius:10px;border:1px solid var(--line-2);background:var(--line);color:var(--ink);text-align:left;font:inherit;font-size:13px;overflow:hidden;cursor:grab}
 .blk strong{display:block;font-size:13px}
 .blk span{display:block;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.blk>*{flex-shrink:0}
+.blk strong{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk span{white-space:normal;overflow-wrap:anywhere}
+.blk .tag{max-width:100%;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blk-done{background:var(--wash);border-color:var(--line-2)}
 .blk-progress{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .blk-progress span{color:var(--line-2)}

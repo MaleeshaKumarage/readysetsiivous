@@ -26,6 +26,11 @@
 .scheduler .blk{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;padding:8px;border-radius:10px;border:1px solid var(--line-2);background:var(--line);color:var(--ink);text-align:left;font:inherit;font-size:13px;overflow:hidden;cursor:grab}
 .scheduler .blk strong{display:block;font-size:13px}
 .scheduler .blk span{display:block;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+/* Overlapping visits share their column: cards get narrower, the column never widens, and long text is cut with an ellipsis. */
+.scheduler .blk>*{flex-shrink:0}
+.scheduler .blk strong{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scheduler .blk span{white-space:normal;overflow-wrap:anywhere}
+.scheduler .blk .tag{max-width:100%;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scheduler .blk-done{background:var(--wash);border-color:var(--line-2)}
 .scheduler .blk-progress{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .scheduler .blk-progress span{color:var(--line-2)}

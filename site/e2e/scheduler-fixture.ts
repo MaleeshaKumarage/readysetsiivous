@@ -16,7 +16,7 @@ export type SchedulerState = {
   workSaved: boolean; failWork: number; failVisit: boolean;
 };
 
-export async function setupScheduler(page: Page, options: { calendar?: boolean; query?: string } = {}) {
+export async function setupScheduler(page: Page, options: { calendar?: boolean; query?: string; thirdOverlap?: boolean } = {}) {
   await setupAdminMocks(page);
   const state: SchedulerState = { calendarCalls: [], scheduleCalls: [], saved: [], workSaved: false, failWork: 0, failVisit: false };
   const calendar = options.calendar ?? true;
@@ -51,7 +51,9 @@ export async function setupScheduler(page: Page, options: { calendar?: boolean; 
           visit({ shiftId: 'hietaniemi', shiftName: 'Hietaniemi office', startUtc: `${DAY}T08:00:00Z`, endUtc: `${DAY}T12:00:00Z`, companyName: 'Hietaniemi office Oy', branchName: 'Hietaniemi',
             workStatus: 'Scheduled', visitNumber: 1, checklistDone: 0, checklistTotal: 9, assigneeIds: ['ville'], rosterVersion: 'r-hieta' }),
           visit({ shiftId: 'kallio-ville', shiftName: 'Kallio, Ville R.', startUtc: `${DAY}T10:00:00Z`, endUtc: `${DAY}T12:00:00Z`, companyName: 'Virtanen Oy', branchName: 'Kallio',
-            workStatus: 'Scheduled', assigneeIds: ['ville'], rosterVersion: 'r-kv' })] },
+            workStatus: 'Scheduled', assigneeIds: ['ville'], rosterVersion: 'r-kv' }),
+          ...(options.thirdOverlap ? [visit({ shiftId: 'third', shiftName: 'Third overlapping clean with a long property name', startUtc: `${DAY}T09:00:00Z`, endUtc: `${DAY}T11:00:00Z`,
+            companyName: 'Virtanen Oy', branchName: 'Töölö', workStatus: 'Scheduled', assigneeIds: ['ville'], rosterVersion: 'r-third' })] : [])] },
         { employeeId: 'minna', localDay: `${DAY}T00:00:00`, visits: [visit({ shiftId: 'espoo-minna', shiftName: 'Espoo, weekly clean', startUtc: `${DAY}T05:30:00Z`, endUtc: `${DAY}T07:30:00Z`,
           companyName: 'Virtanen Oy', branchName: 'Espoo', workStatus: 'NeedsAction', visitNumber: 3, visitNotes: 'Not started. Call the assignee.', assigneeIds: ['minna'], rosterVersion: 'r-em' })] },
       ] });

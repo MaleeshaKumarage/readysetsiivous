@@ -26,6 +26,9 @@ test('the page matches the design: header, controls, columns, visit cards and fo
   await expect(column(page, 'Minna Salo').getByRole('button', { name: 'Espoo, weekly clean, 07:30–09:30, Needs action, needs review' }).getByText('Needs review')).toBeVisible();
   // A cancelled visit stays on its assignee's column, struck through.
   await expect(column(page, 'Minna Salo').getByRole('button', { name: 'Helsinki showroom, 15:00–16:00, Cancelled' })).toHaveClass(/blk-cancelled/);
+  // A short card still shows its title first.
+  await expect(column(page, 'Minna Salo').getByRole('button', { name: /^Helsinki showroom/ }).getByText('Helsinki showroom')).toBeVisible();
+  expect(await column(page, 'Minna Salo').getByRole('button', { name: /^Helsinki showroom/ }).locator('strong').evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(10);
   await expect(page.getByText('Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same assignee.')).toBeVisible();
 });
 
@@ -295,4 +298,32 @@ test('the work order list is read once and only lists active work orders', async
   await page.getByRole('button', { name: 'Add visit for Minna Salo' }).click();
   await expect(page.getByRole('dialog', { name: 'New visit' }).getByText('Minna Salo, Tue 15 Jan')).toBeVisible();
   expect(reads).toHaveLength(1);
+});
+
+test('overlapping visits shrink to share their column; the column keeps the same width as the others', async ({ page }) => {
+  await setupScheduler(page, { thirdOverlap: true });
+  const ville = column(page, 'Ville Rantanen');
+  const cards = ville.getByRole('button', { name: /overlaps another visit|^Third overlapping/ });
+  await expect(cards).toHaveCount(3);
+  const lane = (await ville.boundingBox())!;
+  const other = (await column(page, 'Anna Korhonen').boundingBox())!;
+  // Every column is the same width, however many visits overlap in it.
+  expect(Math.abs(lane.width - other.width)).toBeLessThanOrEqual(1);
+  const boxes = await Promise.all([0, 1, 2].map(async index => (await cards.nth(index).boundingBox())!));
+  for (const box of boxes) {
+    // Each card stays inside its column and takes about a third of it.
+    expect(box.x).toBeGreaterThanOrEqual(lane.x);
+    expect(box.x + box.width).toBeLessThanOrEqual(lane.x + lane.width + 0.5);
+    expect(box.width).toBeLessThan(lane.width / 3);
+  }
+  // Side by side: no two cards cover the same horizontal space.
+  const sorted = [...boxes].sort((a, b) => a.x - b.x);
+  for (let i = 1; i < sorted.length; i++) expect(sorted[i].x).toBeGreaterThanOrEqual(sorted[i - 1].x + sorted[i - 1].width - 0.5);
+  // A long name is cut with an ellipsis instead of widening or spilling out of the card.
+  const title = ville.getByRole('button', { name: /^Third overlapping/ }).locator('strong');
+  expect(await title.evaluate(el => getComputedStyle(el).textOverflow)).toBe('ellipsis');
+  expect(await title.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+  // Times are never cut: they wrap inside the narrow card instead.
+  const time = ville.getByRole('button', { name: /^Hietaniemi office/ }).getByText('10:00–14:00');
+  expect(await time.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
