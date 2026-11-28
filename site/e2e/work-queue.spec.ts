@@ -323,6 +323,13 @@ test.describe('Assigning cleaning from the queue', () => {
     await page.goto('/admin/work-queue/?booking=bk-1042');
     await expect(panel(page)).toHaveAccessibleName('Booking B-1042');
   });
+
+  test('a link to a booking that already has an employee opens it on the Bookings page', async ({ page }) => {
+    await setupWorkQueue(page);
+    await page.goto('/admin/work-queue/?booking=bk-old');
+    await expect(page).toHaveURL(/\/admin\/bookings\/\?booking=bk-old$/);
+    await expect(page.getByRole('dialog', { name: 'Booking B-0999' })).toBeVisible();
+  });
 });
 
 test.describe('Partner work in the queue', () => {

@@ -125,6 +125,11 @@ export default function WorkQueuePage() {
   const pageRows = list.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const overdue = list.filter(row => row.alert).length;
   const open = openId ? rows.find(row => row.id === openId) ?? null : null;
+  // A booking link for a booking that is not waiting (it already has an employee, or is finished) opens it on the Bookings page.
+  useEffect(() => {
+    if (!data || !openId?.startsWith('booking-') || rows.some(row => row.id === openId)) return;
+    window.location.replace(`/admin/bookings/?booking=${encodeURIComponent(openId.slice('booking-'.length))}`);
+  }, [data, openId, rows]);
 
   const openRow = (row: Row, target: HTMLElement) => { opener.current = target; setOpenId(row.id); };
   const closeDrawer = useCallback(() => {

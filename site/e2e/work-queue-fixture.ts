@@ -120,6 +120,8 @@ export async function setupWorkQueue(page: Page, options: { empty?: boolean; man
       if (path === '/bookings') return json(BOOKED);
       if (path.startsWith('/bookings/')) {
         const id = path.split('/')[2]; const item = bookings.find(b => b.id === id);
+        const booked = BOOKED.find(b => b.id === id);
+        if (!item && booked) return json({ ...booked, startLocalDate: '2030-01-16', startLocalTime: '08:00', employeeName: 'Jari Laine', customer: { name: 'Assigned customer', phone: '040 000 0000', email: 'x@example.fi' }, service: { nameFi: 'Kotisiivous', durationMinutes: 120, priceNet: 90 }, history: [] });
         return item ? json({ id, bookingNumber: item.reference, customer: { name: item.customerName, phone: '040 123 4567', email: 'eeva@example.fi' }, service: { nameFi: 'Kotisiivous', durationMinutes: 180, priceNet: 120 },
           startLocalDate: '2030-01-16', startLocalTime: '08:00', status: item.status, employeeName: null }) : json({}, 404);
       }
