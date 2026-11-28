@@ -59,10 +59,12 @@ a{color:var(--muted)}
 .blk-partner{box-shadow:inset 4px 0 0 var(--teal)}
 .blk .tag.tag-partner{font-style:normal;background:var(--teal-wash);color:var(--teal-ink);border-color:var(--teal)}
 .chip-partner{background:var(--teal-wash);color:var(--teal-ink);border:1px solid var(--teal)}
-/* Key requests have a day but no time: they sit at the top of the employee's column. */
-.keys{display:flex;flex-direction:column;gap:4px;margin-top:8px}
-.keychip{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:4px 8px;border:1px solid var(--teal);border-radius:8px;background:var(--teal-wash);color:var(--teal-ink);font:inherit;font-size:12px;font-weight:600;text-align:left;cursor:grab;white-space:normal}
-.keychip[aria-pressed='true']{outline:3px solid var(--gold-ink);outline-offset:1px}
+/* Key pickups and handovers are tasks on the calendar like visits, in the partner colour with a key mark. */
+.blk-key{background:var(--teal-wash);border-color:var(--teal);color:var(--teal-ink)}
+.blk-key strong,.blk-key span{color:var(--teal-ink)}
+.blk strong>span{display:inline;color:inherit;font-size:inherit}
+.blk .kicon{display:none}
+.blk-key .kicon{display:inline-block;margin-right:4px;vertical-align:-1px;font-style:normal}
 .blk[aria-pressed='true']{outline:3px solid var(--gold-ink);outline-offset:1px}
 .blk:disabled{cursor:not-allowed}
 .handle{position:absolute;height:10px;cursor:ns-resize;border-radius:6px;background:var(--line-3);opacity:.8}
@@ -166,7 +168,7 @@ a{color:var(--muted)}
       <div class="grid" style="{{ gridStyle }}">
         <div class="colhead" style="font-size:13px;color:var(--muted)">Time</div>
         <sc-for list="{{ cols }}" as="c" hint-placeholder-count="3">
-        <div class="colhead" onDragOver="{{ c.dragOver }}" onDrop="{{ c.drop }}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>{{ c.name }}<small>{{ c.sub }}</small><small>{{ c.hours }} · {{ c.count }}</small></span><button type="button" class="btn btn-ghost" onClick="{{ c.addVisit }}" aria-label="Add visit for {{ c.name }}" style="min-height:40px;padding:0 10px;font-size:13px">+ Visit</button></div><sc-if value="{{ c.hasKeys }}" hint-placeholder-val="{{ false }}"><div class="keys" aria-label="Key requests"><sc-for list="{{ c.keys }}" as="k" hint-placeholder-count="1"><button type="button" class="keychip" draggable="true" onDragStart="{{ k.dragStart }}" onClick="{{ k.open }}" aria-pressed="{{ k.selected }}" aria-label="{{ k.label }}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h7M12 8v3M14 8v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ k.text }}</button></sc-for></div></sc-if></div>
+        <div class="colhead" onDragOver="{{ c.dragOver }}" onDrop="{{ c.drop }}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>{{ c.name }}<small>{{ c.sub }}</small><small>{{ c.hours }} · {{ c.count }}</small></span><button type="button" class="btn btn-ghost" onClick="{{ c.addVisit }}" aria-label="Add visit for {{ c.name }}" style="min-height:40px;padding:0 10px;font-size:13px">+ Visit</button></div></div>
         </sc-for>
 
         <div class="gutter" style="{{ colStyle }}"><sc-for list="{{ hourLabels }}" as="h" hint-placeholder-count="12"><span style="{{ h.pos }}">{{ h.t }}</span></sc-for></div>
@@ -174,7 +176,7 @@ a{color:var(--muted)}
         <div class="col{{ c.overClass }}" style="{{ colStyle }}" onDragOver="{{ c.dragOver }}" onDrop="{{ c.drop }}" aria-label="{{ c.name }} {{ c.sub }}">
           <sc-for list="{{ c.blocks }}" as="b" hint-placeholder-count="2">
           <button type="button" class="blk {{ b.cls }}" style="{{ b.box }}" draggable="{{ b.draggable }}" onDragStart="{{ b.dragStart }}" onClick="{{ b.open }}" aria-pressed="{{ b.selected }}" aria-label="{{ b.label }}">
-            <strong>{{ b.title }}</strong>
+            <strong><i class="kicon" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 16 16"><circle cx="5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h7M12 8v3M14 8v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></i>{{ b.title }}</strong>
             <span>{{ b.time }}</span>
             <span>{{ b.statusText }}</span>
             <sc-if value="{{ b.partner }}" hint-placeholder-val="{{ false }}"><em class="tag tag-partner">Partner portal</em></sc-if>
@@ -186,7 +188,7 @@ a{color:var(--muted)}
         </sc-for>
       </div>
     </div>
-    <p class="note">Visits in progress, done or cancelled cannot be moved. Red: the time has passed and nobody started it. Gold outline: overlaps another visit for the same assignee. Grey dashed: offered, waiting for the employee to accept. Teal edge: booked through the partner portal. Key requests sit at the top of each column; drag one to another employee to give it to them.</p>
+    <p class="note">Visits in progress, done or cancelled cannot be moved. Red: the time has passed and nobody started it. Gold outline: overlaps another visit for the same assignee. Grey dashed: offered, waiting for the employee to accept. Teal edge: booked through the partner portal. Teal with a key: a key pickup or handover; drag it like a visit to change its time or give it to someone else on the same day.</p>
   </main>
 </div>
 
@@ -277,7 +279,7 @@ a{color:var(--muted)}
     <button type="button" class="btn btn-ghost x" aria-label="Close key request" onClick="{{ closeKey }}">×</button>
   </div>
   <dl style="display:grid;grid-template-columns:auto 1fr;gap:10px 16px;font-size:14px;margin:16px 0">
-    <dt style="color:var(--muted)">Day</dt><dd style="margin:0;font-weight:600">{{ key.day }}</dd>
+    <dt style="color:var(--muted)">When</dt><dd style="margin:0;font-weight:600">{{ key.day }}</dd>
     <dt style="color:var(--muted)">Staff member</dt><dd style="margin:0;font-weight:600">{{ key.who }}</dd>
     <dt style="color:var(--muted)">Fee</dt><dd style="margin:0">{{ key.fee }}</dd>
     <dt style="color:var(--muted)">Notes</dt><dd style="margin:0">{{ key.notes }}</dd>
@@ -285,7 +287,7 @@ a{color:var(--muted)}
   <div style="display:flex;flex-direction:column;gap:10px">
     <label class="field">Give it to someone else<select class="input" onChange="{{ key.onTo }}"><option value="">Choose a staff member</option><sc-for list="{{ key.choices }}" as="o" hint-placeholder-count="2"><option value="{{ o.id }}">{{ o.name }}</option></sc-for></select></label>
     <button type="button" class="btn btn-primary" onClick="{{ key.reassign }}" disabled="{{ key.noTo }}">Reassign</button>
-    <p class="note">The day is the one the partner asked for. Drag the key to another column to reassign it.</p>
+    <p class="note">The day is the one the partner asked for. Drag the task to change its time or length, or onto another employee to give it to them.</p>
     <button type="button" class="btn btn-ghost" onClick="{{ key.addPhoto }}">Add a photo ({{ key.photos }} added)</button>
     <button type="button" class="btn btn-ghost" onClick="{{ key.complete }}">Mark completed</button>
   </div>
@@ -356,13 +358,10 @@ const SEED = [
   { id: 'v9', emp: 'minna', day: 1, start: 7 * 60 + 30, end: 9 * 60 + 30, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 3, status: 'late', checklist: 'No checklist yet', notes: 'Not started. Call the assignee.', actual: '', hours: null, version: false, review: { kind: 'Missing completion', label: 'No start or end recorded' } },
   { id: 'p1', emp: 'ville', day: 1, start: 15 * 60, end: 17 * 60, title: 'Nordea office', place: 'Mannerheimintie · Nordea branch', company: 'Nordea branch', number: 1, status: 'sched', partner: true, checklist: 'No checklist yet', notes: 'Keys at reception.', actual: '', hours: null, version: false, review: null },
   { id: 'p2', emp: 'minna', day: 0, start: 8 * 60, end: 9 * 60 + 30, title: 'Kesko store', place: 'Kamppi · Kesko store', company: 'Kesko store, Kamppi', number: 1, status: 'late', partner: true, checklist: 'No checklist yet', notes: 'Store opens at 09:00.', actual: '', hours: null, version: false, review: null },
+  { id: 'k1', emp: 'ville', day: 1, start: 7 * 60, end: 8 * 60, title: 'Key pickup', place: 'Kesko store, Kamppi', key: true, fee: '€25.00 excl. VAT', notes: 'Pick up from the security desk.', photos: 0, number: 1, status: 'sched', checklist: '', actual: '', hours: null, version: false, review: null },
+  { id: 'k2', emp: 'anna', day: 1, start: 12 * 60, end: 13 * 60, title: 'Key handover', place: 'Aurora clinic', key: true, fee: '€25.00 excl. VAT', notes: 'Hand over to the clinic manager.', photos: 0, number: 1, status: 'sched', checklist: '', actual: '', hours: null, version: false, review: null },
   { id: 'o1', emp: 'anna', day: 1, start: 13 * 60, end: 15 * 60, title: 'Töölö, move-out', place: 'Töölö · Aurora clinic', number: 2, status: 'offered', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'c1', emp: 'ville', day: 2, start: 9 * 60, end: 12 * 60, title: 'Helsinki showroom', place: 'Virtanen Oy · Helsinki showroom', number: 1, status: 'cancelled', checklist: 'Not needed', actual: '', hours: null, version: false, review: null },
-];
-// Key requests: a day, a staff member, no time.
-const KEYS = [
-  { id: 'k1', emp: 'ville', day: 1, kind: 'Key pickup', place: 'Kesko store, Kamppi', fee: '€25.00 excl. VAT', notes: 'Pick up from the security desk.', photos: 0 },
-  { id: 'k2', emp: 'anna', day: 1, kind: 'Key handover', place: 'Aurora clinic', fee: '€25.00 excl. VAT', notes: 'Hand over to the clinic manager.', photos: 0 },
 ];
 const STATUS = {
   late: { text: 'Not started · overdue', cls: 'blk-late', chip: 'chip chip-late', locked: false },
@@ -419,6 +418,7 @@ class Component extends DCLogic {
     const v = this.visits().find(x => x.id === id);
     if (v && v.status === 'offered') { if (v.emp !== emp && v.day === day) this.reoffer(id, emp); return; }
     if (!v || STATUS[v.status].locked) { this.say('This visit is ' + STATUS[v.status].text.toLowerCase() + ' and cannot be moved.'); return; }
+    if (v.key && day !== v.day) { this.say('A key pickup or handover stays on the day the partner asked for. Move its time, or drop it on another employee for that day.'); return; }
     let start = v.start;
     if (e && e.clientY != null && e.currentTarget && e.currentTarget.getBoundingClientRect) {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -456,11 +456,11 @@ class Component extends DCLogic {
     const who = emp ? EMP_BY_ID[emp] : 'no assignee yet';
     this.setState({ visits: prev.concat([v]), prevVisits: prev, newOpen: false, msg: 'Scheduled ' + title + ' for ' + who + ' on ' + DAYS[day] + ', ' + fmt(start) + '–' + fmt(end) + '.' + (clash ? ' It overlaps another visit for the same assignee.' : '') });
   }
-  keys() { return this.st().keys || KEYS; }
   giveKey(id, emp) {
-    const k = this.keys().find(x => x.id === id);
+    const k = this.visits().find(x => x.id === id);
     if (!k || !emp || k.emp === emp) return;
-    this.setState({ keys: this.keys().map(x => (x.id === id ? { ...x, emp: emp } : x)), keySel: null, keyTo: '', msg: k.kind + ' at ' + k.place + ' is now with ' + EMP_BY_ID[emp] + ' on ' + DAYS[k.day] + '.' });
+    this.change(id, { emp: emp }, k.title + ' at ' + k.place + ' is now with ' + EMP_BY_ID[emp] + ', ' + DAYS[k.day] + ' ' + fmt(k.start) + '.');
+    this.setState({ keySel: null, keyTo: '' });
   }
   undo() { if (this.st().prevVisits) this.setState({ visits: this.st().prevVisits, prevVisits: null, msg: 'Change undone.' }); }
   openDlg(kind, vid, extra) { this.setState({ dlg: { kind: kind, vid: vid }, ...(extra || {}), msg: '' }); }
@@ -516,8 +516,9 @@ class Component extends DCLogic {
         statusText: s.text,
         review: !!v.review,
         partner: !!v.partner,
+        key: !!v.key,
         reviewTag: v.review ? 'Needs review' : '',
-        cls: s.cls + (over ? ' blk-over' : '') + (v.emp === null ? ' blk-unassigned' : '') + (v.partner ? ' blk-partner' : ''),
+        cls: s.cls + (over ? ' blk-over' : '') + (v.emp === null ? ' blk-unassigned' : '') + (v.partner ? ' blk-partner' : '') + (v.key ? ' blk-key' : ''),
         box: box(v),
         draggable: !s.locked || v.status === 'offered' ? 'true' : 'false',
         selected: selId === v.id,
@@ -525,7 +526,7 @@ class Component extends DCLogic {
         handleBox: { position: 'absolute', left: box(v).left, width: box(v).width, top: (((v.end - FIRST) / 60) * HOUR_PX - 8) + 'px' },
         resizeStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', v.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ resizing: v.id }); },
         label: v.title + ', ' + fmt(v.start) + ' to ' + fmt(v.end) + ', ' + s.text,
-        open: () => this.setState({ sel: v.id, keySel: null, cancelAsk: false, msg: '' }),
+        open: () => this.setState(v.key ? { keySel: v.id, sel: null, keyTo: '', msg: '' } : { sel: v.id, keySel: null, cancelAsk: false, msg: '' }),
         dragStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', v.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ dragging: v.id }); },
       };
     };
@@ -542,16 +543,9 @@ class Component extends DCLogic {
         count: list.length + (list.length === 1 ? ' visit' : ' visits'),
         addVisit: () => this.setState({ newOpen: true, newTitle2: null, newEmp: c.emp || 'anna', newDay: String(c.day), newStart: '08:00', newDur: '60', newTitle: '', newErr: '', msg: '' }),
         blocks: list.map(blockOf),
-        hasKeys: this.keys().some(k => k.emp === c.emp && k.day === c.day),
-        keys: this.keys().filter(k => k.emp === c.emp && k.day === c.day).map(k => ({
-          text: k.kind + ' · ' + k.place, label: k.kind + ' at ' + k.place + ', ' + EMP_BY_ID[k.emp] + '. Drag to another employee to reassign.', selected: st.keySel === k.id,
-          open: () => this.setState({ keySel: k.id, sel: null, keyTo: '', msg: '' }),
-          dragStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', k.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ draggingKey: k.id }); },
-        })),
         dragOver: e => { if (e && e.preventDefault) e.preventDefault(); },
         drop: e => {
           if (e && e.preventDefault) e.preventDefault();
-          if (st.draggingKey) { const kid = st.draggingKey; this.setState({ draggingKey: null }); if (c.day === this.keys().find(k => k.id === kid).day) this.giveKey(kid, c.emp); else this.say('A key request stays on the day the partner asked for. Drop it on another employee for that day.'); return; }
           if (st.resizing) { const rid = st.resizing; this.setState({ resizing: null }); this.resizeAt(rid, c.emp, c.day, e); return; }
           const id = st.dragging || (e && e.dataTransfer ? e.dataTransfer.getData('text/plain') : '');
           this.setState({ dragging: null });
@@ -700,12 +694,12 @@ class Component extends DCLogic {
       orderWhen: dv ? DAYS[dv.day] + ', ' + fmt(dv.start) + ' – ' + fmt(dv.end) : '',
       closeDlg: () => this.setState({ dlg: null, recMsg: '', photoMsg: '' }),
       hasKey: !!st.keySel,
-      key: (() => { const k = this.keys().find(x => x.id === st.keySel); if (!k) return {}; return {
-        title: k.kind, place: k.place, day: DAYS[k.day], who: EMP_BY_ID[k.emp], fee: k.fee, notes: k.notes, photos: k.photos, state: 'Assigned · not completed',
+      key: (() => { const k = visits.find(x => x.id === st.keySel); if (!k) return {}; return {
+        title: k.title, place: k.place, day: DAYS[k.day] + ', ' + fmt(k.start) + '–' + fmt(k.end), who: EMP_BY_ID[k.emp], fee: k.fee, notes: k.notes, photos: k.photos, state: k.status === 'done' ? 'Completed' : 'Assigned · not completed',
         choices: EMPLOYEES.filter(e => e.id !== k.emp).map(e => ({ id: e.id, name: e.name })),
         onTo: e => this.setState({ keyTo: e.target.value }), noTo: !st.keyTo, reassign: () => this.giveKey(k.id, st.keyTo),
-        addPhoto: () => this.setState({ keys: this.keys().map(x => (x.id === k.id ? { ...x, photos: x.photos + 1 } : x)) }),
-        complete: () => this.setState({ keys: this.keys().filter(x => x.id !== k.id), keySel: null, msg: k.kind + ' at ' + k.place + ' is completed.' }),
+        addPhoto: () => this.setState({ visits: visits.map(x => (x.id === k.id ? { ...x, photos: x.photos + 1 } : x)) }),
+        complete: () => this.change(k.id, { status: 'done' }, k.title + ' at ' + k.place + ' is completed.'),
       }; })(),
       closeKey: () => this.setState({ keySel: null }),
       hasSel: selOut.hasSel,
