@@ -38,7 +38,7 @@ export function KeyRequestFee() {
         <Button type="submit" variant="default" disabled={!loaded} loading={busy}>Save fee</Button>
       </Group>
       <Text size="sm" c="dimmed" mt="xs">Charged for each key pickup or handover a partner requests. New requests use the new fee.</Text>
-      {loadFailed && <Group gap="xs" mt="xs"><Text size="sm" role="alert">The key request fee could not be loaded.</Text><Button size="xs" variant="subtle" onClick={load}>Retry</Button></Group>}
+      {loadFailed && <Group gap="xs" mt="xs"><Text component="span" size="sm" role="alert">The key request fee could not be loaded.</Text><Button size="xs" variant="subtle" onClick={load}>Retry</Button></Group>}
     </Paper>
   );
 }
