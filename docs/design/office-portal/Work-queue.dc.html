@@ -266,11 +266,11 @@ const TEMPLATES = [
   { 'Anna K': [], 'Ville R': [[7, 9, 'Kesko store, Kamppi'], [10, 13, 'Nordea branch']], 'Minna S': 'away', 'Jari L': [[14, 17, 'Pasila office']] },
 ];
 const dayOf = date => TEMPLATES[Number(date.slice(8, 10)) % 3];
-// When the work happens: start hour and length in hours. Key requests have only a day.
-const SLOT = { w5: [9, 3], w1: [8, 3], w2: [8, 3], w3: [9, 3], w7: [7, 2], w9: [9, 3] };
+// When the work happens: start hour and length in hours. A key pickup or handover gets a time too, on the day the partner asked for.
+const SLOT = { w6: [9, 1], w5: [9, 3], w1: [8, 3], w2: [8, 3], w3: [9, 3], w7: [7, 2], w9: [9, 3] };
 const addDays = (date, n) => { const d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const dayName = date => new Date(date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-const WINDOW = { w3: ['2026-12-04', '2026-12-05'], w5: ['2026-12-08', '2026-12-09'] };
+const WINDOW = { w3: ['2026-12-04', '2026-12-05'], w5: ['2026-12-08', '2026-12-09'], w6: ['2026-12-06'] };
 const daysFor = it => WINDOW[it.id] || [0, 1, 2, 3, 4, 5, 6].map(n => addDays(it.date, n));
 const hh = h => String(Math.floor(h)).padStart(2, '0') + ':' + String(Math.round((h % 1) * 60)).padStart(2, '0');
 const snap = h => Math.round(h * 4) / 4;
