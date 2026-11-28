@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Agreements for the cleaning company: PDF contracts customers sign online, with signers, links and repair of old records.">
+<title>Agreements</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.panel{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.card{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-ink{background:var(--ink);color:var(--surface)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:860px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.sub{font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.drop{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px;border:2px dashed var(--line-3);border-radius:14px;background:var(--wash);text-align:center}
+.dlg{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg>section{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);max-height:92%;overflow:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html" aria-current="page">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Agreements</h1><p style="margin:4px 0 0" class="sub">Cleaning contracts your customers sign online.</p></div>
+      <button type="button" class="btn btn-primary" onClick="{{ newAgreement }}">New agreement</button>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+
+    <sc-if value="{{ hasRepairs }}" hint-placeholder-val="{{ true }}">
+    <section class="panel" aria-labelledby="repair-h" style="border-color:var(--gold);background:var(--gold-wash)">
+      <div><h2 id="repair-h" style="margin:0;font-size:18px">Old agreements need a company</h2><p style="margin:4px 0 0" class="sub">Pick the right company for each unsigned agreement. Signed agreements aren’t listed.</p></div>
+      <sc-for list="{{ repairs }}" as="r" hint-placeholder-count="1">
+      <div class="card" style="flex-direction:row;flex-wrap:wrap;align-items:flex-end;justify-content:space-between">
+        <div style="display:flex;flex-direction:column"><strong>{{ r.title }}</strong><span class="sub">{{ r.status }}</span></div>
+        <label class="field" style="flex:1 1 240px">Company for {{ r.title }}<select class="input" onChange="{{ r.pick }}"><option value="">Choose company</option><option>Virtanen Oy</option><option>Hietaniemi office Oy</option><option>Sörnäinen Bakery Oy (inactive)</option></select></label>
+        <button type="button" class="btn btn-primary" disabled="{{ r.blocked }}" onClick="{{ r.apply }}">Apply company</button>
+      </div>
+      </sc-for>
+    </section>
+    </sc-if>
+
+    <div class="seg" role="tablist" aria-label="Agreement activity"><button type="button" role="tab" aria-pressed="{{ tActive }}" aria-selected="{{ tActive }}" onClick="{{ showActive }}">Active {{ nActive }}</button><button type="button" role="tab" aria-pressed="{{ tInactive }}" aria-selected="{{ tInactive }}" onClick="{{ showInactive }}">Inactive {{ nInactive }}</button></div>
+    <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">{{ emptyText }}</p></sc-if>
+    <div class="tablebox" role="region" aria-label="Agreements" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Title</th><th scope="col">Customer</th><th scope="col">Code</th><th scope="col">Signed</th><th scope="col">Status</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="a" hint-placeholder-count="4">
+          <tr><td><strong>{{ a.title }}</strong></td><td><a href="Company-detail.dc.html">{{ a.company }}</a></td><td style="font-variant-numeric:tabular-nums">{{ a.code }}</td><td style="font-variant-numeric:tabular-nums">{{ a.signed }}</td><td><span class="{{ a.chip }}">{{ a.status }}</span></td>
+            <td><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ a.open }}">Signers</button><button type="button" class="btn btn-ghost" onClick="{{ a.pdf }}">PDF</button><button type="button" class="btn btn-ghost" disabled="{{ a.noReactivate }}" onClick="{{ a.activity }}">{{ a.activityLabel }}</button><sc-if value="{{ a.inactive }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ a.del }}">Delete</button></sc-if></div><sc-if value="{{ a.noReactivate }}" hint-placeholder-val="{{ false }}"><span class="sub">Cancelled agreements can’t be reactivated.</span></sc-if></td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<sc-if value="{{ newOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="New agreement">
+  <section style="width:min(620px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">New agreement</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeNew }}" style="min-width:44px">×</button></div>
+    <label class="field">Company (required)<select class="input" onChange="{{ onCompany }}"><option value="">Select company</option><option>Virtanen Oy</option><option>Hietaniemi office Oy</option><option>Lindqvist household</option></select></label>
+    <label class="field">Title (required)<input class="input" type="text" placeholder="For example: Office cleaning 2027" onChange="{{ onTitle }}"></label>
+    <div class="drop"><strong>{{ pdfLabel }}</strong><span class="sub">One PDF file, required.</span><button type="button" class="btn btn-ghost" onClick="{{ pickPdf }}">Choose PDF</button></div>
+    <div class="field"><span>Signers (at least one)</span>
+      <sc-for list="{{ draftSigners }}" as="s" hint-placeholder-count="1"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input class="input" style="flex:1 1 160px" type="text" aria-label="Signer {{ s.n }} name" placeholder="Name" onChange="{{ s.onName }}"><input class="input" style="flex:1 1 200px" type="email" aria-label="Signer {{ s.n }} email" placeholder="Email" onChange="{{ s.onEmail }}"><button type="button" class="btn btn-ghost" aria-label="Remove signer {{ s.n }}" onClick="{{ s.remove }}" style="min-width:44px">×</button></div></sc-for>
+      <button type="button" class="btn btn-ghost" style="width:fit-content" onClick="{{ addDraftSigner }}">Add signer</button>
+    </div>
+    <sc-if value="{{ hasNewErr }}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin:0;color:var(--gold-ink)">{{ newErr }}</p></sc-if>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeNew }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ create }}">Create agreement</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ dTitle }}">
+  <section style="width:min(640px,100%)">
+    <div class="dlg-head"><div><strong style="font-size:18px">{{ dTitle }}</strong><div class="sub">{{ dHeading }}</div></div><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDetail }}" style="min-width:44px">×</button></div>
+    <sc-if value="{{ justCreated }}" hint-placeholder-val="{{ false }}"><div class="msg">Agreement created. Send each signer their link: copy it, copy a ready email, or open your mail app.</div></sc-if>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="sub">Code {{ dCode }}</span><span class="{{ dChip }}">{{ dStatus }}</span></div>
+    <sc-for list="{{ dSigners }}" as="s" hint-placeholder-count="2">
+    <article class="card">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><div><strong>{{ s.name }}</strong><div class="sub">{{ s.email }}</div></div><div style="display:flex;gap:8px;align-items:center"><span class="{{ s.chip }}">{{ s.status }}</span><sc-if value="{{ s.canRemove }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ s.remove }}">Remove</button></sc-if></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ s.copyLink }}">{{ s.linkLabel }}</button><button type="button" class="btn btn-ghost" onClick="{{ s.copyEmail }}">{{ s.emailLabel }}</button><button type="button" class="btn btn-ghost" onClick="{{ s.mail }}">Open mail app</button></div>
+    </article>
+    </sc-for>
+    <sc-if value="{{ canChange }}" hint-placeholder-val="{{ true }}">
+    <div class="card" style="background:var(--wash)">
+      <strong>Add signer</strong>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end"><label class="field" style="flex:1 1 160px">Name<input class="input" type="text" onChange="{{ onNsName }}"></label><label class="field" style="flex:1 1 200px">Email<input class="input" type="email" onChange="{{ onNsEmail }}"></label><button type="button" class="btn btn-primary" onClick="{{ addSigner }}">Add signer</button></div>
+    </div>
+    </sc-if>
+    <sc-if value="{{ cannotChange }}" hint-placeholder-val="{{ false }}"><p style="margin:0" class="sub">Signers can’t be changed on a {{ dStatusLower }} agreement.</p></sc-if>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px"><sc-if value="{{ canChange }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ askCancel }}">Cancel agreement</button></sc-if><button type="button" class="btn btn-primary" onClick="{{ closeDetail }}">Close</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ confirmTitle }}" style="z-index:60">
+  <section style="width:min(460px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ confirmTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeConfirm }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">{{ confirmText }}</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeConfirm }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ doConfirm }}">{{ confirmLabel }}</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const AGREEMENTS = [
+  { id: 'g1', title: 'Office cleaning 2026', company: 'Virtanen Oy', code: 'AGR-0142', status: 'Completed', active: true, signers: [{ id: 's1', name: 'Päivi Virtanen', email: 'paivi@virtanen.fi', signed: true }, { id: 's2', name: 'Mikko Virtanen', email: 'mikko@virtanen.fi', signed: true }] },
+  { id: 'g2', title: 'Warehouse add-on', company: 'Virtanen Oy', code: 'AGR-0157', status: 'PartiallySigned', active: true, signers: [{ id: 's3', name: 'Päivi Virtanen', email: 'paivi@virtanen.fi', signed: true }, { id: 's4', name: 'Antti Laine', email: 'antti@virtanen.fi', signed: false }] },
+  { id: 'g3', title: 'Home cleaning', company: 'Lindqvist household', code: 'AGR-0160', status: 'Draft', active: true, signers: [{ id: 's5', name: 'Eva Lindqvist', email: 'eva@lindqvist.fi', signed: false }] },
+  { id: 'g4', title: 'Bakery trial', company: 'Sörnäinen Bakery Oy', code: 'AGR-0101', status: 'Cancelled', active: false, signers: [{ id: 's6', name: 'Juha Mäki', email: 'juha@bakery.fi', signed: false }] },
+];
+const STATUS_TEXT = { Draft: 'Draft', PartiallySigned: 'Partly signed', Completed: 'Signed', Cancelled: 'Cancelled' };
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  all() { return this.st().items || AGREEMENTS; }
+  put(id, ch) { return this.all().map(a => (a.id === id ? { ...a, ...ch } : a)); }
+  renderVals() {
+    const st = this.st();
+    const all = this.all();
+    const tab = st.tab || 'active';
+    const rows = all.filter(a => (tab === 'active' ? a.active : !a.active));
+    const repairs = st.repairs || [{ id: 'r1', title: 'Cleaning agreement (2024)', status: 'Draft', pick: '' }];
+    const nd = st.nd || null;
+    const d = st.detail ? all.find(a => a.id === st.detail) : null;
+    const open = d && (d.status === 'Draft' || d.status === 'PartiallySigned');
+    const cf = st.confirm || null;
+    const copied = st.copied || '';
+    return {
+      newAgreement: () => this.setState({ nd: { company: '', title: '', pdf: false, signers: [{ name: '', email: '' }], err: '' } }),
+      hasMsg: !!st.msg, msg: st.msg || '',
+      hasRepairs: repairs.length > 0,
+      repairs: repairs.map(r => ({ title: r.title, status: r.status, blocked: !r.pick,
+        pick: e => this.setState({ repairs: repairs.map(x => (x.id === r.id ? { ...x, pick: e.target.value } : x)) }),
+        apply: () => this.setState({ repairs: repairs.filter(x => x.id !== r.id), msg: r.title + ' is now linked to ' + r.pick + '.' }) })),
+      tActive: tab === 'active', tInactive: tab === 'inactive',
+      nActive: all.filter(a => a.active).length, nInactive: all.filter(a => !a.active).length,
+      showActive: () => this.setState({ tab: 'active' }), showInactive: () => this.setState({ tab: 'inactive' }),
+      listEmpty: rows.length === 0, emptyText: all.length ? 'No ' + tab + ' agreements. Check the ' + (tab === 'active' ? 'Inactive' : 'Active') + ' tab.' : 'No agreements yet.',
+      rows: rows.map(a => {
+        const signedN = a.signers.filter(s => s.signed).length;
+        return { title: a.title, company: a.company, code: a.code, signed: signedN + ' / ' + a.signers.length, status: STATUS_TEXT[a.status] + (a.active ? '' : ', inactive'),
+          chip: 'chip' + (a.status === 'Completed' ? ' chip-ink' : a.status === 'PartiallySigned' || a.status === 'Draft' ? ' chip-gold' : ''),
+          open: () => this.setState({ detail: a.id, created: false, copied: '' }),
+          pdf: () => this.setState({ msg: a.code + '.pdf downloaded. (Prototype: no file.)' }),
+          activityLabel: a.active ? 'Deactivate' : 'Reactivate', noReactivate: !a.active && a.status === 'Cancelled', inactive: !a.active,
+          activity: () => this.setState({ items: this.put(a.id, { active: !a.active }), msg: a.title + (a.active ? ' deactivated.' : ' reactivated.') }),
+          del: () => this.setState({ confirm: { kind: 'delete', id: a.id, title: 'Delete agreement?', label: 'Delete', text: signedN ? 'Permanently delete signed agreement “' + a.title + '”? Its signing and download links will stop working. This cannot be undone.' : 'Permanently delete inactive agreement “' + a.title + '”? This cannot be undone.' } }) };
+      }),
+      newOpen: !!nd, closeNew: () => this.setState({ nd: null }),
+      onCompany: e => this.setState({ nd: { ...nd, company: e.target.value } }),
+      onTitle: e => this.setState({ nd: { ...nd, title: e.target.value } }),
+      pdfLabel: nd && nd.pdf ? 'Cleaning-agreement.pdf' : 'No PDF chosen',
+      pickPdf: () => this.setState({ nd: { ...nd, pdf: true } }),
+      draftSigners: nd ? nd.signers.map((s, i) => ({ n: i + 1,
+        onName: e => this.setState({ nd: { ...nd, signers: nd.signers.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) } }),
+        onEmail: e => this.setState({ nd: { ...nd, signers: nd.signers.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)) } }),
+        remove: () => this.setState({ nd: { ...nd, signers: nd.signers.filter((x, j) => j !== i) } }) })) : [],
+      addDraftSigner: () => this.setState({ nd: { ...nd, signers: nd.signers.concat([{ name: '', email: '' }]) } }),
+      hasNewErr: !!nd && !!nd.err, newErr: nd ? nd.err : '',
+      create: () => {
+        const valid = nd.signers.filter(s => s.name.trim() && s.email.trim());
+        if (!nd.company || !nd.title.trim() || !nd.pdf) { this.setState({ nd: { ...nd, err: 'Company, title and PDF are required.' } }); return; }
+        if (!valid.length) { this.setState({ nd: { ...nd, err: 'Add at least one signer with a name and email.' } }); return; }
+        const id = 'g' + Date.now();
+        this.setState({ items: [{ id: id, title: nd.title, company: nd.company, code: 'AGR-0' + (170 + all.length), status: 'Draft', active: true, signers: valid.map((s, i) => ({ id: id + i, name: s.name, email: s.email, signed: false })) }].concat(all), nd: null, tab: 'active', detail: id, created: true });
+      },
+      detailOpen: !!d, justCreated: !!st.created,
+      dTitle: d ? d.title : '', dHeading: d ? d.company + ', ' + d.signers.filter(s => s.signed).length + ' of ' + d.signers.length + ' signed' : '',
+      dCode: d ? d.code : '', dStatus: d ? STATUS_TEXT[d.status] : '', dStatusLower: d ? STATUS_TEXT[d.status].toLowerCase() : '',
+      dChip: d ? 'chip' + (d.status === 'Completed' ? ' chip-ink' : d.status === 'Cancelled' ? '' : ' chip-gold') : 'chip',
+      dSigners: d ? d.signers.map(s => ({ name: s.name, email: s.email, status: s.signed ? 'Signed' : 'Waiting', chip: 'chip' + (s.signed ? ' chip-ink' : ' chip-gold'), canRemove: !!open && !s.signed,
+        linkLabel: copied === s.id + 'l' ? 'Link copied' : 'Copy link', emailLabel: copied === s.id + 'e' ? 'Email copied' : 'Copy email',
+        copyLink: () => this.setState({ copied: s.id + 'l' }), copyEmail: () => this.setState({ copied: s.id + 'e' }),
+        mail: () => this.setState({ msg: 'Your mail app opens with a plain-text message to ' + s.email + '. (Prototype.)' }),
+        remove: () => this.setState({ confirm: { kind: 'signer', id: d.id, sid: s.id, title: 'Remove signer?', label: 'Remove', text: 'Remove ' + s.name + ' (' + s.email + ') from “' + d.title + '”? Their signing link will stop working.' } }) })) : [],
+      canChange: !!open, cannotChange: !!d && !open,
+      onNsName: e => this.setState({ ns: { ...(st.ns || {}), name: e.target.value } }),
+      onNsEmail: e => this.setState({ ns: { ...(st.ns || {}), email: e.target.value } }),
+      addSigner: () => { const ns = st.ns || {}; if (!ns.name || !ns.email) { this.setState({ msg: 'Enter a name and an email address for the new signer.' }); return; } this.setState({ items: this.put(d.id, { signers: d.signers.concat([{ id: 's' + Date.now(), name: ns.name, email: ns.email, signed: false }]) }), ns: {} }); },
+      askCancel: () => this.setState({ confirm: { kind: 'cancel', id: d.id, title: 'Cancel agreement?', label: 'Cancel agreement', text: 'Cancel “' + d.title + '”? Signers can no longer open or sign it. Signed copies stay on record.' } }),
+      closeDetail: () => this.setState({ detail: null, created: false }),
+      confirmOpen: !!cf, confirmTitle: cf ? cf.title : '', confirmText: cf ? cf.text : '', confirmLabel: cf ? cf.label : '',
+      closeConfirm: () => this.setState({ confirm: null }),
+      doConfirm: () => {
+        const a = all.find(x => x.id === cf.id);
+        if (cf.kind === 'delete') this.setState({ items: all.filter(x => x.id !== cf.id), confirm: null, msg: 'Agreement deleted.' });
+        else if (cf.kind === 'signer') this.setState({ items: this.put(a.id, { signers: a.signers.filter(s => s.id !== cf.sid) }), confirm: null });
+        else this.setState({ items: this.put(a.id, { status: 'Cancelled' }), confirm: null });
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

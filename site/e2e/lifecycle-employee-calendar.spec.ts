@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
-// The employee calendar: a day view across chosen employees, a week view for one employee,
+// The Scheduler's employee views: a day view across employees, a week view for one employee,
 // and visit details on selection. Times are Europe/Helsinki (UTC+2 in January).
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const MONDAY = '2030-01-14';
@@ -42,120 +42,95 @@ async function setup(page: Page, options: { calendarAccess?: boolean } = {}) {
     if (path.endsWith('/tenant')) return route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } });
     return route.fulfill({ headers, json: [] });
   });
-  await page.goto(`/admin/shifts/employee-schedule/?date=${MONDAY}`);
-  await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
+  await page.goto(`/admin/shifts/scheduler/?date=${MONDAY}`);
+  await expect(page.getByRole('heading', { name: 'Scheduler', exact: true })).toBeVisible();
 }
 
 const details = (page: Page) => page.getByRole('complementary', { name: 'Visit details' });
+const neil = (page: Page, day = MONDAY) => page.getByRole('group', { name: `Neil Park, ${day}` });
 
 test('selecting a visit shows its place, time, checklist and notes', async ({ page }) => {
   await setup(page);
-  await page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean, 07:00–09:00, In progress$/ }).click();
+  await neil(page).getByRole('button', { name: /^Deep clean, 07:00–09:00, In progress$/ }).click();
   const panel = details(page);
   await expect(panel.getByRole('heading', { name: 'Deep clean' })).toBeVisible();
-  await expect(panel.getByText('Quay Dental · Harbour Road')).toBeVisible();
-  await expect(panel.getByText('Harbour Road 14, 00180 Helsinki')).toBeVisible();
+  await expect(panel.getByText('Harbour Road · Quay Dental')).toBeVisible();
   await expect(panel.getByText('In progress', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Mon 14 Jan, 07:00–09:00')).toBeVisible();
+  await expect(panel.getByText('2 h', { exact: true })).toBeVisible();
   await expect(panel.getByText('2 of 4 done')).toBeVisible();
-  await expect(panel.getByRole('img', { name: '2 of 4 checklist items done' })).toBeVisible();
   await expect(panel.getByText('Alarm code is with reception.')).toBeVisible();
   await expect(panel.getByText('Neil Park', { exact: true })).toBeVisible();
   await panel.getByRole('button', { name: 'Close visit details' }).click();
   await expect(page.getByRole('heading', { name: 'Deep clean' })).toHaveCount(0);
 });
 
-test('each work state has its own badge and a visit without a checklist says so', async ({ page }) => {
+test('each work state has its own label and a visit without a checklist says so', async ({ page }) => {
   await setup(page);
-  const neil = page.getByRole('group', { name: `Neil Park, ${MONDAY}` });
-  await expect(neil.getByRole('button', { name: /^Window clean, 11:00–12:00, Needs action$/ })).toBeVisible();
-  await expect(page.getByRole('group', { name: `Aiden Grey, ${MONDAY}` }).getByRole('button', { name: /^Lawn service, 08:00–10:00, Completed$/ })).toBeVisible();
-  await neil.getByRole('button', { name: /^Window clean/ }).click();
+  await expect(neil(page).getByRole('button', { name: /^Window clean, 11:00–12:00, Needs action$/ })).toHaveClass(/blk-needs/);
+  await expect(neil(page).getByRole('button', { name: /^Deep clean, 07:00–09:00, In progress$/ })).toHaveClass(/blk-progress/);
+  await expect(page.getByRole('group', { name: `Aiden Grey, ${MONDAY}` }).getByRole('button', { name: /^Lawn service, 08:00–10:00, Done$/ })).toHaveClass(/blk-done/);
+  await neil(page).getByRole('button', { name: /^Window clean/ }).click();
   await expect(details(page).getByText('Needs action', { exact: true })).toBeVisible();
   await expect(details(page).getByText('No checklist yet')).toBeVisible();
-  // On phones the details sheet covers the list, so it is closed before picking another visit.
+  await expect(details(page).getByText('No notes')).toBeVisible();
+  // The panel covers part of the grid, so it is closed before picking another visit.
   await details(page).getByRole('button', { name: 'Close visit details' }).click();
   await page.getByRole('group', { name: `Aiden Grey, ${MONDAY}` }).getByRole('button', { name: /^Lawn service/ }).click();
   await expect(details(page).getByText('Visit 12')).toBeVisible();
 });
 
-test('columns show each employee’s working hours for that day', async ({ page }) => {
+test('columns show each employee’s working hours and visit count for that day', async ({ page }) => {
   await setup(page);
-  await expect(page.getByText('Available 07:00–15:00')).toBeVisible();
-  await expect(page.getByText('No working hours set')).toBeVisible();
+  await expect(page.getByText('07:00–15:00 · 2 visits')).toBeVisible();
+  await expect(page.getByText('No hours set · 1 visit')).toBeVisible();
 });
 
-test('day view picks several employees from a dropdown list', async ({ page }) => {
+test('day view shows everyone or one employee from the Employees dropdown', async ({ page }) => {
   await setup(page);
+  const employees = page.getByRole('combobox', { name: 'Employees' });
+  await expect(employees.locator('option')).toHaveText(['All employees', 'Aiden Grey', 'Neil Park']);
   await expect(page.getByRole('group', { name: `Aiden Grey, ${MONDAY}` })).toBeVisible();
-  await page.getByRole('button', { name: /^Employees/ }).click();
-  const list = page.getByRole('listbox', { name: 'Employees' });
-  await expect(list).toHaveAttribute('aria-multiselectable', 'true');
-  await list.getByRole('option', { name: 'Aiden Grey' }).click();
-  // Several can be picked, so the list stays open after a pick.
-  await expect(list).toBeVisible();
-  await expect(list.getByRole('option', { name: 'Aiden Grey' })).toHaveAttribute('aria-selected', 'false');
+  await employees.selectOption({ label: 'Neil Park' });
   await expect(page.getByRole('group', { name: `Aiden Grey, ${MONDAY}` })).toHaveCount(0);
-  await expect(page.getByRole('group', { name: `Neil Park, ${MONDAY}` })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(list).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Employees Neil Park$/ })).toBeVisible();
+  await expect(neil(page)).toBeVisible();
 });
 
-test('week view shows one employee across the week, picked from a single-choice list', async ({ page }) => {
+test('week view shows one employee across the week, picked from the Employee dropdown', async ({ page }) => {
   await setup(page);
   await page.getByRole('button', { name: 'Week', exact: true }).click();
-  await page.getByRole('button', { name: /^Employee Aiden Grey$/ }).click();
-  const list = page.getByRole('listbox', { name: 'Employee' });
-  await expect(list).toHaveAttribute('aria-multiselectable', 'false');
-  await list.getByRole('option', { name: 'Neil Park' }).click();
-  // A single choice closes the list.
-  await expect(list).toHaveCount(0);
-  await expect(page.getByRole('group', { name: `Neil Park, ${MONDAY}` })).toBeVisible();
-  await expect(page.getByRole('group', { name: `Neil Park, ${TUESDAY}` }).getByRole('button', { name: /^Carpet clean, 09:00–10:00, Scheduled$/ })).toBeVisible();
+  const employee = page.getByRole('combobox', { name: 'Employee', exact: true });
+  await expect(employee).toHaveValue('aiden');
+  await employee.selectOption({ label: 'Neil Park' });
+  await expect(neil(page)).toBeVisible();
+  await expect(neil(page, TUESDAY).getByRole('button', { name: /^Carpet clean, 09:00–10:00, Scheduled$/ })).toBeVisible();
   await expect(page.getByRole('group', { name: /^Aiden Grey/ })).toHaveCount(0);
-  // The week count includes the hidden weekend visit.
-  await expect(page.getByText('4 visits this week · Neil Park')).toBeVisible();
+  await expect(page.getByText(/^Week of 14 January for Neil Park\./)).toBeVisible();
 });
 
-test('the shift calendar link is offered only to admins who can use the calendar, and opens the visit day', async ({ page }) => {
-  await setup(page, { calendarAccess: false });
-  await page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ }).click();
-  await expect(details(page).getByRole('heading', { name: 'Deep clean' })).toBeVisible();
-  await expect(details(page).getByRole('link', { name: 'Open in shift calendar' })).toHaveCount(0);
-
-  await page.unrouteAll({ behavior: 'ignoreErrors' });
-  await setup(page, { calendarAccess: true });
-  await page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ }).click();
-  const link = details(page).getByRole('link', { name: 'Open in shift calendar' });
-  await expect(link).toHaveAttribute('href', `/admin/shifts/calendar/?date=${MONDAY}`);
-
-  const requested: string[] = [];
-  await page.route(/\/api\/v1\/admin\/shifts\/calendar(?:\?|\/|$)/, route => {
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ headers, status: 200 });
-    const date = new URL(route.request().url()).searchParams.get('date') ?? '';
-    requested.push(date);
-    return route.fulfill({ headers, json: { date: date || '2030-01-20', today: '2030-01-20', timeZoneId: 'Europe/Helsinki', occurrences: [] } });
-  });
-  await link.click();
-  await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/\?date=2030-01-14$/);
-  await expect.poll(() => requested.includes(MONDAY)).toBe(true);
-  await expect(page.getByLabel('Calendar date')).toHaveValue(MONDAY);
-});
-
-test('visit details stay closed until a visit is picked', async ({ page }) => {
+test('a day picked in the Employees dropdown opens that employee’s week', async ({ page }) => {
   await setup(page);
-  await expect(page.getByRole('group', { name: `Neil Park, ${MONDAY}` })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Employees' }).selectOption({ label: 'Neil Park' });
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Employee', exact: true })).toHaveValue('neil');
+  await page.getByRole('button', { name: 'Day', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Employees' })).toHaveValue('neil');
+});
+
+test('visit details stay closed until a visit is picked, then focus moves into them', async ({ page }) => {
+  await setup(page);
+  await expect(neil(page)).toBeVisible();
   await expect(details(page)).toHaveCount(0);
-  await page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ }).click();
+  await neil(page).getByRole('button', { name: /^Deep clean/ }).click();
   await expect(details(page)).toBeVisible();
   await expect(details(page).getByRole('button', { name: 'Close visit details' })).toBeFocused();
 });
 
 test('on desktop, picking another visit while the panel is open switches the details', async ({ page, isMobile }) => {
-  // On phones the details sheet covers the list, so another visit is picked after closing it.
-  test.skip(isMobile, 'The phone sheet covers the visit list.');
+  // On phones the panel covers the grid, so another visit is picked after closing it.
+  test.skip(isMobile, 'The phone panel covers the grid.');
   await setup(page);
-  await page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ }).click();
+  await neil(page).getByRole('button', { name: /^Deep clean/ }).click();
   await expect(details(page).getByRole('heading', { name: 'Deep clean' })).toBeVisible();
   await page.getByRole('group', { name: `Aiden Grey, ${MONDAY}` }).getByRole('button', { name: /^Lawn service/ }).click();
   await expect(details(page).getByRole('heading', { name: 'Lawn service' })).toBeVisible();
@@ -163,10 +138,9 @@ test('on desktop, picking another visit while the panel is open switches the det
   await expect(details(page)).toHaveCount(1);
 });
 
-test('on desktop, Escape closes the panel and returns focus to the visit', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'Phones have no hardware Escape key.');
+test('Escape closes the panel and returns focus to the visit', async ({ page }) => {
   await setup(page);
-  const card = page.getByRole('group', { name: `Neil Park, ${MONDAY}` }).getByRole('button', { name: /^Deep clean/ });
+  const card = neil(page).getByRole('button', { name: /^Deep clean/ });
   await card.click();
   await expect(details(page)).toBeVisible();
   await page.keyboard.press('Escape');
@@ -174,34 +148,31 @@ test('on desktop, Escape closes the panel and returns focus to the visit', async
   await expect(card).toBeFocused();
 });
 
-test('on desktop, the grid shows 08:00–17:00, widened for earlier visits, and Show 24 h shows the whole day', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'Phones list visits instead of an hour grid.');
+test('the grid shows 07:00–19:00, widened for earlier visits, and Show 24 h shows the whole day', async ({ page }) => {
   await setup(page);
-  const gutter = page.getByRole('region', { name: 'Visits' });
-  // The earliest visit starts at 07:00, so the day starts there instead of 08:00; it ends at 17:00.
-  await expect(gutter.getByText('07:00', { exact: true })).toBeVisible();
-  await expect(gutter.getByText('17:00', { exact: true })).toBeVisible();
-  await expect(gutter.getByText('06:00', { exact: true })).toHaveCount(0);
-  await expect(gutter.getByText('18:00', { exact: true })).toHaveCount(0);
+  const grid = page.getByRole('region', { name: 'Schedule grid' });
+  await expect(grid.getByText('07:00', { exact: true })).toBeVisible();
+  await expect(grid.getByText('19:00', { exact: true })).toBeAttached();
+  await expect(grid.getByText('06:00', { exact: true })).toHaveCount(0);
+  await expect(grid.getByText('20:00', { exact: true })).toHaveCount(0);
   await page.getByLabel('Show 24 h').check();
-  await expect(gutter.getByText('00:00', { exact: true })).toBeVisible();
-  await expect(gutter.getByText('23:00', { exact: true })).toBeVisible();
+  await expect(grid.getByText('00:00', { exact: true })).toBeVisible();
+  await expect(grid.getByText('23:00', { exact: true })).toBeAttached();
   await page.getByLabel('Show 24 h').uncheck();
-  await expect(gutter.getByText('00:00', { exact: true })).toHaveCount(0);
+  await expect(grid.getByText('00:00', { exact: true })).toHaveCount(0);
 });
 
 test('week view shows Monday to Friday, with a notice and a tick box for weekend visits', async ({ page }) => {
   await setup(page);
   await page.getByRole('button', { name: 'Week', exact: true }).click();
-  await page.getByRole('button', { name: /^Employee Aiden Grey$/ }).click();
-  await page.getByRole('listbox', { name: 'Employee' }).getByRole('option', { name: 'Neil Park' }).click();
-  await expect(page.getByRole('group', { name: 'Neil Park, 2030-01-18' })).toBeVisible();
-  await expect(page.getByRole('group', { name: `Neil Park, ${SATURDAY}` })).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Employee', exact: true }).selectOption({ label: 'Neil Park' });
+  await expect(neil(page, '2030-01-18')).toBeVisible();
+  await expect(neil(page, SATURDAY)).toHaveCount(0);
   const notice = page.getByText('1 weekend visit — tick Show weekends to see it.');
   await expect(notice).toBeVisible();
   await page.getByLabel('Show weekends').check();
-  await expect(page.getByRole('group', { name: `Neil Park, ${SATURDAY}` }).getByRole('button', { name: /^Saturday deep clean, 10:00–12:00, Scheduled$/ })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Neil Park, 2030-01-20' })).toBeVisible();
+  await expect(neil(page, SATURDAY).getByRole('button', { name: /^Saturday deep clean, 10:00–12:00, Scheduled$/ })).toBeVisible();
+  await expect(neil(page, '2030-01-20')).toBeVisible();
   await expect(notice).toHaveCount(0);
 });
 

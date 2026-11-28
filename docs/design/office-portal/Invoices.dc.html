@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Invoices for the cleaning company: work order and manual invoices, preview, issue, payment and issuer details.">
+<title>Invoices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.card{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-ink{background:var(--ink);color:var(--surface)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:760px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.sub{font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.check{display:flex;align-items:center;gap:12px;min-height:44px}
+.check input{width:20px;height:20px}
+.step{display:flex;align-items:center;gap:8px}
+.step span{min-width:96px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.kpi{display:flex;flex-direction:column;gap:4px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.kpi strong{font-size:22px;font-variant-numeric:tabular-nums}
+.dlg{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg>section{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);max-height:92%;overflow:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html" aria-current="page">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Invoices</h1><p style="margin:4px 0 0" class="sub">Bill completed cleaning, preview every amount, then issue.</p></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ openIssuer }}">Company and payment details</button><button type="button" class="btn btn-primary" onClick="{{ openCreate }}">New invoice</button></div>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+    <div class="kpis">
+      <div class="kpi"><span class="sub">Waiting for payment</span><strong>{{ openTotal }}</strong><span class="sub">{{ openCount }} invoices</span></div>
+      <div class="kpi"><span class="sub">Paid this month</span><strong>{{ paidTotal }}</strong><span class="sub">{{ paidCount }} invoices</span></div>
+    </div>
+    <h2 style="margin:8px 0 0;font-size:20px">Issued invoices</h2>
+    <div class="tablebox" role="region" aria-label="Issued invoices" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Invoice</th><th scope="col">Customer</th><th scope="col">Issued</th><th scope="col">Due</th><th scope="col" class="num">Total incl. VAT</th><th scope="col">Status</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ invoices }}" as="i" hint-placeholder-count="4">
+          <tr><td style="font-variant-numeric:tabular-nums"><strong>{{ i.no }}</strong><sc-if value="{{ i.sample }}" hint-placeholder-val="{{ false }}"><div><span class="chip chip-gold">Sample issuer details</span></div></sc-if></td><td><a href="Company-detail.dc.html">{{ i.customer }}</a></td><td style="font-variant-numeric:tabular-nums">{{ i.issued }}</td><td style="font-variant-numeric:tabular-nums">{{ i.due }}</td><td class="num">{{ i.total }}</td><td><span class="{{ i.chip }}">{{ i.status }}</span></td>
+            <td><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ i.pdf }}">PDF</button><sc-if value="{{ i.open }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ i.paid }}">Mark paid</button><button type="button" class="btn btn-ghost" onClick="{{ i.void }}">Void</button></sc-if></div></td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<sc-if value="{{ createOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="New invoice">
+  <section style="width:min(720px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">New invoice</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeCreate }}" style="min-width:44px">×</button></div>
+    <div class="seg" role="group" aria-label="Invoice type"><button type="button" aria-pressed="{{ isWork }}" onClick="{{ useWork }}">Work order invoice</button><button type="button" aria-pressed="{{ isManual }}" onClick="{{ useManual }}">Manual invoice</button></div>
+    <label class="field">Company<select class="input" onChange="{{ onCompany }}"><option value="Virtanen Oy">Virtanen Oy (partner)</option><option value="Hietaniemi office Oy">Hietaniemi office Oy</option><option value="Lindqvist household">Lindqvist household</option></select></label>
+
+    <sc-if value="{{ isWork }}" hint-placeholder-val="{{ true }}">
+    <label class="check"><input type="checkbox" checked="{{ byMonth }}" onChange="{{ toggleMonth }}">Bill a completed cleaning month</label>
+    <sc-if value="{{ byMonth }}" hint-placeholder-val="{{ true }}">
+    <label class="field">Completion month<select class="input"><option>November 2026</option><option>October 2026</option><option>September 2026</option><option>August 2026</option></select></label>
+    <p style="margin:0" class="sub">Bills every completed, unbilled cleaning visit for this company finished in that month. Nothing is emailed automatically.</p>
+    </sc-if>
+    <sc-if value="{{ byOrders }}" hint-placeholder-val="{{ false }}">
+    <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 12px;margin:0;display:flex;flex-direction:column"><legend class="sub" style="padding:0 4px">Work orders to bill</legend><sc-for list="{{ orderChoices }}" as="o" hint-placeholder-count="3"><label class="check"><input type="checkbox" checked="{{ o.on }}" onChange="{{ o.toggle }}">{{ o.name }}</label></sc-for></fieldset>
+    <div class="grid2"><label class="field">Bill from<select class="input"><option>1 Nov 2026</option><option>1 Oct 2026</option></select></label><label class="field">Bill to (inclusive)<select class="input"><option>30 Nov 2026</option><option>31 Oct 2026</option></select></label></div>
+    <details class="card"><summary style="cursor:pointer;font-weight:600;min-height:32px">Override a monthly subtotal</summary>
+      <p style="margin:0" class="sub">Replaces one work order’s whole net subtotal for a month. Give the agreed fee and a reason.</p>
+      <div class="grid2"><label class="field">Work order<select class="input"><option>Espoo, weekly clean</option><option>Tampere, monthly deep clean</option></select></label><label class="field">Month<select class="input"><option>November 2026</option><option>October 2026</option></select></label></div>
+      <div class="field"><span>Monthly subtotal before VAT</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Lower by 10 euros" onClick="{{ ovDown }}" style="min-width:44px">−</button><span>{{ ovText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise by 10 euros" onClick="{{ ovUp }}" style="min-width:44px">+</button></div></div>
+      <label class="field">Reason (up to 500 characters)<input class="input" type="text" maxlength="500" onChange="{{ onOvReason }}"></label>
+      <button type="button" class="btn btn-ghost" style="width:fit-content" onClick="{{ applyOverride }}">Apply override</button>
+      <sc-for list="{{ overrides }}" as="ov" hint-placeholder-count="1"><div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><span>{{ ov.text }}</span><button type="button" class="btn btn-ghost" onClick="{{ ov.remove }}">Remove override</button></div></sc-for>
+    </details>
+    </sc-if>
+    <p style="margin:0" class="sub">Monthly fees are charged per completed visit. Hourly work uses scheduled hours. On-call visits are charged when completed. Visits not started yet are billed only if you tick them in the preview.</p>
+    </sc-if>
+
+    <sc-if value="{{ isManual }}" hint-placeholder-val="{{ false }}">
+    <p style="margin:0" class="sub">Enter agreed prices before VAT. VAT is added from your saved company details.</p>
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="1">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center"><strong>Row {{ r.n }}</strong><button type="button" class="btn btn-ghost" disabled="{{ r.only }}" onClick="{{ r.remove }}">Remove row</button></div>
+      <label class="field">Description<input class="input" type="text" maxlength="1000" value="{{ r.desc }}"></label>
+      <div class="grid2">
+        <div class="field"><span>Quantity (pieces)</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Row {{ r.n }} fewer" onClick="{{ r.qDown }}" style="min-width:44px">−</button><span>{{ r.qty }}</span><button type="button" class="btn btn-ghost" aria-label="Row {{ r.n }} more" onClick="{{ r.qUp }}" style="min-width:44px">+</button></div></div>
+        <div class="field"><span>Unit price before VAT</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Row {{ r.n }} lower price" onClick="{{ r.pDown }}" style="min-width:44px">−</button><span>{{ r.price }}</span><button type="button" class="btn btn-ghost" aria-label="Row {{ r.n }} higher price" onClick="{{ r.pUp }}" style="min-width:44px">+</button></div></div>
+      </div>
+    </div>
+    </sc-for>
+    <button type="button" class="btn btn-ghost" style="width:fit-content" onClick="{{ addRow }}">Add row</button>
+    </sc-if>
+
+    <div class="grid2">
+      <label class="field">PDF language<select class="input"><option>Finnish</option><option>English</option><option>Swedish</option></select></label>
+    </div>
+    <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:12px;margin:0;display:flex;flex-direction:column;gap:12px"><legend class="sub" style="padding:0 4px">Customer billing address (all required)</legend>
+      <div class="grid2"><label class="field">Street<input class="input" type="text" value="Keilaranta 10"></label><label class="field">Postal code<input class="input" type="text" value="02150"></label><label class="field">City<input class="input" type="text" value="Espoo"></label><label class="field">Country<input class="input" type="text" value="FI"></label></div>
+    </fieldset>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeCreate }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ toPreview }}">Preview invoice</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ previewOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Invoice preview">
+  <section style="width:min(920px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Invoice preview</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closePreview }}" style="min-width:44px">×</button></div>
+    <div class="grid2">
+      <div class="card"><span class="sub">From</span><strong>ReadySetSiivous Oy, 3210987-6</strong><span class="sub">Mannerheimintie 12, 00100 Helsinki</span><span>Bank account FI21 1234 5600 0007 85 (NDEAFIHH)</span></div>
+      <div class="card"><span class="sub">To</span><strong>{{ company }}</strong><span class="sub">{{ periodText }}</span></div>
+    </div>
+    <sc-if value="{{ isWork }}" hint-placeholder-val="{{ true }}">
+    <div class="tablebox"><table>
+      <thead><tr><th scope="col">Work order</th><th scope="col">Period</th><th scope="col" class="num">Hours</th><th scope="col" class="num">Visits</th><th scope="col">Basis</th><th scope="col" class="num">Net</th><th scope="col" class="num">VAT</th><th scope="col" class="num">Total</th></tr></thead>
+      <tbody>
+        <tr><th scope="rowgroup" colspan="8" style="background:var(--surface);color:var(--ink)">Espoo head office</th></tr>
+        <tr><td>Espoo, weekly clean<div class="sub">Completed on 27 Nov 2026</div></td><td>1 to 30 Nov</td><td class="num">16</td><td class="num">4</td><td>Per completed visit × 4</td><td class="num">€580.00</td><td class="num">€147.90 (25.5%)</td><td class="num">€727.90</td></tr>
+        <sc-for list="{{ extraLines }}" as="x" hint-placeholder-count="0"><tr><td>{{ x.name }}<div class="sub">Not started yet, ticked</div></td><td>{{ x.when }}</td><td class="num">4</td><td class="num">1</td><td>Per completed visit × 1</td><td class="num">€145.00</td><td class="num">€36.98 (25.5%)</td><td class="num">€181.98</td></tr></sc-for>
+      </tbody>
+    </table></div>
+    <div class="card" style="background:var(--gold-wash)">
+      <strong>Visits scheduled but not started</strong>
+      <span class="sub">Tick a visit to bill it on this invoice. Each change refreshes the preview.</span>
+      <sc-for list="{{ unstarted }}" as="u" hint-placeholder-count="2"><label class="check"><input type="checkbox" checked="{{ u.on }}" onChange="{{ u.toggle }}">{{ u.text }}</label></sc-for>
+    </div>
+    </sc-if>
+    <sc-if value="{{ isManual }}" hint-placeholder-val="{{ false }}">
+    <div class="tablebox"><table>
+      <thead><tr><th scope="col">Description</th><th scope="col" class="num">Quantity</th><th scope="col" class="num">Unit price</th><th scope="col" class="num">Net</th><th scope="col" class="num">VAT</th><th scope="col" class="num">Total</th></tr></thead>
+      <tbody><sc-for list="{{ manualLines }}" as="m" hint-placeholder-count="1"><tr><td>{{ m.desc }}</td><td class="num">{{ m.qty }}</td><td class="num">{{ m.price }}</td><td class="num">{{ m.net }}</td><td class="num">{{ m.vat }}</td><td class="num">{{ m.total }}</td></tr></sc-for></tbody>
+    </table></div>
+    </sc-if>
+    <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:24px;font-variant-numeric:tabular-nums"><span>Net <strong>{{ net }}</strong></span><span>VAT <strong>{{ vat }}</strong></span><span>Total <strong style="font-size:20px">{{ gross }}</strong></span></div>
+    <p style="margin:0" class="sub">Issuing saves the invoice for good. Check the dates, address and totals first.</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ backToEdit }}">Back to edit</button><button type="button" class="btn btn-primary" onClick="{{ issue }}">Issue invoice</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ issuerOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Company and payment details">
+  <section style="width:min(640px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Company and payment details</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeIssuer }}" style="min-width:44px">×</button></div>
+    <p style="margin:0" class="sub">Printed on every invoice you issue. Changes don’t alter invoices already issued.</p>
+    <div class="grid2">
+      <label class="field">Company name<input class="input" type="text" value="ReadySetSiivous Oy"></label>
+      <label class="field">Business ID<input class="input" type="text" value="3210987-6"></label>
+      <label class="field">Email<input class="input" type="email" value="laskutus@readysetsiivous.fi"></label>
+      <label class="field">Phone<input class="input" type="tel" value="+358 9 123 4567"></label>
+      <label class="field">IBAN<input class="input" type="text" value="FI21 1234 5600 0007 85"></label>
+      <label class="field">BIC<input class="input" type="text" value="NDEAFIHH"></label>
+      <label class="field">Street<input class="input" type="text" value="Mannerheimintie 12"></label>
+      <label class="field">Postal code<input class="input" type="text" value="00100"></label>
+      <label class="field">City<input class="input" type="text" value="Helsinki"></label>
+      <label class="field">Country<input class="input" type="text" value="FI"></label>
+    </div>
+    <div class="grid2">
+      <div class="field"><span>Payment terms</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Fewer days" onClick="{{ termsDown }}" style="min-width:44px">−</button><span>{{ termsText }}</span><button type="button" class="btn btn-ghost" aria-label="More days" onClick="{{ termsUp }}" style="min-width:44px">+</button></div></div>
+      <div class="field"><span>VAT rate on invoices</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Lower VAT" onClick="{{ vatDown }}" style="min-width:44px">−</button><span>{{ vatText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise VAT" onClick="{{ vatUp }}" style="min-width:44px">+</button></div></div>
+    </div>
+    <label class="check"><input type="checkbox" checked="{{ sample }}" onChange="{{ toggleSample }}">These are sample details (invoices are marked)</label>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeIssuer }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveIssuer }}">Save company details</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ voidOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Void invoice" style="z-index:60">
+  <section style="width:min(440px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Void invoice {{ voidNo }}?</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeVoid }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">The invoice stays on record as void and can’t be paid.</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeVoid }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ doVoid }}">Void invoice</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const INVOICES = [
+  { id: 'i1', no: '2026-0342', customer: 'Virtanen Oy', issued: '20 Nov 2026', due: '4 Dec 2026', total: 1906.25, status: 'Issued', sample: false },
+  { id: 'i2', no: '2026-0338', customer: 'Hietaniemi office Oy', issued: '15 Nov 2026', due: '29 Nov 2026', total: 1214.40, status: 'Issued', sample: false },
+  { id: 'i3', no: '2026-0311', customer: 'Virtanen Oy', issued: '1 Nov 2026', due: '15 Nov 2026', total: 1820.00, status: 'Paid', sample: false },
+  { id: 'i4', no: '2026-0290', customer: 'Lindqvist household', issued: '20 Oct 2026', due: '3 Nov 2026', total: 310.00, status: 'Void', sample: true },
+];
+const ORDERS = ['Espoo, weekly clean', 'Tampere, monthly deep clean', 'Vantaa, office move-out (inactive)'];
+const UNSTARTED = [{ id: 'u1', name: 'Espoo, weekly clean', when: 'Mon 30 Nov 2026, 17:00', text: 'Espoo, weekly clean · 30 Nov 2026 17:00 · 4 h' }, { id: 'u2', name: 'Tampere, monthly deep clean', when: 'Sat 28 Nov 2026, 08:00', text: 'Tampere, monthly deep clean · 28 Nov 2026 08:00 · 6 h' }];
+const eur = n => '€' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  all() { return this.st().invoices || INVOICES; }
+  renderVals() {
+    const st = this.st();
+    const all = this.all();
+    const manual = st.type === 'manual';
+    const byMonth = st.byMonth !== false;
+    const chosen = st.orders || [ORDERS[0]];
+    const rows = st.rows || [{ desc: 'Extra window cleaning', qty: 1, price: 120 }];
+    const ticked = st.ticked || [];
+    const vatRate = st.vatRate == null ? 25.5 : st.vatRate;
+    const overrides = st.overrides || [];
+    const netWork = 580 + ticked.length * 145;
+    const netManual = rows.reduce((s, r) => s + r.qty * r.price, 0);
+    const net = manual ? netManual : netWork;
+    const vat = Math.round(net * vatRate) / 100;
+    const voidI = st.voidId ? all.find(i => i.id === st.voidId) : null;
+    const setRow = (i, ch) => this.setState({ rows: rows.map((r, j) => (j === i ? { ...r, ...ch } : r)) });
+    return {
+      openIssuer: () => this.setState({ issuer: true }), openCreate: () => this.setState({ create: true }),
+      hasMsg: !!st.msg, msg: st.msg || '',
+      openTotal: eur(all.filter(i => i.status === 'Issued').reduce((s, i) => s + i.total, 0)), openCount: all.filter(i => i.status === 'Issued').length,
+      paidTotal: eur(all.filter(i => i.status === 'Paid').reduce((s, i) => s + i.total, 0)), paidCount: all.filter(i => i.status === 'Paid').length,
+      invoices: all.map(i => ({ no: i.no, customer: i.customer, issued: i.issued, due: i.due, total: eur(i.total), status: i.status, sample: i.sample, open: i.status === 'Issued',
+        chip: 'chip' + (i.status === 'Paid' ? ' chip-ink' : i.status === 'Issued' ? ' chip-gold' : ''),
+        pdf: () => this.setState({ msg: 'Invoice ' + i.no + '.pdf downloaded. (Prototype: no file.)' }),
+        paid: () => this.setState({ invoices: all.map(x => (x.id === i.id ? { ...x, status: 'Paid' } : x)), msg: 'Invoice ' + i.no + ' marked paid.' }),
+        void: () => this.setState({ voidId: i.id }) })),
+      createOpen: !!st.create, closeCreate: () => this.setState({ create: false }),
+      isWork: !manual, isManual: manual,
+      useWork: () => this.setState({ type: 'work' }), useManual: () => this.setState({ type: 'manual' }),
+      onCompany: e => this.setState({ company: e.target.value, byMonth: e.target.value === 'Virtanen Oy' }),
+      byMonth: byMonth, byOrders: !byMonth, toggleMonth: () => this.setState({ byMonth: !byMonth }),
+      orderChoices: ORDERS.map(o => ({ name: o, on: chosen.includes(o), toggle: () => this.setState({ orders: chosen.includes(o) ? chosen.filter(x => x !== o) : chosen.concat([o]) }) })),
+      ovText: eur(st.ov == null ? 600 : st.ov),
+      ovDown: () => this.setState({ ov: Math.max(0, (st.ov == null ? 600 : st.ov) - 10) }), ovUp: () => this.setState({ ov: (st.ov == null ? 600 : st.ov) + 10 }),
+      onOvReason: e => this.setState({ ovReason: e.target.value }),
+      applyOverride: () => { if (!st.ovReason) { this.setState({ msg: 'Give a reason for the override.' }); return; } this.setState({ overrides: overrides.concat([{ text: 'Espoo, weekly clean · November 2026 · ' + eur(st.ov == null ? 600 : st.ov) + ' · ' + st.ovReason }]) }); },
+      overrides: overrides.map((o, i) => ({ text: o.text, remove: () => this.setState({ overrides: overrides.filter((x, j) => j !== i) }) })),
+      rows: rows.map((r, i) => ({ n: i + 1, desc: r.desc, qty: r.qty, price: eur(r.price), only: rows.length === 1,
+        remove: () => this.setState({ rows: rows.filter((x, j) => j !== i) }),
+        qDown: () => setRow(i, { qty: Math.max(1, r.qty - 1) }), qUp: () => setRow(i, { qty: r.qty + 1 }),
+        pDown: () => setRow(i, { price: Math.max(0, r.price - 5) }), pUp: () => setRow(i, { price: r.price + 5 }) })),
+      addRow: () => this.setState({ rows: rows.concat([{ desc: '', qty: 1, price: 0 }]) }),
+      toPreview: () => { if (!manual && !byMonth && !chosen.length) { this.setState({ msg: 'Choose at least one work order.' }); return; } this.setState({ create: false, preview: true }); },
+      previewOpen: !!st.preview, closePreview: () => this.setState({ preview: false }), backToEdit: () => this.setState({ preview: false, create: true }),
+      company: st.company || 'Virtanen Oy', periodText: manual ? 'Manual invoice' : byMonth ? 'Visits completed in November 2026' : '1 Nov – 30 Nov 2026',
+      unstarted: UNSTARTED.map(u => ({ text: u.text, on: ticked.includes(u.id), toggle: () => this.setState({ ticked: ticked.includes(u.id) ? ticked.filter(x => x !== u.id) : ticked.concat([u.id]) }) })),
+      extraLines: UNSTARTED.filter(u => ticked.includes(u.id)).map(u => ({ name: u.name, when: u.when })),
+      manualLines: rows.map(r => { const n = r.qty * r.price; const v = Math.round(n * vatRate) / 100; return { desc: r.desc || 'Untitled row', qty: r.qty, price: eur(r.price), net: eur(n), vat: eur(v) + ' (' + vatRate + '%)', total: eur(n + v) }; }),
+      net: eur(net), vat: eur(vat), gross: eur(net + vat),
+      issue: () => { const no = '2026-0' + (343 + all.length - 4); this.setState({ invoices: [{ id: 'i' + Date.now(), no: no, customer: st.company || 'Virtanen Oy', issued: '26 Nov 2026', due: '10 Dec 2026', total: net + vat, status: 'Issued', sample: !!st.sample }].concat(all), preview: false, ticked: [], msg: 'Invoice ' + no + ' issued.' }); },
+      issuerOpen: !!st.issuer, closeIssuer: () => this.setState({ issuer: false }),
+      termsText: (st.terms == null ? 14 : st.terms) + ' days',
+      termsDown: () => this.setState({ terms: Math.max(0, (st.terms == null ? 14 : st.terms) - 7) }), termsUp: () => this.setState({ terms: Math.min(365, (st.terms == null ? 14 : st.terms) + 7) }),
+      vatText: vatRate + '%', vatDown: () => this.setState({ vatRate: Math.max(0, Math.round((vatRate - 0.5) * 10) / 10) }), vatUp: () => this.setState({ vatRate: Math.min(50, Math.round((vatRate + 0.5) * 10) / 10) }),
+      sample: !!st.sample, toggleSample: () => this.setState({ sample: !st.sample }),
+      saveIssuer: () => this.setState({ issuer: false, msg: 'Company and payment details saved.' }),
+      voidOpen: !!voidI, voidNo: voidI ? voidI.no : '', closeVoid: () => this.setState({ voidId: null }),
+      doVoid: () => this.setState({ invoices: all.map(x => (x.id === st.voidId ? { ...x, status: 'Void' } : x)), voidId: null, msg: 'Invoice voided.' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

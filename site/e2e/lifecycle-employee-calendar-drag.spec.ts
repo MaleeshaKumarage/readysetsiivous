@@ -1,13 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 
-// Drag and drop on the desktop employee calendar. Times are Europe/Helsinki (UTC+2 in January).
-// The grid starts at 08:00 and each hour is 72 px tall, so a y offset in a column maps to a time.
+// Drag and drop on the desktop Scheduler. Times are Europe/Helsinki (UTC+2 in January).
+// The grid starts at 07:00 and each hour is 56 px tall, so a y offset in a column maps to a time.
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const MONDAY = '2030-01-14';
-const HOUR_PX = 72;
-// Pixel offset in a column for a local time, measured from the 08:00 grid start.
-const yFor = (hour: number, minute = 0) => ((hour - 8) * 60 + minute) / 60 * HOUR_PX;
+const HOUR_PX = 56;
+// Pixel offset in a column for a local time, measured from the 07:00 grid start.
+const yFor = (hour: number, minute = 0) => ((hour - 7) * 60 + minute) / 60 * HOUR_PX;
 
 type Saved = { path: string; body: any };
 
@@ -55,8 +55,8 @@ async function setup(page: Page, options: { moveConflict?: boolean } = {}) {
     if (path.endsWith('/tenant')) return route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } });
     return route.fulfill({ headers, json: [] });
   });
-  await page.goto(`/admin/shifts/employee-schedule/?date=${MONDAY}`);
-  await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
+  await page.goto(`/admin/shifts/scheduler/?date=${MONDAY}`);
+  await expect(page.getByRole('heading', { name: 'Scheduler' })).toBeVisible();
   return saved;
 }
 
@@ -70,7 +70,7 @@ async function drag(page: Page, from: ReturnType<typeof card>, to: ReturnType<ty
 
 test.describe('desktop', () => {
   test.skip(({ isMobile }) => isMobile, 'Drag and drop is off on phones.');
-  // Tall enough that the whole 08:00–17:00 grid is on screen, so drops in the afternoon are reachable.
+  // Tall enough that the whole 07:00–19:00 grid is on screen, so drops in the afternoon are reachable.
   test.use({ viewport: { width: 1280, height: 1400 } });
 
   test('dragging a visit down its column moves it, snapped to 15 minutes, and Undo moves it back', async ({ page }) => {
@@ -80,13 +80,13 @@ test.describe('desktop', () => {
     await expect(page.getByRole('status')).toContainText('Moved Deep clean to Mon 14 Jan 11:15.');
     const move = saved.find(item => item.path.endsWith('/shifts/deep/occurrence-exceptions'))!;
     expect(move.body).toMatchObject({ startUtc: '2030-01-14T09:15:00.000Z', endUtc: '2030-01-14T10:15:00.000Z', status: 1,
-      originalStartUtc: '2030-01-14T07:00:00Z', reason: 'Moved in the employee calendar', employeeId: null });
+      originalStartUtc: '2030-01-14T07:00:00Z', reason: 'Moved in the scheduler', employeeId: null });
     expect(saved.some(item => item.path.endsWith('/visit-assignees'))).toBe(false);
 
     await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
     await expect(page.getByRole('status')).toContainText('Change undone.');
     const undo = saved.filter(item => item.path.endsWith('/shifts/deep/occurrence-exceptions'))[1];
-    expect(undo.body).toMatchObject({ id: 'moved-1', startUtc: '2030-01-14T07:00:00Z', endUtc: '2030-01-14T08:00:00Z', reason: 'Undo in the employee calendar' });
+    expect(undo.body).toMatchObject({ id: 'moved-1', startUtc: '2030-01-14T07:00:00Z', endUtc: '2030-01-14T08:00:00Z', reason: 'Undo in the scheduler' });
   });
 
   test('a manual visit is moved by its own id', async ({ page }) => {
@@ -103,7 +103,7 @@ test.describe('desktop', () => {
     await drag(page, card(page, 'Neil Park', /^Deep clean/), column(page, 'Aiden Grey'), yFor(9));
     await expect(page.getByRole('status')).toContainText('Reassigned Deep clean from Neil Park to Aiden Grey.');
     const assign = saved.find(item => item.path.endsWith('/shifts/deep/visit-assignees'))!;
-    expect(assign.body).toMatchObject({ mode: 1, employeeIds: ['aiden'], reason: 'Reassigned in the employee calendar',
+    expect(assign.body).toMatchObject({ mode: 1, employeeIds: ['aiden'], reason: 'Reassigned in the scheduler',
       rosterVersion: 'roster-1', assignmentVersion: 'assign-1', originalStartUtc: '2030-01-14T07:00:00Z', extraExceptionId: null, preview: false });
     // Same time, so the visit is not moved.
     expect(saved.some(item => item.path.endsWith('/occurrence-exceptions'))).toBe(false);
@@ -131,13 +131,26 @@ test.describe('desktop', () => {
     expect(move.body).toMatchObject({ status: 1, originalStartUtc: '2030-01-14T13:00:00Z', startUtc: '2030-01-14T14:00:00.000Z' });
   });
 
+  test('dragging the bottom handle of a visit changes its end time, snapped to 15 minutes', async ({ page }) => {
+    const saved = await setup(page);
+    const handle = column(page, 'Neil Park').getByRole('separator', { name: 'Drag to change the end time of Deep clean' });
+    // Dropped at about 11:20 in the same column: the visit keeps its 09:00 start and now ends at 11:15.
+    await handle.dragTo(column(page, 'Neil Park'), { sourcePosition: { x: 20, y: 4 }, targetPosition: { x: 40, y: yFor(11, 20) } });
+    await expect(page.getByRole('status')).toContainText('Changed Deep clean to end at 11:15.');
+    const resize = saved.find(item => item.path.endsWith('/shifts/deep/occurrence-exceptions'))!;
+    expect(resize.body).toMatchObject({ startUtc: '2030-01-14T07:00:00.000Z', endUtc: '2030-01-14T09:15:00.000Z', status: 1,
+      reason: 'End time changed in the scheduler' });
+    // Finished work has no handle.
+    await expect(column(page, 'Neil Park').getByRole('separator', { name: /Office clean/ })).toHaveCount(0);
+  });
+
   test('finished visits cannot be dragged and say why on hover', async ({ page }) => {
     await setup(page);
     const finished = card(page, 'Neil Park', /^Office clean/);
     await expect(finished).not.toHaveAttribute('draggable', 'true');
     await expect(finished).toHaveAttribute('title', 'Started or completed work cannot be moved or reassigned.');
     await expect(card(page, 'Neil Park', /^Deep clean/)).toHaveAttribute('draggable', 'true');
-    await expect(page.getByText('Drag a visit to change its time or employee.')).toBeVisible();
+    await expect(page.getByText(/Drag a visit to change its time or assignee\./)).toBeVisible();
   });
 });
 
@@ -146,5 +159,5 @@ test('on phones no visit can be dragged', async ({ page, isMobile }) => {
   await setup(page);
   await expect(card(page, 'Neil Park', /^Deep clean/)).toBeVisible();
   await expect(page.locator('[draggable="true"]')).toHaveCount(0);
-  await expect(page.getByText(/^Drag a visit/)).toHaveCount(0);
+  await expect(page.getByRole('separator', { name: /^Drag to change the end time/ })).toHaveCount(0);
 });

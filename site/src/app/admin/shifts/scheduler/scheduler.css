@@ -1,0 +1,70 @@
+/* Scheduler: ported from docs/design/office-portal/Scheduler.dc.html, scoped to .scheduler so it cannot leak into other admin pages. */
+.scheduler{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);
+  display:flex;flex-direction:column;gap:16px;color:var(--ink);font-size:16px;line-height:1.5;min-width:0}
+.scheduler :focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+.scheduler button:active{transform:translateY(1px)}
+.scheduler .btn,.scheduler button{white-space:nowrap}
+.scheduler a{color:var(--muted);text-decoration:underline}
+.scheduler h1{margin:0;font-size:28px;line-height:1.2;font-weight:700;color:var(--ink)}
+.scheduler h2{font-weight:700;color:var(--ink)}
+.scheduler .btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+.scheduler .btn:disabled{opacity:.5;cursor:not-allowed}
+.scheduler .btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.scheduler .btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.scheduler .seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.scheduler .seg button{min-height:36px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.scheduler .seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.scheduler .board{position:relative;overflow:auto;max-height:600px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.scheduler .grid{display:grid;min-width:640px}
+.scheduler .gutter{position:relative;border-right:1px solid var(--line)}
+.scheduler .gutter span{position:absolute;left:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;transform:translateY(-8px)}
+.scheduler .gutter span:first-child{transform:none}
+.scheduler .colhead{position:sticky;top:0;z-index:2;padding:12px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-size:14px;font-weight:700;background:var(--wash)}
+.scheduler .colhead small{display:block;font-weight:400;color:var(--muted)}
+.scheduler .col{position:relative;border-right:1px solid var(--line);background-image:repeating-linear-gradient(to bottom,var(--line) 0 1px,transparent 1px 56px)}
+.scheduler .col.over{background-color:var(--gold-wash)}
+.scheduler .blk{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;padding:8px;border-radius:10px;border:1px solid var(--line-2);background:var(--line);color:var(--ink);text-align:left;font:inherit;font-size:13px;overflow:hidden;cursor:grab}
+.scheduler .blk strong{display:block;font-size:13px}
+.scheduler .blk span{display:block;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+/* Overlapping visits share their column: cards get narrower, the column never widens, and long text is cut with an ellipsis. */
+.scheduler .blk>*{flex-shrink:0}
+.scheduler .blk strong{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scheduler .blk span{white-space:normal;overflow-wrap:anywhere}
+.scheduler .blk .tag{max-width:100%;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scheduler .blk-done{background:var(--wash);border-color:var(--line-2)}
+.scheduler .blk-progress{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.scheduler .blk-progress span{color:var(--line-2)}
+.scheduler .blk-sched{background:var(--line)}
+.scheduler .blk-needs{background:var(--gold-wash);border-color:var(--gold)}
+.scheduler .blk-cancelled{background:var(--wash);color:var(--muted);border-style:dashed;text-decoration:line-through}
+.scheduler .blk-over{border:2px solid var(--gold-ink)}
+.scheduler .blk[aria-pressed='true']{outline:3px solid var(--gold-ink);outline-offset:1px}
+.scheduler .blk.locked{cursor:pointer}
+.scheduler .blk .tag{align-self:flex-start;margin-top:4px;padding:2px 8px;border-radius:999px;background:var(--gold-wash);color:var(--gold-ink);border:1px solid var(--gold);font-style:normal;font-size:12px;font-weight:700}
+.scheduler .handle{position:absolute;height:10px;cursor:ns-resize;border-radius:6px;background:var(--line-3);opacity:.8}
+.scheduler .handle:hover{opacity:1;background:var(--ink-2)}
+.scheduler .drop-marker{position:absolute;left:4px;right:4px;pointer-events:none;border:2px dashed var(--gold-ink);border-radius:10px;background:rgba(251,247,236,.7);z-index:1}
+.scheduler .chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.scheduler .chip-done{background:var(--line);color:var(--ink)}
+.scheduler .chip-progress{background:var(--ink);color:var(--surface)}
+.scheduler .chip-sched{background:var(--gold-wash);color:var(--gold-ink)}
+.scheduler .chip-needs{background:var(--gold-wash);color:var(--gold-ink)}
+.scheduler .chip-mute{background:var(--line);color:var(--muted)}
+.scheduler .field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.scheduler .input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.scheduler .check{display:flex;align-items:center;gap:8px;min-height:44px}
+.scheduler .check input{width:20px;height:20px}
+.scheduler .note{margin:0;font-size:14px;color:var(--muted)}
+.scheduler .msg{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.scheduler .msg.error{border-color:var(--gold-ink);background:var(--gold-wash)}
+.scheduler .x{min-width:44px;padding:0 12px}
+.scheduler .panel{position:fixed;top:var(--app-shell-header-offset,0px);right:0;bottom:0;width:340px;max-width:100%;box-sizing:border-box;overflow-y:auto;padding:20px;border-left:2px solid var(--line-2);background:var(--wash);z-index:180}
+.scheduler .dlg{position:fixed;inset:0;z-index:200;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.scheduler .dlg section{display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(480px,100%);max-height:calc(100vh - 32px);overflow-y:auto;box-sizing:border-box}
+.scheduler .dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.scheduler .dlg-head strong{font-size:18px}
+.scheduler .dlg-foot{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.scheduler .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.scheduler .alert{margin:0;color:var(--gold-ink);font-weight:600}
+.scheduler .photo-preview{display:block;width:100%;height:120px;object-fit:cover;border-radius:10px;background:var(--line)}
+@media (max-width:900px){.scheduler .panel{width:100%}}

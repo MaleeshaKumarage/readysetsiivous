@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, setNavOpen } from './admin-helpers';
 import { buildScaleData, installScaleRoutes } from './admin-scale-data';
 
-const NAV_PAGES = ['/admin/', '/admin/shifts/', '/admin/shifts/calendar/', '/admin/work-queue/', '/admin/partner-requests/', '/admin/quality-cycle/', '/admin/leads/', '/admin/companies/', '/admin/agreements/', '/admin/employees/', '/admin/invoices/', '/admin/services/'];
+const NAV_PAGES = ['/admin/', '/admin/shifts/', '/admin/shifts/scheduler/', '/admin/work-queue/', '/admin/partner-requests/', '/admin/quality-cycle/', '/admin/leads/', '/admin/companies/', '/admin/agreements/', '/admin/employees/', '/admin/invoices/', '/admin/services/'];
 
 async function openAdmin(page: Page, path: string) {
   await page.goto(path, { waitUntil: 'commit' }).catch(() => {});
@@ -12,8 +12,8 @@ async function openAdmin(page: Page, path: string) {
 
 test('header names the most specific section and the partner entry matches its page', async ({ page }) => {
   await setupAdminMocks(page); await installScaleRoutes(page, buildScaleData());
-  await openAdmin(page, '/admin/shifts/calendar/');
-  await expect(page.getByText('Shift calendar', { exact: true }).first()).toBeVisible();
+  await openAdmin(page, '/admin/shifts/scheduler/');
+  await expect(page.getByText('Scheduler', { exact: true }).first()).toBeVisible();
   const partnerLink = page.locator('a[aria-label="Partner operations"]').first();
   if (!(await partnerLink.isVisible())) await setNavOpen(page, true);
   await expect(partnerLink).toBeVisible({ timeout: 15000 });

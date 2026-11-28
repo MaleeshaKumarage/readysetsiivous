@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Work orders for the cleaning company, with each work order's visits opening in a side panel.">
+<title>Work orders</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif;--gold-focus:#7d6220;--gold-ink:#7d6220;--gold-wash:#fbf7ec;--ink:#0a1741;--ink-2:#232e54;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--muted:#32406f;--surface:#fdfeff;--wash:#f3f5fa}
+html,body{overflow-x:clip}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+.btn,button{white-space:nowrap}
+button:disabled,[aria-disabled='true']{opacity:.5;cursor:not-allowed}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+a{color:var(--muted)}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.wo-list{container-type:inline-size;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.wo-row{display:grid;grid-template-columns:minmax(0,1fr) auto 64px auto;grid-template-areas:'info tags donut actions';gap:16px;align-items:center;padding:16px}
+.wo-row>:nth-child(1){grid-area:info;min-width:0;overflow-wrap:anywhere}.wo-row>:nth-child(2){grid-area:tags}.wo-row>:nth-child(3){grid-area:donut}.wo-row>:nth-child(4){grid-area:actions}
+.wo-tags{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.wo-head{padding:12px 16px;background:var(--wash);font-size:14px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line);border-radius:16px 16px 0 0}
+.wo-item{border-bottom:1px solid var(--line)}
+.wo-item:last-child{border-bottom:0}
+@container (max-width:560px){.wo-head{display:none}.wo-row{grid-template-columns:auto minmax(0,1fr);grid-template-areas:'info info' 'tags tags' 'donut actions'}.wo-tags{justify-content:flex-start}}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:16px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+.drawer-scrim{position:fixed;inset:0;z-index:40;background:var(--scrim)}
+.visits{container-type:inline-size;position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(560px,100%);box-sizing:border-box;overflow-y:auto;padding:24px 24px 160px;background:var(--surface);box-shadow:var(--shadow-pop);display:flex;flex-direction:column;gap:16px}
+
+.visit{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,1fr) 44px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.visit>*{min-width:0}
+.visit:last-child{border-bottom:0}
+.visit-head{padding:8px 0;font-size:14px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line-2)}
+.donut{position:relative;width:44px;height:44px;border-radius:999px;flex:0 0 44px}
+.donut::after{content:'';position:absolute;inset:8px;border-radius:999px;background:var(--surface)}
+.donut-wrap{position:relative;display:inline-flex;padding:4px;border-radius:999px;cursor:default}
+.tip{display:none;position:absolute;left:60px;top:50%;transform:translateY(-50%);z-index:10;flex-direction:column;gap:4px;padding:8px 12px;border-radius:10px;background:var(--ink);color:var(--surface);font-size:14px;white-space:nowrap;box-shadow:var(--shadow-pop)}
+.donut-wrap:hover .tip,.donut-wrap:focus-visible .tip{display:flex}
+.btn.dots{box-sizing:border-box;width:44px;min-width:44px;height:44px;justify-content:center;font-size:22px;line-height:1;padding:0}
+.tag{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.tag::before{content:'';width:8px;height:8px;border-radius:999px;background:var(--dot,var(--line-3))}
+.tag-scheduled{--dot:var(--line-3)}
+.tag-ongoing{--dot:var(--gold)}
+.tag-completed{--dot:var(--ink)}
+.tag-cancelled{--dot:var(--muted);color:var(--muted)}
+.tag-missing{background:var(--gold-wash);color:var(--gold-ink);--dot:var(--gold)}
+.chip-info{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;background:var(--wash);color:var(--ink-2);border:1px solid var(--line)}
+.pick{display:flex;align-items:center;gap:12px;min-height:44px}
+.pick input{width:20px;height:20px}
+.step{display:flex;align-items:center;gap:8px}
+.step span{min-width:96px;text-align:center;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.field-step{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.chip-over{background:var(--ink);color:var(--surface)}
+.chip-open{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-ok{background:var(--line);color:var(--ink)}
+.chip-done{background:var(--wash);color:var(--muted)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 16px;border:0;border-radius:9px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.menu{position:absolute;right:0;z-index:20;margin-top:8px;min-width:220px;padding:8px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);display:flex;flex-direction:column}
+.menu button{min-height:44px;text-align:left;padding:0 12px;border:0;background:transparent;font:inherit;color:var(--ink);border-radius:8px;cursor:pointer}
+.menu button:hover{background:var(--wash)}
+.menu button:disabled{background:transparent;color:var(--muted)}
+.menu-note{padding:8px 12px 4px;border-top:1px solid var(--line);margin-top:4px;font-size:13px;color:var(--muted);white-space:normal}
+.seg-tight{flex-wrap:nowrap;max-width:100%}
+.seg-tight button{min-height:40px;padding:0 8px;font-size:14px;min-width:0}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+@container (max-width:440px){
+  .visit-head{display:none}
+  .visit{grid-template-columns:minmax(0,1fr) 44px;grid-template-areas:'when menu' 'cleaner menu' 'type menu';row-gap:4px}
+  .visit>:nth-child(1){grid-area:when}.visit>:nth-child(2){grid-area:cleaner}.visit>:nth-child(3){grid-area:type}.visit>:nth-child(4){grid-area:menu;align-self:start}
+}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:24px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html" aria-current="page">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:24px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px">
+      <div>
+        <h1 style="margin:0;font-size:28px;line-height:1.2">Work orders</h1>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:15px">One work order per property. Its visits are the cleanings. {{ shownCount }} shown.</p>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <button type="button" class="btn btn-ghost" onClick="{{ doExport }}">Export</button>
+        <button type="button" class="btn btn-primary" onClick="{{ newOrder }}">New work order</button>
+      </div>
+    </header>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Filter by company<select onChange="{{ onFCompany }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="">All companies</option><option value="Virtanen Oy">Virtanen Oy</option><option value="Hietaniemi office Oy">Hietaniemi office Oy</option><option value="Aurora clinic">Aurora clinic</option><option value="Lindqvist household">Lindqvist household</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Filter by type<select onChange="{{ onFType }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="">All types</option><option value="Daily">Daily</option><option value="Varied times by weekday">Varied times by weekday</option><option value="Specific days">Specific days</option><option value="Bi-weekly">Bi-weekly</option><option value="On-call / flexible">On-call / flexible</option><option value="Monthly">Monthly</option><option value="One-time">One-time</option></select></label>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+      <div class="seg" role="tablist" aria-label="Work order activity">
+      <button type="button" role="tab" aria-selected="{{ tActive }}" aria-pressed="{{ tActive }}" onClick="{{ showActive }}">Active {{ nActive }}</button>
+      <button type="button" role="tab" aria-selected="{{ tInactive }}" aria-pressed="{{ tInactive }}" onClick="{{ showInactive }}">Inactive {{ nInactive }}</button>
+      </div>
+      <input type="search" placeholder="Search property" onChange="{{ onQ }}" aria-label="Search work orders" style="min-height:44px;min-width:240px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)">
+    </div>
+
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}">
+    <div role="status" aria-live="polite" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;width:min(560px,calc(100% - 32px));box-sizing:border-box;padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--ink);color:var(--surface);box-shadow:var(--shadow-pop)">
+      <span>{{ msg }}</span>
+      <sc-if value="{{ canUndo }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ undo }}" style="color:var(--surface);border-color:var(--surface)">Undo</button></sc-if>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ assignOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="Assign cleaner" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(440px,100%)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Assign cleaner</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeAssign }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ assignTitle }}. The cleaner is set on every visit that is not done yet.</p>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Cleaner<select onChange="{{ onAssignCleaner }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end">
+          <button type="button" class="btn btn-ghost" onClick="{{ closeAssign }}">Cancel</button>
+          <button type="button" class="btn btn-primary" onClick="{{ applyAssign }}">OK</button>
+        </div>
+      </section>
+    </div>
+    </sc-if>
+    <sc-if value="{{ newOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="New work order" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(680px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">New work order</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeNew }}" style="min-width:44px">×</button></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Company<select onChange="{{ onCompany }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Virtanen Oy">Virtanen Oy</option><option value="Hietaniemi office Oy">Hietaniemi office Oy</option><option value="Aurora clinic">Aurora clinic</option></select></label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Property<select onChange="{{ onProperty }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Espoo head office|Virtanen Oy">Espoo head office (Virtanen Oy)</option><option value="Helsinki showroom|Virtanen Oy">Helsinki showroom (Virtanen Oy)</option><option value="Tampere warehouse|Virtanen Oy">Tampere warehouse (Virtanen Oy)</option><option value="Hietaniemi office|Hietaniemi office Oy">Hietaniemi office (Hietaniemi office Oy)</option><option value="Aurora clinic, Töölö|Aurora clinic">Aurora clinic, Töölö (Aurora clinic)</option></select></label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Schedule type<select onChange="{{ onType }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Daily">Daily</option><option value="Varied times by weekday">Varied times by weekday</option><option value="Specific days">Specific days</option><option value="Bi-weekly">Bi-weekly</option><option value="On-call / flexible">On-call / flexible</option><option value="Monthly">Monthly</option><option value="One-time">One-time</option></select></label>
+          <sc-if value="{{ showWeekday }}" hint-placeholder-val="{{ false }}"><label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Day of the week<select onChange="{{ onWeekday }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></label></sc-if>
+        </div>
+        <fieldset style="border:1px solid var(--line);border-radius:12px;padding:12px;margin:0">
+          <legend style="font-size:14px;color:var(--muted);padding:0 6px">{{ startLabel }}</legend>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Day<select onChange="{{ onSDay }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Month<select onChange="{{ onSMonth }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Year<select onChange="{{ onSYear }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="2026">2026</option><option value="2027">2027</option></select></label>
+          </div>
+        </fieldset>
+        <sc-if value="{{ showEnd }}" hint-placeholder-val="{{ false }}">
+        <fieldset style="border:1px solid var(--line);border-radius:12px;padding:12px;margin:0">
+          <legend style="font-size:14px;color:var(--muted);padding:0 6px">End date (optional)</legend>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Day<select onChange="{{ onEDay }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="">No end date</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Month<select onChange="{{ onEMonth }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Year<select onChange="{{ onEYear }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="2026">2026</option><option value="2027">2027</option></select></label>
+          </div>
+        </fieldset>
+        </sc-if>
+        <sc-if value="{{ showTimes }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Start time<select onChange="{{ onStartTime }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="00:00">00:00</option><option value="00:30">00:30</option><option value="01:00">01:00</option><option value="01:30">01:30</option><option value="02:00">02:00</option><option value="02:30">02:30</option><option value="03:00">03:00</option><option value="03:30">03:30</option><option value="04:00">04:00</option><option value="04:30">04:30</option><option value="05:00">05:00</option><option value="05:30">05:30</option><option value="06:00">06:00</option><option value="06:30">06:30</option><option value="07:00">07:00</option><option value="07:30">07:30</option><option value="08:00">08:00</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="09:30">09:30</option><option value="10:00">10:00</option><option value="10:30">10:30</option><option value="11:00">11:00</option><option value="11:30">11:30</option><option value="12:00">12:00</option><option value="12:30">12:30</option><option value="13:00">13:00</option><option value="13:30">13:30</option><option value="14:00">14:00</option><option value="14:30">14:30</option><option value="15:00">15:00</option><option value="15:30">15:30</option><option value="16:00">16:00</option><option value="16:30">16:30</option><option value="17:00">17:00</option><option value="17:30">17:30</option><option value="18:00">18:00</option><option value="18:30">18:30</option><option value="19:00">19:00</option><option value="19:30">19:30</option><option value="20:00">20:00</option><option value="20:30">20:30</option><option value="21:00">21:00</option><option value="21:30">21:30</option><option value="22:00">22:00</option><option value="22:30">22:30</option><option value="23:00">23:00</option><option value="23:30">23:30</option></select></label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">End time<select onChange="{{ onEndTime }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="00:00">00:00</option><option value="00:30">00:30</option><option value="01:00">01:00</option><option value="01:30">01:30</option><option value="02:00">02:00</option><option value="02:30">02:30</option><option value="03:00">03:00</option><option value="03:30">03:30</option><option value="04:00">04:00</option><option value="04:30">04:30</option><option value="05:00">05:00</option><option value="05:30">05:30</option><option value="06:00">06:00</option><option value="06:30">06:30</option><option value="07:00">07:00</option><option value="07:30">07:30</option><option value="08:00">08:00</option><option value="08:30">08:30</option><option value="09:00">09:00</option><option value="09:30">09:30</option><option value="10:00">10:00</option><option value="10:30">10:30</option><option value="11:00">11:00</option><option value="11:30">11:30</option><option value="12:00">12:00</option><option value="12:30">12:30</option><option value="13:00">13:00</option><option value="13:30">13:30</option><option value="14:00">14:00</option><option value="14:30">14:30</option><option value="15:00">15:00</option><option value="15:30">15:30</option><option value="16:00">16:00</option><option value="16:30">16:30</option><option value="17:00">17:00</option><option value="17:30">17:30</option><option value="18:00">18:00</option><option value="18:30">18:30</option><option value="19:00">19:00</option><option value="19:30">19:30</option><option value="20:00">20:00</option><option value="20:30">20:30</option><option value="21:00">21:00</option><option value="21:30">21:30</option><option value="22:00">22:00</option><option value="22:30">22:30</option><option value="23:00">23:00</option><option value="23:30">23:30</option></select></label>
+        </div>
+        </sc-if>
+        <fieldset style="border:1px solid var(--line);border-radius:12px;padding:12px;margin:0">
+          <legend style="font-size:14px;color:var(--muted);padding:0 6px">Price</legend>
+          <p style="margin:0 0 10px;font-size:14px;color:var(--ink)">{{ propertyPriceText }}</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+            <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Use<select onChange="{{ onPriceBasis }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Property price">Property price</option><option value="Override">Override for this work order</option></select></label>
+            <sc-if value="{{ showOverride }}" hint-placeholder-val="{{ false }}"><div role="group" aria-label="Override price, excl. VAT" style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)"><span>Override price, excl. VAT</span><div style="display:flex;align-items:center;gap:8px"><button type="button" class="btn btn-ghost" aria-label="Lower price by 1 euro" onClick="{{ priceDown }}" style="min-width:44px">−</button><span aria-live="polite" style="min-width:96px;text-align:center;font-size:18px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums">{{ overrideText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise price by 1 euro" onClick="{{ priceUp }}" style="min-width:44px">+</button></div></div></sc-if>
+            </div>
+        </fieldset>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Cleaner (optional)<select onChange="{{ onCleaner }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Not assigned">Not assigned</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Quality cycle<select onChange="{{ onQc }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="None">None</option><option value="Standard office check">Standard office check</option><option value="Home check">Home check</option></select></label>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)">Notes (optional)<input type="text" maxlength="500" onChange="{{ onNotes }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"></label>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ createNote }}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end">
+          <button type="button" class="btn btn-ghost" onClick="{{ closeNew }}">Cancel</button>
+          <button type="button" class="btn btn-primary" onClick="{{ createOrder }}">Create work order</button>
+        </div>
+      </section>
+    </div>
+    </sc-if>
+
+    <div class="wo-list">
+      <div class="wo-row wo-head" aria-hidden="true"><span>Property</span><span>Visits</span><span></span></div>
+      <ul style="list-style:none;margin:0;padding:0" aria-label="Work orders">
+        <sc-for list="{{ rows }}" as="item" hint-placeholder-count="4">
+        <li class="wo-item">
+        <div class="wo-row">
+          <div><strong>{{ item.name }}</strong><div style="font-size:13px;color:var(--ink-2)">{{ item.size }}</div><div style="font-size:14px;color:var(--muted)">{{ item.company }}</div><div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ item.chips }}" as="sc" hint-placeholder-count="4"><span class="chip-info">{{ sc.text }}</span></sc-for></div><div style="font-size:13px;color:var(--muted)">{{ item.qcText }}</div></div>
+          <div class="wo-tags"><sc-if value="{{ item.missingCleaner }}" hint-placeholder-val="{{ false }}"><span class="tag tag-missing">Missing cleaner</span></sc-if><sc-if value="{{ item.missingQc }}" hint-placeholder-val="{{ false }}"><span class="tag tag-missing">Missing Quality Cycle</span></sc-if><sc-if value="{{ item.missingPrice }}" hint-placeholder-val="{{ false }}"><span class="tag tag-missing">Missing price</span></sc-if></div>
+          <div><div class="donut-wrap" tabindex="0" role="img" aria-label="{{ item.progressLabel }}"><div class="donut" style="{{ item.donutStyle }}"></div><div class="tip" aria-hidden="true"><strong style="font-variant-numeric:tabular-nums">{{ item.progress }}</strong><span>{{ item.progressSub }}</span></div></div></div>
+          <div><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end"><button type="button" class="btn btn-ghost" aria-expanded="{{ item.isOpen }}" onClick="{{ item.toggle }}">{{ item.toggleText }}</button><details style="position:relative"><summary class="btn btn-ghost dots" style="list-style:none;display:inline-flex;align-items:center" aria-label="Actions for {{ item.name }}" title="Actions">⋯</summary><div role="menu" class="menu"><button role="menuitem" type="button" onClick="{{ item.openDetails }}">View details</button><button role="menuitem" type="button" onClick="{{ item.openPricing }}">Pricing</button><button role="menuitem" type="button" onClick="{{ item.editSchedule }}">Edit schedule</button><sc-if value="{{ item.active }}" hint-placeholder-val="{{ true }}"><button role="menuitem" type="button" onClick="{{ item.openAssign }}">Assign employees</button><button role="menuitem" type="button" onClick="{{ item.toggle }}">Visits</button><button role="menuitem" type="button" onClick="{{ item.addVisit }}">Add visit</button><button role="menuitem" type="button" onClick="{{ item.openTemplate }}">Checklist template</button><button role="menuitem" type="button" onClick="{{ item.askDeactivate }}">Deactivate</button></sc-if><sc-if value="{{ item.inactive }}" hint-placeholder-val="{{ false }}"><button role="menuitem" type="button" onClick="{{ item.askReactivate }}">Reactivate</button><button role="menuitem" type="button" onClick="{{ item.askDelete }}">Delete</button></sc-if></div></details></div></div>
+        </div>
+        <sc-if value="{{ item.isOpen }}" hint-placeholder-val="{{ false }}">
+
+
+            <div class="drawer-scrim" onClick="{{ item.toggle }}"></div>
+            <section class="visits" role="dialog" aria-modal="true" aria-label="Visits of {{ item.name }}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                <div><h2 style="margin:0;font-size:22px;line-height:1.3">{{ item.name }}</h2><div style="font-size:14px;color:var(--muted)">{{ item.company }}</div><div style="font-size:14px;color:var(--muted)">{{ item.schedule }}</div></div>
+                <div style="display:flex;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ item.addVisit }}">Add visit</button><button type="button" class="btn btn-ghost dots" aria-label="Close visits" onClick="{{ item.toggle }}">×</button></div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+                <strong>{{ item.monthTitle }}</strong>
+                <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)" aria-label="Month"><select onChange="{{ item.onVMonth }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="2026-11">November 2026</option><option value="2026-12">December 2026</option><option value="2027-01">January 2027</option></select></label>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+                <div class="seg seg-tight" role="group" aria-label="Show visits"><sc-for list="{{ item.vFilters }}" as="vf" hint-placeholder-count="5"><button type="button" aria-pressed="{{ vf.on }}" onClick="{{ vf.go }}">{{ vf.label }}</button></sc-for></div>
+              </div>
+              <sc-if value="{{ item.noVisitsShown }}" hint-placeholder-val="{{ false }}"><p style="margin:0;color:var(--muted)">No visits match. Pick another month or status, or add a visit.</p></sc-if>
+              <div role="table" aria-label="Visits of {{ item.name }}">
+              <div class="visit visit-head" role="row"><span role="columnheader">Date and time</span><span role="columnheader">Cleaner</span><span role="columnheader">Type</span><span role="columnheader"><span style="position:absolute;width:1px;height:1px;overflow:hidden">Actions</span></span></div>
+              <sc-for list="{{ item.visitRows }}" as="v" hint-placeholder-count="2">
+              <div class="visit" role="row">
+                <span role="cell" style="font-variant-numeric:tabular-nums;display:flex;flex-direction:column;gap:2px"><strong>{{ v.whenDate }}</strong><span style="color:var(--muted)">{{ v.whenTime }}</span></span>
+                <span role="cell" style="{{ v.cleanerStyle }}">{{ v.cleaner }}</span>
+                <span role="cell" style="font-size:14px;color:var(--muted)">{{ v.typeText }}</span>
+                <details role="cell" style="position:relative"><summary class="btn btn-ghost dots" style="list-style:none;display:inline-flex;align-items:center" aria-label="Actions for visit {{ v.n }}" title="Actions">⋯</summary><div role="menu" class="menu"><button role="menuitem" type="button" disabled="{{ v.noAssign }}" onClick="{{ v.changeEmp }}">Assign employees</button><button role="menuitem" type="button" disabled="{{ v.noTime }}" onClick="{{ v.changeTime }}">Change time</button><button role="menuitem" type="button" onClick="{{ v.cleaning }}">Change cleaning type</button><button role="menuitem" type="button" onClick="{{ v.pricing }}">Visit price</button><button role="menuitem" type="button" disabled="{{ v.noCancel }}" onClick="{{ v.cancelOrRestore }}">{{ v.cancelLabel }}</button><sc-if value="{{ v.hasMenuNote }}" hint-placeholder-val="{{ false }}"><span class="menu-note">{{ v.menuNote }}</span></sc-if></div></details>
+              </div>
+              </sc-for>
+              </div>
+              <sc-if value="{{ item.isAdding }}" hint-placeholder-val="{{ false }}">
+              <div role="dialog" aria-modal="true" aria-label="Add visit to {{ item.name }}" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+                <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(560px,100%);max-height:90%;overflow:auto">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Add visit to {{ item.name }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ item.cancelVisit }}" style="min-width:44px">×</button></div>
+                  <span style="font-size:14px;color:var(--muted)">Visit date and start time: {{ item.whenText }}</span>
+                <div role="group" aria-label="Start and end" style="display:flex;flex-wrap:wrap;gap:12px">
+                  <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 10px;margin:0;flex:1 1 300px;min-width:0"><legend style="font-size:13px;color:var(--muted);padding:0 4px">Start</legend>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px">
+                      <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:64px">Day<select value="{{ item.sD }}" onChange="{{ item.sDChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:80px">Month<select value="{{ item.sM }}" onChange="{{ item.sMChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:74px">Year<select value="{{ item.sY }}" onChange="{{ item.sYChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="2026">2026</option><option value="2027">2027</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:64px">Hour<select value="{{ item.sH }}" onChange="{{ item.sHChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:70px">Minute<select value="{{ item.sMi }}" onChange="{{ item.sMiChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option></select></label>
+                    </div>
+                  </fieldset>
+                  <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 10px;margin:0;flex:1 1 300px;min-width:0"><legend style="font-size:13px;color:var(--muted);padding:0 4px">End</legend>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px">
+                      <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:64px">Day<select value="{{ item.eD }}" onChange="{{ item.eDChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:80px">Month<select value="{{ item.eM }}" onChange="{{ item.eMChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:74px">Year<select value="{{ item.eY }}" onChange="{{ item.eYChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="2026">2026</option><option value="2027">2027</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:64px">Hour<select value="{{ item.eH }}" onChange="{{ item.eHChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option></select></label> <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);min-width:0;width:70px">Minute<select value="{{ item.eMi }}" onChange="{{ item.eMiChange }}" style="min-height:40px;padding:0 6px;border:1px solid var(--line-3);border-radius:10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0"><option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option></select></label>
+                    </div>
+                  </fieldset>
+                </div>
+                  <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 12px;margin:0;display:flex;flex-direction:column"><legend style="font-size:14px;color:var(--muted);padding:0 4px">Employees</legend>
+                    <label class="field-step" style="font-size:14px;color:var(--muted)" aria-label="Employee"><select value="{{ item.nvEmpValue }}" onChange="{{ item.onNewEmp }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)"><option value="Not assigned">Not assigned</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option><option value="Jari K.">Jari K.</option></select></label>
+                  </fieldset>
+                  <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:12px;margin:0;display:flex;flex-direction:column;gap:8px"><legend style="font-size:14px;color:var(--muted);padding:0 4px">Price, excl. VAT</legend>
+                    <span style="font-size:14px;color:var(--muted)">From the work order: {{ item.defaultPrice }}. {{ item.priceNote }}</span>
+                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px"><div class="step"><button type="button" class="btn btn-ghost" aria-label="Lower price by 1 euro" onClick="{{ item.nvPriceDown }}" style="min-width:44px">−</button><span aria-live="polite">{{ item.nvPrice }}</span><button type="button" class="btn btn-ghost" aria-label="Raise price by 1 euro" onClick="{{ item.nvPriceUp }}" style="min-width:44px">+</button></div><sc-if value="{{ item.priceChanged }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ item.nvPriceReset }}">Use work order price</button></sc-if></div>
+                  </fieldset>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end">
+                    <button type="button" class="btn btn-ghost" onClick="{{ item.cancelVisit }}">Cancel visit</button>
+                    <button type="button" class="btn btn-primary" onClick="{{ item.saveVisit }}">Save visit</button>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+            </section>
+
+
+        </sc-if>
+        </li>
+        </sc-for>
+      </ul>
+
+    </div>
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:0;color:var(--muted)">No work orders match this view.</p></sc-if>
+    <sc-if value="{{ detailsOpen }}" hint-placeholder-val="{{ false }}">
+    <aside aria-label="Work order details" style="position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100%;box-sizing:border-box;overflow-y:auto;padding:20px;background:var(--surface);border-left:2px solid var(--line-2);z-index:45;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px"><div><h2 style="margin:0;font-size:18px">{{ d.name }}</h2><p style="margin:8px 0 0"><span class="{{ d.chip }}">{{ d.status }}</span></p><p style="margin:4px 0 0;font-size:14px;color:var(--muted)">{{ d.company }}</p></div><button type="button" class="btn btn-ghost" aria-label="Close details" onClick="{{ closeDetails }}" style="min-width:44px">×</button></div>
+      <dl style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;margin:0">
+        <dt style="color:var(--muted)">Schedule</dt><dd style="margin:0">{{ d.schedule }}</dd>
+        <dt style="color:var(--muted)">Property</dt><dd style="margin:0">{{ d.size }}</dd>
+        <dt style="color:var(--muted)">Employees</dt><dd style="margin:0">{{ d.employees }}</dd>
+        <dt style="color:var(--muted)">Checklist</dt><dd style="margin:0">{{ d.template }}</dd>
+        <dt style="color:var(--muted)">Visits</dt><dd style="margin:0">{{ d.visits }}</dd>
+      </dl>
+      <p style="margin:0;padding:12px;border:1px solid var(--gold);border-radius:12px;background:var(--gold-wash);font-size:14px;color:var(--gold-ink)">Next step: {{ d.next }}</p>
+      <p style="margin:0;font-size:13px;color:var(--muted)">To change this work order, use the ⋯ menu on its row.</p>
+    </aside>
+    </sc-if>
+<sc-if value="{{ pricingOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="Pricing" style="position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Pricing</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ dlgTitle }}. {{ priceNote }}</p>
+        <sc-if value="{{ priceWO }}" hint-placeholder-val="{{ true }}"><label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Pricing basis<select onChange="{{ onPBasis }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Property price">Property price</option><option value="Monthly">Fixed monthly fee</option><option value="PerVisit">Price per completed visit</option></select></label></sc-if>
+        <div role="group" aria-label="Net rate" style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)"><span>Net rate, excl. VAT</span><div style="display:flex;align-items:center;gap:8px"><button type="button" class="btn btn-ghost" aria-label="Lower by 1 euro" onClick="{{ pDown }}" style="min-width:44px">−</button><span style="min-width:96px;text-align:center;font-size:18px;font-weight:600;color:var(--ink)">{{ pRate }}</span><button type="button" class="btn btn-ghost" aria-label="Raise by 1 euro" onClick="{{ pUp }}" style="min-width:44px">+</button></div></div>
+        <sc-if value="{{ priceWO }}" hint-placeholder-val="{{ true }}"><label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Effective from<select onChange="{{ onPFrom }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="1 Dec 2026">1 Dec 2026</option><option value="1 Jan 2027">1 Jan 2027</option><option value="1 Feb 2027">1 Feb 2027</option></select></label></sc-if>
+        <sc-if value="{{ priceWO }}" hint-placeholder-val="{{ true }}"><p style="margin:0;font-size:13px;color:var(--muted)">Price history for this property: from 1 Mar 2026, 39 € per visit; from 1 Sep 2026, 42 € per visit.</p></sc-if>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ savePricing }}">Save price</button></div>
+      </section>
+    </div>
+    </sc-if>
+<sc-if value="{{ templateOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="Checklist template" style="position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Checklist template</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ dlgTitle }}</p>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Checklist template<select onChange="{{ onTmpl }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="None">None</option><option value="Home check">Home check</option><option value="Standard office check">Standard office check</option><option value="Move-out check">Move-out check</option></select></label>
+        <p style="margin:0;font-size:13px;color:var(--muted)">Applies to upcoming visits and the current visit if it has no checklist yet. Started and submitted checklists keep their items.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveTemplate }}">Save template</button></div>
+      </section>
+    </div>
+    </sc-if>
+<sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="{{ confirmTitle }}" style="position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(420px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">{{ confirmTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--ink)">{{ confirmBody }}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ doConfirm }}">{{ confirmLabel }}</button></div>
+      </section>
+    </div>
+    </sc-if>
+<sc-if value="{{ empOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="Assign employees" style="position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Assign employees</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ dlgTitle }}. Only this visit changes. New employees get an offer and hold the visit once accepted; anyone you untick is released.</p>
+        <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 12px;margin:0;display:flex;flex-direction:column"><legend style="font-size:14px;color:var(--muted);padding:0 4px">Employees on this visit</legend><sc-for list="{{ empChoices }}" as="ec" hint-placeholder-count="4"><label class="pick"><input type="checkbox" checked="{{ ec.on }}" onChange="{{ ec.toggle }}">{{ ec.name }}<span style="font-size:13px;color:var(--muted)">{{ ec.note }}</span></label></sc-for></fieldset>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ empSummary }}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveEmp }}">Save employees</button></div>
+      </section>
+    </div>
+    </sc-if>
+<sc-if value="{{ typeOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="Cleaning type" style="position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Cleaning type</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ dlgTitle }}. Every visit starts as Normal. You can change it at any time, including after the cleaning is done.</p>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Cleaning type<select onChange="{{ onVType }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="Normal">Normal</option><option value="Deep">Deep (adds 15.00 € excl. VAT)</option></select></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveType }}">Save cleaning type</button></div>
+      </section>
+    </div>
+    </sc-if>
+<sc-if value="{{ timeOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="Change visit" style="position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Change visit</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ dlgTitle }}. Times use Europe/Helsinki. Changes apply only to this visit.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Start<select onChange="{{ onVStart }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="06:00">06:00</option><option value="06:15">06:15</option><option value="06:30">06:30</option><option value="06:45">06:45</option><option value="07:00">07:00</option><option value="07:15">07:15</option><option value="07:30">07:30</option><option value="07:45">07:45</option><option value="08:00">08:00</option><option value="08:15">08:15</option><option value="08:30">08:30</option><option value="08:45">08:45</option><option value="09:00">09:00</option><option value="09:15">09:15</option><option value="09:30">09:30</option><option value="09:45">09:45</option><option value="10:00">10:00</option><option value="10:15">10:15</option><option value="10:30">10:30</option><option value="10:45">10:45</option><option value="11:00">11:00</option><option value="11:15">11:15</option><option value="11:30">11:30</option><option value="11:45">11:45</option><option value="12:00">12:00</option><option value="12:15">12:15</option><option value="12:30">12:30</option><option value="12:45">12:45</option><option value="13:00">13:00</option><option value="13:15">13:15</option><option value="13:30">13:30</option><option value="13:45">13:45</option><option value="14:00">14:00</option><option value="14:15">14:15</option><option value="14:30">14:30</option><option value="14:45">14:45</option><option value="15:00">15:00</option><option value="15:15">15:15</option><option value="15:30">15:30</option><option value="15:45">15:45</option><option value="16:00">16:00</option><option value="16:15">16:15</option><option value="16:30">16:30</option><option value="16:45">16:45</option><option value="17:00">17:00</option><option value="17:15">17:15</option><option value="17:30">17:30</option><option value="17:45">17:45</option><option value="18:00">18:00</option><option value="18:15">18:15</option><option value="18:30">18:30</option><option value="18:45">18:45</option><option value="19:00">19:00</option><option value="19:15">19:15</option><option value="19:30">19:30</option><option value="19:45">19:45</option><option value="20:00">20:00</option><option value="20:15">20:15</option><option value="20:30">20:30</option><option value="20:45">20:45</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Length<select onChange="{{ onVLen }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="60">1 h</option><option value="90">1 h 30 min</option><option value="120">2 h</option><option value="180">3 h</option><option value="240">4 h</option></select></label>
+        </div>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Reason<input type="text" maxlength="500" onChange="{{ onVReason }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"></label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Notes for the employee (optional)<input type="text" maxlength="4000" onChange="{{ onVNotes }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveTime }}">Save visit</button></div>
+      </section>
+    </div>
+    </sc-if>
+<sc-if value="{{ cancelOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="Cancel visit" style="position:fixed;inset:0;z-index:55;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+      <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(460px,100%);max-height:92%;overflow:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Cancel visit</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDlg }}" style="min-width:44px">×</button></div>
+        <p style="margin:0;font-size:14px;color:var(--muted)">{{ dlgTitle }}. The visit leaves the employee’s schedule and is not invoiced. It stays in the list so you can restore it.</p>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Cancelled by<select onChange="{{ onVBy }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"><option value="company">Company cancelled</option><option value="customer">Customer cancelled</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Reason<input type="text" maxlength="500" onChange="{{ onVReason }}" style="min-height:44px;padding:0 10px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink)"></label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" class="btn btn-ghost" onClick="{{ closeDlg }}">Keep visit</button><button type="button" class="btn btn-primary" onClick="{{ saveCancel }}">Cancel visit</button></div>
+      </section>
+    </div>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const SEED = [
+  { id: 'o1', endTime: '11:00', price: 42, name: 'Kallio, Lindqvist flat', company: 'Lindqvist household', type: 'Daily', size: '68 m² · 3 rooms · 2 beds', active: true, template: 'Home check', employees: 'Anna K.', schedule: 'Daily, 08:00 to 11:00, from 24 Nov 2026, no end date. Price: property price.', visits: [
+    { n: 1, when: '24 Nov, 08:00', cleaner: 'Anna K.', status: 'completed', kind: 'Normal' },
+    { n: 2, when: '26 Nov, 08:00', cleaner: 'Anna K.', status: 'completed', kind: 'Deep' },
+    { n: 3, when: '28 Nov, 08:00', cleaner: 'Anna K.', status: 'completed', kind: 'Normal' },
+    { n: 4, when: '1 Dec, 08:00', cleaner: 'Anna K.', status: 'scheduled', kind: 'Normal' },
+  ] },
+  { id: 'o2', endTime: '17:00', price: 49, name: 'Töölö, move-out', company: 'Aurora clinic', type: 'On-call / flexible', size: '54 m² · 2 rooms', active: true, template: 'None', employees: 'None', schedule: 'On-call / flexible, visits added by hand. Price: 49 € per completed visit.', visits: [
+    { n: 1, when: 'Today, 13:00', cleaner: 'Not assigned', status: 'scheduled', kind: 'Deep' },
+  ] },
+  { id: 'o3', endTime: '14:00', price: 60, name: 'Hietaniemi office', company: 'Hietaniemi office Oy', type: 'Specific days', size: '240 m² · 9 rooms', active: true, template: 'Standard office check', employees: 'Ville R.', schedule: 'Specific days: Tue, Thu, 10:00 to 14:00, from 1 Sep 2026. Price: fixed monthly fee.', visits: [
+    { n: 1, when: 'Today, 10:00', cleaner: 'Ville R.', status: 'ongoing', kind: 'Normal' },
+    { n: 2, when: 'Tue 1 Dec, 10:00', cleaner: 'Ville R.', status: 'scheduled', kind: 'Normal' },
+    { n: 3, when: 'Thu 3 Dec, 10:00', cleaner: 'Ville R.', status: 'cancelled', kind: 'Normal' },
+  ] },
+  { id: 'o4', endTime: '13:00', price: 39, name: 'Espoo, weekly clean', company: 'Virtanen Oy', type: 'Bi-weekly', size: '120 m² · 5 rooms', active: true, template: 'None', employees: 'Minna S.', schedule: 'Bi-weekly, Week 1, Wednesday, 09:00 to 13:00, from 2 Sep 2026. Price: property price.', visits: [
+    { n: 1, when: '3 Dec, 09:00', cleaner: 'Minna S.', status: 'scheduled', kind: 'Normal' },
+    { n: 2, when: '17 Dec, 09:00', cleaner: 'Minna S.', status: 'scheduled', kind: 'Normal' },
+  ] },
+  { id: 'o5', endTime: '12:00', price: 55, name: 'Tampere warehouse', company: 'Virtanen Oy', type: 'Monthly', size: '600 m²', active: false, template: 'None', employees: 'None', schedule: 'Monthly, day 9, 07:00 to 12:00. Deactivated 1 Nov 2026.', visits: [] },
+  { id: 'o6', endTime: '12:00', price: 45, name: 'Helsinki showroom', company: 'Virtanen Oy', type: 'One-time', size: '180 m² · 4 rooms', active: true, template: 'None', employees: 'Anna K.', schedule: 'One-time on 20 Nov 2026, 08:00 to 12:00.', visits: [
+    { n: 1, when: '20 Nov, 08:00', cleaner: 'Anna K.', status: 'completed', kind: 'Deep' },
+  ] },
+];
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const STAFF = ['Anna K.', 'Ville R.', 'Minna S.', 'Jari K.'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function formatWhen(d, t) { const p = d.split('-').map(Number); return p[2] + ' ' + MONTHS[p[1] - 1] + ', ' + t; }
+const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1));
+const YEARS = ['2026', '2027'];
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = ['00', '15', '30', '45'];
+function pick(list, current) { return list.map(v => ({ v: v, t: v, sel: v === current })); }
+function toIso(y, m, d) { return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
+const WO_DEFAULT = { company: 'Virtanen Oy', property: 'Espoo head office|Virtanen Oy', type: 'Daily', weekday: '1', sDay: '1', sMonth: '12', sYear: '2026', eDay: '', eMonth: '12', eYear: '2026', startTime: '08:00', endTime: '11:00', priceBasis: 'Property price', override: '45', vat: '25.5', qc: 'None', cleaner: 'Not assigned', notes: '' };
+const MAX_VISITS = 28;
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const PROPERTY_PRICE = { 'Espoo head office': 39, 'Helsinki showroom': 45, 'Tampere warehouse': 55, 'Hietaniemi office': 60, 'Aurora clinic, Töölö': 49 };
+const PROPERTIES = ['Kallio, Lindqvist flat', 'Töölö, move-out', 'Hietaniemi office', 'Espoo, weekly clean', 'Virtanen Oy, Espoo', 'Aurora clinic, Töölö'];
+// A visit is Scheduled, Ongoing, Completed or Cancelled. "No cleaner yet" is shown in the cleaner column, not as a status.
+const VLABEL = { scheduled: 'Scheduled', ongoing: 'Ongoing', completed: 'Completed', cancelled: 'Cancelled' };
+const VCHIP = { scheduled: 'tag tag-scheduled', ongoing: 'tag tag-ongoing', completed: 'tag tag-completed', cancelled: 'tag tag-cancelled' };
+
+class Component extends DCLogic {
+  orders() { return (this.state && this.state.orders) || SEED; }
+  open() { return (this.state && this.state.open) || {}; }
+  save(orders, msg) { this.setState({ orders: orders, prev: this.orders(), msg: msg }); }
+  addVisit(oid) {
+    const o = this.orders().find(x => x.id === oid);
+    const n = o.visits.length + 1;
+    const orders = this.orders().map(x => (x.id !== oid ? x : { ...x, visits: x.visits.concat([{ n: n, when: 'Date to be set', cleaner: 'Not assigned', status: 'scheduled' }]) }));
+    this.save(orders, 'Visit ' + n + ' added to ' + o.name + '.');
+  }
+  partsOf(iso, time) { const [y, m, d] = iso.split('-'); const [h, mi] = time.split(':'); return { D: String(Number(d)), M: String(Number(m)), Y: y, H: h, Mi: mi }; }
+  endIso(st) { return st.newEndDate || this.whenIso(st); }
+  pickerVals(o, st) {
+    const s = this.partsOf(this.whenIso(st), this.whenTime(st));
+    const e = this.partsOf(this.endIso(st), this.endTime(o, st));
+    const out = {};
+    ['D', 'M', 'Y', 'H', 'Mi'].forEach(k => { out['s' + k] = s[k]; out['e' + k] = e[k]; });
+    return out;
+  }
+  setPicker(o, pre, key, value) {
+    const st = this.state || {};
+    const cur = pre === 's' ? this.partsOf(this.whenIso(st), this.whenTime(st)) : this.partsOf(this.endIso(st), this.endTime(o, st));
+    const p = { ...cur, [key]: value };
+    const iso = p.Y + '-' + String(Number(p.M)).padStart(2, '0') + '-' + String(Number(p.D)).padStart(2, '0');
+    const time = String(p.H).padStart(2, '0') + ':' + String(p.Mi).padStart(2, '0');
+    if (pre === 's') this.setState({ newDate: iso, newTime: time, msg: '' });
+    else this.setState({ newEndDate: iso, newEnd: time, msg: '' });
+  }
+  whenIso(st) { return st.newDate || '2026-11-27'; }
+  whenTime(st) { return st.newTime || '08:00'; }
+  endTime(o, st) { return st.newEnd || o.endTime || '11:00'; }
+  setWhen(patch) {
+    const st = this.state || {};
+    const next = { ...patch };
+    const day = next.dDay || st.dDay || '1', mon = next.dMonth || st.dMonth || '1', yr = next.dYear || st.dYear || YEARS[0];
+    const hr = next.dHour || st.dHour || '08', mi = next.dMin || st.dMin || '00';
+    this.setState({ ...next, newDate: toIso(yr, mon, day), newTime: hr + ':' + mi, msg: '' });
+  }
+  applyWhen() {
+    const st = this.state || {};
+    const day = st.dDay || '1', mon = st.dMonth || '1', yr = st.dYear || YEARS[0], hr = st.dHour || '08', mi = st.dMin || '00';
+    const iso = toIso(yr, mon, day);
+    this.setState({ newDate: iso, newTime: hr + ':' + mi, panelOpen: false, dDay: day, dMonth: mon, dYear: yr, dHour: hr, dMin: mi, msg: 'Date and time set to ' + formatWhen(iso, hr + ':' + mi) + '. Save the visit to add it.' });
+  }
+  saveVisit(oid) {
+    const st = this.state || {};
+    const o = this.orders().find(x => x.id === oid);
+    const dIso = this.whenIso(st), dTime = this.whenTime(st);
+    const when = formatWhen(dIso, dTime);
+    const n = o.visits.length + 1;
+    const emps = this.nvEmps(o);
+    const price = this.nvPrice(o);
+    const cleaner = emps.length ? emps.join(', ') : 'Not assigned';
+    const endT = o.type === 'One-time' || o.type === 'On-call / flexible' ? null : (this.endIso(st) !== dIso ? formatWhen(this.endIso(st), this.endTime(o, st)) : this.endTime(o, st));
+    const orders = this.orders().map(x => (x.id !== oid ? x : { ...x, visits: x.visits.concat([{ n: n, when: when, cleaner: cleaner, status: 'scheduled', price: price, end: endT }]) }));
+    this.setState({ orders: orders, prev: this.orders(), adding: null, newDate: '', newTime: '', nvEmps: null, nvPrice: null, msg: 'Visit ' + n + ' added to ' + o.name + ' on ' + when + ', ' + cleaner + ', ' + price + ' € excl. VAT' + (price !== (o.price || 45) ? ' (own price)' : '') + '.' });
+  }
+  nvEmps(o) { const st = this.state || {}; return st.nvEmps || (o.employees && o.employees !== 'None' ? o.employees.split(', ') : []); }
+  nvPrice(o) { const st = this.state || {}; return st.nvPrice == null ? (o.price || 45) : st.nvPrice; }
+  toggle(oid) { const op = this.open(); this.setState({ open: op[oid] ? {} : { [oid]: true }, vDay: null, vFilter: 'all' }); }
+  undo() { if (this.state && this.state.prev) this.setState({ orders: this.state.prev, prev: null, msg: 'Change undone.' }); }
+  woState() { return { ...WO_DEFAULT, ...((this.state && this.state.wo) || {}) }; }
+  setWo(patch) { this.setState({ wo: { ...this.woState(), ...patch } }); }
+  propertyName(w) { return w.property.split('|')[0]; }
+  propertyPrice(w) { return PROPERTY_PRICE[this.propertyName(w)] || 45; }
+  visitDates(w) {
+    const start = new Date(Number(w.sYear), Number(w.sMonth) - 1, Number(w.sDay));
+    const hasEnd = w.eDay !== '';
+    const end = hasEnd ? new Date(Number(w.eYear), Number(w.eMonth) - 1, Number(w.eDay)) : new Date(start.getTime() + 27 * 86400000);
+    const out = [];
+    const day = Number(w.weekday);
+    if (w.type === 'Monthly') {
+      for (let k = 0; k < 3 && out.length < MAX_VISITS; k++) {
+        const d = new Date(start.getFullYear(), start.getMonth() + k, start.getDate());
+        if (d >= start && (!hasEnd || d <= end)) out.push(d);
+      }
+      return out;
+    }
+    for (let d = new Date(start); d <= end && out.length < MAX_VISITS; d = new Date(d.getTime() + 86400000)) {
+      if (w.type === 'Daily') out.push(new Date(d));
+      else if (w.type === 'Varied times by weekday' || w.type === 'Specific days') { if (d.getDay() === day) out.push(new Date(d)); }
+      else if (w.type === 'Bi-weekly') { if (d.getDay() === day && Math.round((d - start) / 86400000 / 7) % 2 === 0) out.push(new Date(d)); }
+    }
+    return out;
+  }
+  createOrder() {
+    const w = this.woState();
+    const fmt = (d, m, y) => Number(d) + ' ' + MONTHS[Number(m) - 1] + ' ' + y;
+    const startIso = w.sYear + '-' + String(w.sMonth).padStart(2, '0') + '-' + String(w.sDay).padStart(2, '0');
+    const hasEnd = w.eDay !== '' && w.type !== 'One-time' && w.type !== 'On-call / flexible';
+    const endIso = hasEnd ? w.eYear + '-' + String(w.eMonth).padStart(2, '0') + '-' + String(w.eDay).padStart(2, '0') : '';
+    if (hasEnd && endIso < startIso) { this.setState({ msg: 'The end date must be on or after the start date.' }); return; }
+    const timed = w.type !== 'On-call / flexible' && w.type !== 'One-time';
+    if (timed && w.endTime <= w.startTime) { this.setState({ msg: 'The end time must be after the start time.' }); return; }
+    const priceOverride = w.priceBasis === 'Override';
+    const price = priceOverride ? w.override + ' € excl. VAT (override)' : this.propertyPrice(w) + ' € excl. VAT (property price)';
+    const when = w.type === 'On-call / flexible' ? 'On-call / flexible, no set visits'
+      : w.type === 'One-time' ? 'One-time on ' + fmt(w.sDay, w.sMonth, w.sYear)
+      : w.type + ', ' + w.startTime + ' to ' + w.endTime + ', from ' + fmt(w.sDay, w.sMonth, w.sYear) + (hasEnd ? ' until ' + fmt(w.eDay, w.eMonth, w.eYear) : ', no end date');
+    const visits = (w.type === 'On-call / flexible' || w.type === 'One-time') ? [] : this.visitDates(w).map((d, i) => ({
+      n: i + 1,
+      when: WEEKDAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + (timed ? ', ' + w.startTime : ''),
+      cleaner: w.cleaner,
+      end: timed ? w.endTime : null,
+      status: 'scheduled',
+    }));
+    const orders = this.orders();
+    const id = 'o' + (orders.length + 1) + '-' + Date.now();
+    const name = this.propertyName(w);
+    this.setState({
+      orders: orders.concat([{ id: id, name: name, company: w.company, qc: w.qc, endTime: timed ? w.endTime : null, schedule: when + '. Price: ' + price + '.', visits: visits }]),
+      prev: orders, newOpen: false, wo: null,
+      msg: 'Work order created for ' + w.company + ', ' + name + ' with ' + visits.length + ' visit' + (visits.length === 1 ? '' : 's') + '.' + (visits.length === MAX_VISITS ? ' The schedule continues after the first ' + MAX_VISITS + ' visits.' : ''),
+    });
+  }
+  applyAssign() {
+    const st = this.state || {};
+    const oid = st.assignFor;
+    const cleaner = st.assignCleaner || 'Anna K.';
+    const o = this.orders().find(x => x.id === oid);
+    if (!o) { this.setState({ assignFor: null }); return; }
+    const count = o.visits.filter(v => v.status === 'scheduled').length;
+    const orders = this.orders().map(x => (x.id !== oid ? x : { ...x, visits: x.visits.map(v => (v.status === 'scheduled' ? { ...v, cleaner: cleaner } : v)) }));
+    this.setState({ orders: orders, prev: this.orders(), assignFor: null, msg: cleaner + ' assigned to ' + count + ' visit' + (count === 1 ? '' : 's') + ' of ' + o.name + '.' });
+  }
+  endDateOf(o) {
+    const m = /(?:until|One-time on) (\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4})/.exec(o.schedule || '');
+    return m ? Date.UTC(Number(m[3]), MONTHS.indexOf(m[2]), Number(m[1])) : null;
+  }
+  // Active: switched on and still inside its period. Inactive: switched off, or its end date has passed (today is 26 Nov 2026).
+  view(o) {
+    if (o.active === false) return 'inactive';
+    const end = this.endDateOf(o);
+    return end !== null && end < Date.UTC(2026, 10, 26) ? 'inactive' : 'active';
+  }
+  dlg(kind, oid, n) { this.setState({ dlg: { kind: kind, oid: oid, n: n || null }, dv: {}, msg: '' }); }
+  dv() { return (this.state && this.state.dv) || {}; }
+  empPick(o, n) { const dv = this.dv(); if (dv.emps) return dv.emps; const v = o.visits.find(x => x.n === n); return v && v.cleaner !== 'Not assigned' ? v.cleaner.split(', ') : []; }
+  setDv(patch) { this.setState({ dv: { ...this.dv(), ...patch } }); }
+  patchOrder(oid, patch, msg) { const prev = this.orders(); this.setState({ orders: prev.map(o => (o.id === oid ? { ...o, ...patch } : o)), prev: prev, dlg: null, msg: msg }); }
+  patchVisit(oid, n, patch, msg) { const o = this.orders().find(x => x.id === oid); this.patchOrder(oid, { visits: o.visits.map(v => (v.n === n ? { ...v, ...patch } : v)) }, msg); }
+  summary(o) { return o.active === false ? { label: 'Inactive', chip: 'chip chip-done' } : { label: 'Active', chip: 'chip chip-ok' }; }
+  donut(o) {
+    const live = o.visits.filter(v => v.status !== 'cancelled');
+    const total = live.length;
+    const done = live.filter(v => v.status === 'completed').length;
+    const now = live.filter(v => v.status === 'ongoing').length;
+    const a = total ? Math.round(done / total * 100) : 0;
+    const b = total ? Math.round((done + now) / total * 100) : 0;
+    const cancelled = o.visits.length - total;
+    return {
+      donutStyle: { background: total ? 'conic-gradient(var(--ink) 0 ' + a + '%, var(--gold) ' + a + '% ' + b + '%, var(--line-2) ' + b + '% 100%)' : 'var(--line)' },
+      progress: total ? done + ' of ' + total + ' completed' : 'No visits yet',
+      progressSub: total ? (now ? now + ' ongoing · ' : '') + (total - done - now) + ' scheduled' + (cancelled ? ' · ' + cancelled + ' cancelled' : '') : (o.type === 'On-call / flexible' ? 'Add visits by hand' : ''),
+      progressLabel: total ? done + ' of ' + total + ' visits completed, ' + now + ' ongoing, ' + (total - done - now) + ' scheduled' + (cancelled ? ', ' + cancelled + ' cancelled' : '') : 'No visits yet',
+    };
+  }
+  visitDay(v) {
+    if (/^Today/.test(v.when)) return { d: 26, m: 10 };
+    const m = /(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/.exec(v.when);
+    return m ? { d: Number(m[1]), m: MONTHS.indexOf(m[2]) } : null;
+  }
+  isUpcoming(v) {
+    const vd = this.visitDay(v);
+    if (!vd) return false;
+    const today = 26, mo = 10; // prototype "today" is 26 Nov 2026
+    if (vd.m !== mo) return false;
+    return vd.d >= today && vd.d <= today + 7;
+  }
+  visitKey(v) {
+    const d = this.visitDay(v);
+    const t = (v.when.split(', ')[1] || '00:00');
+    return d ? String(d.m).padStart(2, '0') + '-' + String(d.d).padStart(2, '0') + ' ' + t : '99';
+  }
+  panelMonth() { const st = this.state || {}; return st.vMonth || '2026-11'; }
+  visitShown(v) {
+    const st = this.state || {};
+    const f = st.vFilter || 'all';
+    if (f === 'noclean' ? !(v.status === 'scheduled' && v.cleaner === 'Not assigned') : f !== 'all' && v.status !== f) return false;
+    const [y, mo] = this.panelMonth().split('-').map(Number);
+    const vd = this.visitDay(v);
+    if (vd && vd.m !== mo - 1) return false;
+    if (st.vDay && (!vd || vd.d !== st.vDay)) return false;
+    return true;
+  }
+  panel(o) {
+    const st = this.state || {};
+    const [y, mo] = this.panelMonth().split('-').map(Number);
+    const first = new Date(y, mo - 1, 1);
+    const pad = (first.getDay() + 6) % 7;
+    const len = new Date(y, mo, 0).getDate();
+    const byDay = {};
+    o.visits.forEach(v => { const vd = this.visitDay(v); if (vd && vd.m === mo - 1) { const cur = byDay[vd.d]; const rank = { ongoing: 4, scheduled: 3, completed: 2, cancelled: 1 }; if (!cur || rank[v.status] > rank[cur.status]) byDay[vd.d] = v; } });
+    const DOT = { scheduled: 'var(--line-3)', ongoing: 'var(--gold)', completed: 'var(--ink)', cancelled: 'var(--muted)' };
+    const days = [];
+    for (let i = 0; i < pad; i++) days.push({ n: '', cls: 'day pad', dot: {}, on: false, label: '', pick: () => {} });
+    for (let d = 1; d <= len; d++) {
+      const v = byDay[d];
+      const iso = y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      days.push({ n: d, cls: 'day' + (v ? '' : ' is-empty'), dot: v ? { '--dot': DOT[v.status] } : { '--dot': 'transparent' }, on: st.vDay === d,
+        label: d + ' ' + MONTHS[mo - 1] + (v ? ', visit ' + v.n + ' ' + v.status : ', no visit. Select to add one'),
+        pick: () => (v ? this.setState({ vDay: st.vDay === d ? null : d }) : this.setState({ adding: o.id, panelOpen: false, newDate: iso, newTime: '08:00', nvEmps: null, nvPrice: null })) });
+    }
+    const count = k => o.visits.filter(v => v.status === k).length;
+    const FL = [['all', 'All'], ['scheduled', 'Scheduled'], ['ongoing', 'Ongoing'], ['completed', 'Completed'], ['cancelled', 'Cancelled'], ['noclean', 'No cleaner']];
+    const shown = o.visits.filter(v => this.visitShown(v)).length;
+    return {
+      monthTitle: MONTHS_LONG[mo - 1] + ' ' + y,
+      days: days,
+      nScheduled: count('scheduled'), nOngoing: count('ongoing'), nCompleted: count('completed'),
+      nNoCleaner: o.visits.filter(v => v.status === 'scheduled' && v.cleaner === 'Not assigned').length,
+      nUpcoming: o.visits.filter(v => v.status === 'scheduled' && this.isUpcoming(v)).length,
+      vFilters: FL.map(([k, l]) => ({ label: l, on: (st.vFilter || 'all') === k, go: () => this.setState({ vFilter: k }) })),
+      dayPicked: !!st.vDay, clearDay: () => this.setState({ vDay: null }),
+      noVisitsShown: shown === 0,
+      onVMonth: e => this.setState({ vMonth: e.target.value, vDay: null }),
+    };
+  }
+  renderVals() {
+    const st = this.state || {};
+    const f = st.filter || 'all';
+    const q = (st.q || '').toLowerCase();
+    const tab = st.tab || 'active';
+    const op = this.open();
+    const all = this.orders();
+    const needs = o => o.visits.some(v => v.status === 'scheduled' && v.cleaner === 'Not assigned');
+    const rows = all
+      .filter(o => f === 'all' || (f === 'needs' && needs(o)))
+      .filter(o => !q || o.name.toLowerCase().includes(q))
+      .filter(o => this.view(o) === tab && (!st.fCompany || o.company === st.fCompany) && (!st.fType || o.type === st.fType))
+      .map(o => {
+        const isOpen = !!op[o.id];
+        return {
+          id: o.id,
+          name: o.name,
+          company: o.company || '',
+          size: o.size || '',
+          active: o.active !== false,
+          inactive: o.active === false,
+          openDetails: () => this.setState({ details: o.id }),
+          openPricing: () => this.dlg('pricing', o.id),
+          editSchedule: () => this.setState({ newOpen: true, wo: null, msg: 'Editing the schedule of ' + o.name + '. The form is the same as for a new work order.' }),
+          openTemplate: () => this.dlg('template', o.id),
+          askDeactivate: () => this.dlg('deactivate', o.id),
+          askReactivate: () => this.dlg('reactivate', o.id),
+          askDelete: () => this.dlg('delete', o.id),
+          visitCount: o.visits.length,
+          chips: [o.type, ((/\d{2}:\d{2} to \d{2}:\d{2}/.exec(o.schedule || '')) || [null])[0], (o.price || 45) + ' € / ' + (/monthly fee/.test(o.schedule || '') ? 'month' : /per scheduled hour/.test(o.schedule || '') ? 'hour' : 'visit')].filter(Boolean).map(text => ({ text: text })),
+          schedule: (o.schedule || '').replace('Price: property price.', 'Price: ' + (o.price || 45) + ' € excl. VAT, inherited from the property.'),
+          qcText: o.qc && o.qc !== 'None' ? 'Checklist template: ' + o.qc : 'Checklist template: none',
+          missingCleaner: needs(o),
+          missingQc: !o.qc || o.qc === 'None',
+          missingPrice: !o.price,
+          ...this.donut(o),
+          isOpen: isOpen,
+          toggleText: 'Visits',
+          ...this.panel(o),
+          toggle: () => this.toggle(o.id),
+          openAssign: () => this.setState({ assignFor: o.id, assignCleaner: 'Anna K.', msg: '' }),
+          isAdding: st.adding === o.id,
+          notAdding: st.adding !== o.id,
+          panelOpen: st.adding === o.id && !!st.panelOpen,
+          whenText: formatWhen(this.whenIso(st), this.whenTime(st)),
+          dayOptions: pick(DAYS, st.dDay || '1'),
+          monthOptions: MONTHS.map((m, i) => ({ v: String(i + 1), t: m, sel: String(i + 1) === (st.dMonth || '1') })),
+          yearOptions: YEARS.map(y => ({ v: y, t: y, sel: y === (st.dYear || YEARS[0]) })),
+          hourOptions: pick(HOURS, st.dHour || '08'),
+          minuteOptions: pick(MINUTES, st.dMin || '00'),
+          togglePanel: () => this.setState({ panelOpen: !(st.panelOpen && st.adding === o.id), adding: o.id }),
+          closePanel: () => this.setState({ panelOpen: false }),
+          timed: o.type !== 'One-time' && o.type !== 'On-call / flexible',
+          ...this.pickerVals(o, st),
+          sDChange: e => this.setPicker(o, 's', 'D', e.target.value),
+          sMChange: e => this.setPicker(o, 's', 'M', e.target.value),
+          sYChange: e => this.setPicker(o, 's', 'Y', e.target.value),
+          sHChange: e => this.setPicker(o, 's', 'H', e.target.value),
+          sMiChange: e => this.setPicker(o, 's', 'Mi', e.target.value),
+          eDChange: e => this.setPicker(o, 'e', 'D', e.target.value),
+          eMChange: e => this.setPicker(o, 'e', 'M', e.target.value),
+          eYChange: e => this.setPicker(o, 'e', 'Y', e.target.value),
+          eHChange: e => this.setPicker(o, 'e', 'H', e.target.value),
+          eMiChange: e => this.setPicker(o, 'e', 'Mi', e.target.value),
+          onNewEmp: e => this.setState({ nvEmps: e.target.value === 'Not assigned' ? [] : [e.target.value] }),
+          nvEmpValue: (this.nvEmps(o)[0]) || 'Not assigned',
+          addVisit: () => this.setState({ adding: o.id, panelOpen: false, newDate: '', newTime: '', nvEmps: null, nvPrice: null }),
+          defaultEmps: o.employees && o.employees !== 'None' ? o.employees : 'nobody assigned',
+          defaultPrice: (o.price || 45) + ' €',
+          newEmpChoices: STAFF.map(name => { const cur = this.nvEmps(o); return { name: name, on: cur.includes(name), toggle: () => this.setState({ nvEmps: cur.includes(name) ? cur.filter(x => x !== name) : cur.concat([name]) }) }; }),
+          nvPrice: this.nvPrice(o) + ' €',
+          priceChanged: this.nvPrice(o) !== (o.price || 45),
+          priceNote: this.nvPrice(o) !== (o.price || 45) ? 'This visit uses its own price.' : 'Leave it to use the work order price.',
+          nvPriceDown: () => this.setState({ nvPrice: Math.max(1, this.nvPrice(o) - 1) }),
+          nvPriceUp: () => this.setState({ nvPrice: this.nvPrice(o) + 1 }),
+          nvPriceReset: () => this.setState({ nvPrice: null }),
+          cancelVisit: () => this.setState({ adding: null, panelOpen: false, newDate: '', newTime: '' }),
+          saveVisit: () => this.saveVisit(o.id),
+          visitRows: o.visits.filter(v => this.visitShown(v)).slice().sort((a, b) => this.visitKey(a) < this.visitKey(b) ? -1 : this.visitKey(a) > this.visitKey(b) ? 1 : 0).map(v => {
+            return {
+              n: v.n, when: v.when, whenDate: v.when.split(', ')[0], whenTime: v.when.split(', ').slice(1).join(', ') + ((v.end || o.endTime) ? ' to ' + (v.end || o.endTime) : ''), cleaner: v.cleaner, label: VLABEL[v.status], chip: VCHIP[v.status],
+              cleanerStyle: v.cleaner === 'Not assigned' && v.status === 'scheduled' ? { color: 'var(--gold-ink)', fontWeight: 600 } : {},
+              typeText: v.kind || 'Normal',
+              noAssign: v.status === 'completed' || v.status === 'cancelled',
+              noTime: v.status !== 'scheduled',
+              noCancel: v.status === 'completed' || v.status === 'ongoing',
+              cancelLabel: v.status === 'cancelled' ? 'Restore visit' : 'Cancel visit',
+              cancelOrRestore: () => (v.status === 'cancelled' ? this.patchVisit(o.id, v.n, { status: 'scheduled' }, 'Visit ' + v.n + ' of ' + o.name + ' restored.') : this.dlg('cancel', o.id, v.n)),
+              hasMenuNote: v.status !== 'scheduled',
+              menuNote: { ongoing: 'Ongoing: the time can’t change and it can’t be cancelled.', completed: 'Completed: only the cleaning type and price can change.', cancelled: 'Cancelled: restore it to change employees or time.' }[v.status] || '',
+              cancelled: v.status === 'cancelled',
+              changeEmp: () => this.dlg('emp', o.id, v.n),
+              changeTime: () => this.dlg('time', o.id, v.n),
+              cancel: () => this.dlg('cancel', o.id, v.n),
+              cleaning: () => this.dlg('type', o.id, v.n),
+              pricing: () => this.dlg('pricing', o.id, v.n),
+              restore: () => this.patchVisit(o.id, v.n, { status: 'scheduled' }, 'Visit ' + v.n + ' of ' + o.name + ' restored.'),
+            };
+          }),
+        };
+      });
+    const dl = st.dlg || null;
+    const dOrder = dl ? all.find(o => o.id === dl.oid) : null;
+    const dTitle = dOrder ? dOrder.name + (dl.n ? ', visit ' + dl.n : '') : '';
+    const dv = this.dv();
+    const detailOrder = st.details ? all.find(o => o.id === st.details) : null;
+    const CONFIRM = {
+      deactivate: { title: 'Deactivate work order?', body: 'It stops taking new visits. You can reactivate it later from the Inactive tab.', label: 'Deactivate' },
+      reactivate: { title: 'Reactivate work order?', body: 'It returns to the Active tab and can take visits again.', label: 'Reactivate' },
+      delete: { title: 'Delete work order?', body: 'Permanently delete this inactive work order and its employee assignments. Completed checklist records, photos and reports stay.', label: 'Delete' },
+    };
+    const cf = dl && CONFIRM[dl.kind];
+    const counts = { active: 0, inactive: 0 };
+    all.forEach(o => { counts[this.view(o)]++; });
+    return {
+      tActive: tab === 'active', tInactive: tab === 'inactive',
+      nActive: counts.active, nInactive: counts.inactive,
+      showActive: () => this.setState({ tab: 'active' }),
+      showInactive: () => this.setState({ tab: 'inactive' }),
+      onFCompany: e => this.setState({ fCompany: e.target.value }),
+      onFType: e => this.setState({ fType: e.target.value }),
+      detailsOpen: !!detailOrder,
+      d: detailOrder ? { name: detailOrder.name, company: detailOrder.company, status: this.summary(detailOrder).label, chip: this.summary(detailOrder).chip, schedule: detailOrder.schedule, size: detailOrder.size, employees: detailOrder.employees || 'None', template: detailOrder.template || 'None', visits: detailOrder.visits.length + ' visits, ' + detailOrder.visits.filter(v => v.status === 'completed').length + ' completed', next: detailOrder.type === 'On-call / flexible' ? 'on-call work has no automatic visits. Add each visit with a date, time and employee.' : detailOrder.visits.some(v => v.status === 'scheduled' && v.cleaner === 'Not assigned') ? 'assign an employee to the open visits.' : 'nothing to do. Visits follow the schedule.' } : {},
+      closeDetails: () => this.setState({ details: null }),
+      dlgTitle: dTitle,
+      closeDlg: () => this.setState({ dlg: null }),
+      pricingOpen: !!dl && dl.kind === 'pricing',
+      templateOpen: !!dl && dl.kind === 'template',
+      confirmOpen: !!cf,
+      confirmTitle: cf ? cf.title : '', confirmBody: cf ? cf.body : '', confirmLabel: cf ? cf.label : '',
+      empOpen: !!dl && dl.kind === 'emp',
+      typeOpen: !!dl && dl.kind === 'type',
+      timeOpen: !!dl && dl.kind === 'time',
+      cancelOpen: !!dl && dl.kind === 'cancel',
+      priceWO: !dl || !dl.n,
+      priceNote: dl && dl.n ? 'This changes this visit only. Prices exclude VAT; VAT is added on invoicing.' : 'Prices exclude VAT; VAT is added on invoicing.',
+      pRate: (dv.rate != null ? dv.rate : ((dOrder && dOrder.price) || 42)) + ' €',
+      pDown: () => this.setDv({ rate: Math.max(1, (dv.rate != null ? dv.rate : ((dOrder && dOrder.price) || 42)) - 1) }),
+      pUp: () => this.setDv({ rate: (dv.rate != null ? dv.rate : ((dOrder && dOrder.price) || 42)) + 1 }),
+      onPBasis: e => this.setDv({ basis: e.target.value }),
+      onPFrom: e => this.setDv({ from: e.target.value }),
+      savePricing: () => { const base = (dOrder && dOrder.price) || 42; const rate = dv.rate != null ? dv.rate : base; if (dl && dl.n) { this.patchVisit(dl.oid, dl.n, { price: rate }, 'Price for ' + dTitle + ' set to ' + rate + ' € excl. VAT for this visit only.'); return; } this.patchOrder(dl.oid, {}, 'Price saved for ' + dTitle + ': ' + (dv.basis === 'Property price' || !dv.basis ? 'property price' : rate + ' € excl. VAT') + ', from ' + (dv.from || '1 Dec 2026') + '.'); },
+      onTmpl: e => this.setDv({ tmpl: e.target.value }),
+      saveTemplate: () => this.patchOrder(dl.oid, { template: dv.tmpl || 'None' }, 'Checklist template for ' + dTitle + ': ' + (dv.tmpl || 'None') + '.'),
+      doConfirm: () => {
+        if (!dl) return;
+        if (dl.kind === 'deactivate') this.patchOrder(dl.oid, { active: false }, dTitle + ' deactivated. It is on the Inactive tab.');
+        else if (dl.kind === 'reactivate') this.patchOrder(dl.oid, { active: true }, dTitle + ' reactivated.');
+        else { const prev = this.orders(); this.setState({ orders: prev.filter(o => o.id !== dl.oid), prev: prev, dlg: null, msg: dTitle + ' deleted.' }); }
+      },
+      empChoices: (() => { if (!dl || dl.kind !== 'emp') return []; const cur = this.empPick(dOrder, dl.n); return STAFF.map(name => ({ name: name, on: cur.includes(name), note: dOrder.employees && dOrder.employees.split(', ').includes(name) ? 'Work order default' : '', toggle: () => this.setDv({ emps: cur.includes(name) ? cur.filter(x => x !== name) : cur.concat([name]) }) })); })(),
+      empSummary: (() => { if (!dl || dl.kind !== 'emp') return ''; const cur = this.empPick(dOrder, dl.n); return cur.length ? cur.length + ' employee' + (cur.length === 1 ? '' : 's') + ' selected.' : 'Nobody selected. The visit stays scheduled without a cleaner.'; })(),
+      saveEmp: () => { const cur = this.empPick(dOrder, dl.n); const who = cur.length ? cur.join(', ') : 'Not assigned'; this.patchVisit(dl.oid, dl.n, { cleaner: who }, cur.length ? 'Offer sent to ' + who + ' for ' + dTitle + '.' : dTitle + ' has no cleaner now.'); },
+      onVType: e => this.setDv({ kind: e.target.value }),
+      saveType: () => this.patchVisit(dl.oid, dl.n, { kind: dv.kind || 'Normal' }, dTitle + ' is now ' + (dv.kind || 'Normal').toLowerCase() + ' cleaning.' + (dv.kind === 'Deep' ? ' 15.00 € excl. VAT is added.' : '')),
+      onVStart: e => this.setDv({ start: e.target.value }),
+      onVLen: e => this.setDv({ len: e.target.value }),
+      onVReason: e => this.setDv({ reason: e.target.value }),
+      onVNotes: e => this.setDv({ notes: e.target.value }),
+      onVBy: e => this.setDv({ by: e.target.value }),
+      saveTime: () => { if (!dv.reason) { this.setState({ msg: 'Enter a reason for the change.' }); return; } const o = dOrder; const v = o.visits.find(x => x.n === dl.n); const day = v.when.split(',')[0]; this.patchVisit(dl.oid, dl.n, { when: day + ', ' + (dv.start || '06:00') }, dTitle + ' moved to ' + (dv.start || '06:00') + '.'); },
+      saveCancel: () => { if (!dv.reason) { this.setState({ msg: 'Enter a reason for cancelling.' }); return; } this.patchVisit(dl.oid, dl.n, { status: 'cancelled' }, dTitle + ' cancelled by the ' + (dv.by || 'company') + '. It is not invoiced.'); },
+      rows: rows,
+      isEmpty: rows.length === 0,
+      shownCount: rows.length + ' of ' + all.length,
+      onQ: e => this.setState({ q: e.target.value }),
+      undo: () => this.undo(),
+      canUndo: !!st.prev,
+      newOrder: () => this.setState({ newOpen: true, wo: null, msg: '' }),
+      newOpen: !!st.newOpen,
+      propertyOptions: PROPERTIES.map(v => ({ v: v, t: v, sel: v === (st.newProp || PROPERTIES[0]) })),
+      onNewProperty: e => this.setState({ newProp: e.target.value }),
+      closeNew: () => this.setState({ newOpen: false, wo: null }),
+      onCompany: e => this.setWo({ company: e.target.value }),
+      onProperty: e => this.setWo({ property: e.target.value }),
+      onType: e => this.setWo({ type: e.target.value }),
+      onSDay: e => this.setWo({ sDay: e.target.value }),
+      onSMonth: e => this.setWo({ sMonth: e.target.value }),
+      onSYear: e => this.setWo({ sYear: e.target.value }),
+      onEDay: e => this.setWo({ eDay: e.target.value }),
+      onEMonth: e => this.setWo({ eMonth: e.target.value }),
+      onEYear: e => this.setWo({ eYear: e.target.value }),
+      onStartTime: e => this.setWo({ startTime: e.target.value }),
+      onEndTime: e => this.setWo({ endTime: e.target.value }),
+      onPriceBasis: e => this.setWo({ priceBasis: e.target.value }),
+      onRate: e => this.setWo({ rate: e.target.value }),
+      onVat: e => this.setWo({ vat: e.target.value }),
+      onNotes: e => this.setWo({ notes: e.target.value }),
+      priceDown: () => this.setWo({ override: String(Math.max(1, Number(this.woState().override) - 1)) }),
+      priceUp: () => this.setWo({ override: String(Number(this.woState().override) + 1) }),
+      overrideText: this.woState().override + ' €',
+      onWeekday: e => this.setWo({ weekday: e.target.value }),
+      onCleaner: e => this.setWo({ cleaner: e.target.value }),
+      assignOpen: !!st.assignFor,
+      assignTitle: (() => { const ao = all.find(o => o.id === st.assignFor); return ao ? ao.name : ''; })(),
+      onAssignCleaner: e => this.setState({ assignCleaner: e.target.value }),
+      applyAssign: () => this.applyAssign(),
+      closeAssign: () => this.setState({ assignFor: null }),
+      onQc: e => this.setWo({ qc: e.target.value }),
+      showTimes: this.woState().type !== 'On-call / flexible' && this.woState().type !== 'One-time',
+      showEnd: this.woState().type !== 'One-time' && this.woState().type !== 'On-call / flexible',
+      showWeekday: ['Varied times by weekday', 'Specific days', 'Bi-weekly'].includes(this.woState().type),
+      showOverride: this.woState().priceBasis === 'Override',
+      startLabel: this.woState().type === 'One-time' ? 'Visit date' : 'Start date',
+      propertyPriceText: 'Property price: ' + this.propertyPrice(this.woState()) + ' € excl. VAT. Override only if this work order needs a different price. VAT (25%) is added when it is invoiced.',
+      createNote: this.woState().type === 'On-call / flexible' || this.woState().type === 'One-time' ? 'No visits are generated for this type. Add visits by hand.' : 'Visits are generated from the schedule, up to ' + MAX_VISITS + ' visits in the first four weeks.',
+      createOrder: () => this.createOrder(),
+      doExport: () => this.setState({ msg: 'Export is not connected in this prototype. Nothing was exported.' }),
+      hasMsg: !!st.msg,
+      msg: st.msg || '',
+    };
+  }
+}
+</script>
+</body>
+</html>
