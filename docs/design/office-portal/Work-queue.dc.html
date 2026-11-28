@@ -57,12 +57,12 @@ a{color:var(--muted)}
 .chip-busy{background:var(--gold-wash);color:var(--gold-ink);border:1px solid var(--gold)}
 .chip-away{background:var(--line);color:var(--muted)}
 .chip-best{background:var(--ink);color:var(--surface);font-size:12px;padding:2px 8px}
-/* The person's day, 07 to 19. The outlined block is the work being assigned: drag it, or tap the bar to put it there. */
-.bar{position:relative;display:block;height:36px;border-radius:8px;background:var(--wash);border:1px solid var(--line);cursor:copy}
+/* The person's whole day, 00 to 24, with a line every hour. The outlined block is the work being assigned: drag it, or tap the bar to put it there. */
+.bar{position:relative;display:block;height:36px;border-radius:8px;background-color:var(--wash);background-image:repeating-linear-gradient(to right,var(--line-2) 0 1px,transparent 1px calc(100% / 24));border:1px solid var(--line);cursor:copy}
 .bar .b-busy{position:absolute;top:4px;bottom:4px;border-radius:6px;background:var(--line-3)}
-.bar .b-slot,.bar .b-clash{position:absolute;top:0;bottom:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:12px;font-weight:600;cursor:grab;white-space:nowrap;overflow:hidden}
-.bar .b-end{position:absolute;top:-4px;bottom:-4px;width:12px;margin-left:-8px;border-radius:4px;background:var(--ink);cursor:ew-resize}
-.bar .b-end::after{content:'';position:absolute;left:5px;top:10px;bottom:10px;width:2px;background:var(--surface)}
+.bar .b-slot,.bar .b-clash{position:absolute;top:0;bottom:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:10px;font-weight:600;cursor:grab;white-space:nowrap;overflow:hidden}
+.bar .b-end{position:absolute;top:-4px;bottom:-4px;width:8px;margin-left:-4px;border-radius:4px;background:var(--ink);cursor:ew-resize}
+.bar .b-end::after{content:'';position:absolute;left:3px;top:10px;bottom:10px;width:2px;background:var(--surface)}
 .bar .b-slot{border:2px solid var(--teal-ink);background:var(--teal-wash);color:var(--teal-ink)}
 .bar .b-clash{border:2px solid var(--gold-ink);background:var(--gold-wash);color:var(--gold-ink)}
 .scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
@@ -153,9 +153,9 @@ a{color:var(--muted)}
         <div class="pp-day"><button type="button" class="day-btn" aria-label="{{ p.prevLabel }}" disabled="{{ p.noPrev }}" onClick="{{ p.prevDay }}"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><strong>{{ p.dayLabel }}</strong><button type="button" class="day-btn" aria-label="{{ p.nextLabel }}" disabled="{{ p.noNext }}" onClick="{{ p.nextDay }}"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div>
         <div class="bar" aria-label="{{ p.barLabel }}" onClick="{{ p.place }}" onDragOver="{{ p.over }}" onDrop="{{ p.drop }}">
           <sc-for list="{{ p.blocks }}" as="b" hint-placeholder-count="2"><span class="b-busy" style="{{ b.style }}" title="{{ b.title }}"></span></sc-for>
-          <sc-if value="{{ p.hasSlot }}" hint-placeholder-val="{{ true }}"><span class="{{ p.slotCls }}" style="{{ p.slotStyle }}" draggable="true" role="slider" tabindex="0" aria-label="{{ p.slotAria }}" aria-valuetext="{{ p.slotTime }}" onDragStart="{{ p.grab }}" onKeyDown="{{ p.nudge }}">{{ p.slotTime }}</span><span class="b-end" style="{{ p.endStyle }}" draggable="true" role="slider" tabindex="0" aria-label="{{ p.endAria }}" aria-valuetext="{{ p.lenText }}" title="Drag to change the duration" onDragStart="{{ p.grabEnd }}" onKeyDown="{{ p.stretch }}"></span></sc-if>
+          <sc-if value="{{ p.hasSlot }}" hint-placeholder-val="{{ true }}"><span class="{{ p.slotCls }}" style="{{ p.slotStyle }}" draggable="true" role="slider" tabindex="0" aria-label="{{ p.slotAria }}" aria-valuetext="{{ p.slotTime }}" onDragStart="{{ p.grab }}" onKeyDown="{{ p.nudge }}" title="{{ p.slotTime }}">{{ p.slotShort }}</span><span class="b-end" style="{{ p.endStyle }}" draggable="true" role="slider" tabindex="0" aria-label="{{ p.endAria }}" aria-valuetext="{{ p.lenText }}" title="Drag to change the duration" onDragStart="{{ p.grabEnd }}" onKeyDown="{{ p.stretch }}"></span></sc-if>
         </div>
-        <div class="scale" aria-hidden="true"><span>07</span><span>10</span><span>13</span><span>16</span><span>19</span></div>
+        <div class="scale" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
         <sc-if value="{{ p.hasMoved }}" hint-placeholder-val="{{ false }}"><p class="note">{{ p.movedText }}</p></sc-if>
         <sc-if value="{{ p.hasClash }}" hint-placeholder-val="{{ false }}"><p role="status" style="margin:0;padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);color:var(--gold-ink);font-size:14px">{{ p.clashText }}</p></sc-if>
         <button type="button" class="btn btn-primary" style="align-self:flex-start;max-width:100%;white-space:normal;text-align:left" onClick="{{ p.assign }}">{{ p.confirmLabel }}</button>
@@ -256,7 +256,9 @@ const WINDOW = { w3: ['2026-12-04', '2026-12-05'] };
 const daysFor = it => WINDOW[it.id] || [0, 1, 2, 3, 4, 5, 6].map(n => addDays(it.date, n));
 const hh = h => String(Math.floor(h)).padStart(2, '0') + ':' + String(Math.round((h % 1) * 60)).padStart(2, '0');
 const snap = h => Math.round(h * 4) / 4;
-const pos = (a, b) => 'left:' + ((Math.max(a, 7) - 7) / 12 * 100).toFixed(1) + '%;width:' + ((Math.min(b, 19) - Math.max(a, 7)) / 12 * 100).toFixed(1) + '%';
+const pos = (a, b) => 'left:' + (Math.max(a, 0) / 24 * 100).toFixed(2) + '%;width:' + ((Math.min(b, 24) - Math.max(a, 0)) / 24 * 100).toFixed(2) + '%';
+// Short time for inside the block: 8–11, 8:15–11:15.
+const hs = h => String(Math.floor(h)) + (h % 1 ? ':' + String(Math.round((h % 1) * 60)).padStart(2, '0') : '');
 const PAGE_SIZE = 6;
 
 class Component extends DCLogic {
@@ -301,12 +303,10 @@ class Component extends DCLogic {
       hasTime = !!base;
       const di = days.indexOf(date);
       const setSlot = (patch, who) => this.setState({ ...patch, ...(who ? { pick: who } : {}), err: '' });
-      const clamp = h => Math.max(7, Math.min(19 - len, snap(h)));
-      const fitLen = l => Math.max(0.5, Math.min(19 - start, snap(l)));
+      const clamp = h => Math.max(0, Math.min(24 - len, snap(h)));
+      const fitLen = l => Math.max(0.25, Math.min(24 - start, snap(l)));
       const lenText = l => (l % 1 ? Math.floor(l) + ' h ' + Math.round((l % 1) * 60) + ' min' : l + ' h');
-      lenOpts = base ? Array.from({ length: 16 }, (_, i) => 0.5 + i * 0.5).filter(l => start + l <= 19 || l === len).map(l => ({ v: String(l), t: lenText(l), sel: l === len })) : [];
       dayOpts = days.map(d => ({ v: d, t: dayName(d), sel: d === date }));
-      timeOpts = base ? Array.from({ length: (12 - len) * 4 + 1 }, (_, i) => 7 + i / 4).map(h => ({ v: String(h), t: hh(h) + '–' + hh(h + len), sel: h === start })) : [];
       slotText = base ? 'Pick the employee in the card; the list shows every employee, free ones first. Drag the outlined block along the day, or tap the bar, to set the time. Drag its dark right edge to make it longer or shorter. Use the arrows to change the day.' : 'Key requests have a day but no time. Pick the employee in the card; the list shows how busy each one is that day. Use the arrows to change the day.';
       if (base && (date !== open.date || start !== base[0] || len !== base[1])) moved = (open.kind === 'cleaning' ? 'The partner asked for ' + (open.multiDay ? open.window : open.when) + ', ' + lenText(base[1]) + '. ' : 'Originally ' + open.when + ', ' + lenText(base[1]) + '. ') + 'The new time, ' + dayName(date) + ' ' + hh(start) + '–' + hh(start + len) + ', is saved when you ' + (open.kind === 'cleaning' ? 'send the offer.' : 'assign.');
       whenText = dayName(date) + (base ? ' ' + hh(start) + '–' + hh(start + len) : '');
@@ -325,7 +325,7 @@ class Component extends DCLogic {
       const who = st.pick && rows.some(p => p.n === st.pick && !p.away) ? st.pick : bestName;
       pickNow = who;
       empOpts = rows.map(p => ({ v: p.n, t: p.n + '. · ' + p.status + (p.n === bestName ? ' · Best fit' : '') + (p.away ? '' : ' · ' + p.hours + ' h booked'), sel: p.n === who, off: p.away }));
-      const hourAt = (e, offset, el) => { const r = (el || e.currentTarget).getBoundingClientRect(); return 7 + ((e.clientX - r.left) / r.width) * 12 - offset; };
+      const hourAt = (e, offset, el) => { const r = (el || e.currentTarget).getBoundingClientRect(); return ((e.clientX - r.left) / r.width) * 24 - offset; };
       const chosen = rows.find(p => p.n === who);
       if (chosen && chosen.hit) clash = chosen.n + '. already has ' + chosen.hit[2] + ' ' + hh(chosen.hit[0]) + '–' + hh(chosen.hit[1]) + '. Drag the block to a free time, try another day, or go ahead anyway and the Scheduler shows both as an overlap.';
       if (chosen && chosen.away) clash = '';
@@ -340,11 +340,11 @@ class Component extends DCLogic {
         prevDay: () => di > 0 && setSlot({ slotDay: days[di - 1] }, p.away ? null : p.n),
         nextDay: () => di < days.length - 1 && setSlot({ slotDay: days[di + 1] }, p.away ? null : p.n),
         blocks: p.d.map(b => ({ style: pos(b[0], b[1]), title: hh(b[0]) + '–' + hh(b[1]) + ' ' + b[2] })),
-        barLabel: p.n + '. on ' + dayName(date) + ', 07:00 to 19:00',
+        barLabel: p.n + '. on ' + dayName(date) + ', 00:00 to 24:00',
         hasSlot: !!base && !p.away,
         slotCls: p.hit ? 'b-clash' : 'b-slot', slotStyle: base ? pos(start, start + len) : '',
-        slotTime: base ? hh(start) + '–' + hh(start + len) : '', slotAria: 'Time for ' + p.n + '. Arrow keys move it by 15 minutes.',
-        endStyle: base ? 'left:' + ((start + len - 7) / 12 * 100).toFixed(1) + '%' : '', endAria: 'End of the visit, ' + p.n + '. Arrow keys make it 15 minutes longer or shorter.', lenText: base ? lenText(len) : '',
+        slotTime: base ? hh(start) + '–' + hh(start + len) : '', slotShort: base ? hs(start) + '–' + hs(start + len) : '', slotAria: 'Time for ' + p.n + '. Arrow keys move it by 15 minutes.',
+        endStyle: base ? 'left:' + ((start + len) / 24 * 100).toFixed(2) + '%' : '', endAria: 'End of the visit, ' + p.n + '. Arrow keys make it 15 minutes longer or shorter.', lenText: base ? lenText(len) : '',
         grabEnd: e => { this.mode = 'end'; e.stopPropagation(); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; },
         stretch: e => { const k = e.key === 'ArrowLeft' ? -0.25 : e.key === 'ArrowRight' ? 0.25 : 0; if (!k) return; e.preventDefault(); setSlot({ slotLen: fitLen(len + k) }, p.n); },
         hasMoved: !!moved, movedText: moved, hasClash: !!clash, clashText: clash,
