@@ -45,21 +45,28 @@ a{color:var(--muted)}
 .chip-src{background:transparent;border:1px solid var(--line-2);color:var(--muted)}
 .msg{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
 /* Availability picker: one row per employee, with their day as a bar. */
-.pp{display:flex;flex-direction:column;gap:8px;width:100%;text-align:left;padding:12px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);font:inherit;color:var(--ink);cursor:pointer;white-space:normal}
-.pp:hover{background:var(--wash)}
-.pp[aria-checked='true']{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
-.pp:disabled{cursor:not-allowed;opacity:.6;background:var(--wash)}
-.pp-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.pp{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface)}
+.pp.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.pp.off{background:var(--wash)}
+.pp-pick{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:44px;padding:0;border:0;background:transparent;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.pp-pick:disabled{cursor:not-allowed;color:var(--muted)}
 .pp-sub{font-size:13px;color:var(--muted)}
+.pp-day{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px}
+.day-btn{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);font:inherit;font-size:18px;color:var(--ink);cursor:pointer}
+.day-btn:disabled{opacity:.4;cursor:not-allowed}
 .chip-free{background:var(--teal-wash);color:var(--teal-ink);border:1px solid var(--teal)}
 .chip-busy{background:var(--gold-wash);color:var(--gold-ink);border:1px solid var(--gold)}
 .chip-away{background:var(--line);color:var(--muted)}
 .chip-best{background:var(--ink);color:var(--surface);font-size:12px;padding:2px 8px}
-.bar{position:relative;display:block;height:14px;border-radius:7px;background:var(--wash);border:1px solid var(--line)}
-.bar .b-busy{position:absolute;top:0;bottom:0;border-radius:6px;background:var(--line-3)}
-.bar .b-slot{position:absolute;top:-3px;bottom:-3px;border-radius:6px;border:2px solid var(--teal-ink);background:var(--teal-wash)}
-.bar .b-clash{position:absolute;top:-3px;bottom:-3px;border-radius:6px;border:2px solid var(--gold-ink);background:var(--gold-wash)}
-.scale{display:flex;justify-content:space-between;padding:0 12px;font-size:12px;color:var(--muted)}
+/* The person's day, 07 to 19. The outlined block is the work being assigned: drag it, or tap the bar to put it there. */
+.bar{position:relative;display:block;height:36px;border-radius:8px;background:var(--wash);border:1px solid var(--line);cursor:copy}
+.bar .b-busy{position:absolute;top:4px;bottom:4px;border-radius:6px;background:var(--line-3)}
+.bar .b-slot,.bar .b-clash{position:absolute;top:0;bottom:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:12px;font-weight:600;cursor:grab;white-space:nowrap;overflow:hidden}
+.bar .b-slot{border:2px solid var(--teal-ink);background:var(--teal-wash);color:var(--teal-ink)}
+.bar .b-clash{border:2px solid var(--gold-ink);background:var(--gold-wash);color:var(--gold-ink)}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.when{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:12px;border:1px solid var(--line-2);border-radius:12px;background:var(--wash)}
+.when .field{flex:1 1 120px}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100%;box-sizing:border-box;overflow-y:auto;padding:20px;background:var(--surface);border-left:2px solid var(--line-2);z-index:50;display:flex;flex-direction:column;gap:12px}
 </style>
 </helmet>
@@ -133,23 +140,29 @@ a{color:var(--muted)}
 
   <sc-if value="{{ dw.isAssign }}" hint-placeholder-val="{{ false }}">
   <sc-if value="{{ dw.isOffer }}" hint-placeholder-val="{{ false }}"><p class="note">The employee gets an offer to accept. Once accepted, the visit moves to the Scheduler. Employees with automatic acceptance take it straight away.</p></sc-if>
-  <sc-if value="{{ dw.needsStart }}" hint-placeholder-val="{{ false }}"><label class="field">Planned start<select class="input" onChange="{{ onStart }}"><option value="">Choose a date and time</option><option value="4 Dec 2026 09:00">4 Dec 2026 09:00</option><option value="5 Dec 2026 09:00">5 Dec 2026 09:00</option><option value="5 Dec 2026 13:00">5 Dec 2026 13:00</option></select></label></sc-if>
   <div style="display:flex;flex-direction:column;gap:8px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><strong style="font-size:15px">{{ dw.pickLabel }}</strong><a href="Scheduler.dc.html" style="font-size:14px">Open this day in the Scheduler</a></div>
+    <div class="when" role="group" aria-label="When">
+      <label class="field">Day<select class="input" onChange="{{ onSlotDay }}"><sc-for list="{{ dw.dayOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}" selected="{{ o.sel }}">{{ o.t }}</option></sc-for></select></label>
+      <sc-if value="{{ dw.hasTime }}" hint-placeholder-val="{{ true }}"><label class="field">Start<select class="input" onChange="{{ onSlotStart }}"><sc-for list="{{ dw.timeOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}" selected="{{ o.sel }}">{{ o.t }}</option></sc-for></select></label></sc-if>
+    </div>
     <span class="note">{{ dw.slotText }}</span>
-    <sc-if value="{{ dw.hasPeople }}" hint-placeholder-val="{{ true }}">
-    <div class="scale" aria-hidden="true"><span>07</span><span>10</span><span>13</span><span>16</span><span>19</span></div>
     <div role="radiogroup" aria-label="{{ dw.pickLabel }}" style="display:flex;flex-direction:column;gap:8px">
       <sc-for list="{{ dw.people }}" as="p" hint-placeholder-count="4">
-      <button type="button" role="radio" class="pp" aria-checked="{{ p.checked }}" aria-label="{{ p.aria }}" disabled="{{ p.away }}" onClick="{{ p.choose }}">
-        <span class="pp-top"><span style="display:flex;gap:8px;align-items:center"><strong>{{ p.name }}</strong><sc-if value="{{ p.best }}" hint-placeholder-val="{{ false }}"><span class="chip chip-best">Best fit</span></sc-if></span><span class="{{ p.chip }}">{{ p.status }}</span></span>
+      <div class="{{ p.cls }}">
+        <button type="button" role="radio" class="pp-pick" aria-checked="{{ p.checked }}" aria-label="{{ p.aria }}" disabled="{{ p.away }}" onClick="{{ p.choose }}"><span style="display:flex;gap:8px;align-items:center"><strong>{{ p.name }}</strong><sc-if value="{{ p.best }}" hint-placeholder-val="{{ false }}"><span class="chip chip-best">Best fit</span></sc-if></span><span class="{{ p.chip }}">{{ p.status }}</span></button>
         <span class="pp-sub">{{ p.sub }}</span>
-        <span class="bar" aria-hidden="true"><sc-for list="{{ p.blocks }}" as="b" hint-placeholder-count="2"><span class="{{ b.cls }}" style="{{ b.style }}"></span></sc-for></span>
-      </button>
+        <div class="pp-day"><button type="button" class="day-btn" aria-label="{{ p.prevLabel }}" disabled="{{ p.noPrev }}" onClick="{{ p.prevDay }}"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button><strong>{{ p.dayLabel }}</strong><button type="button" class="day-btn" aria-label="{{ p.nextLabel }}" disabled="{{ p.noNext }}" onClick="{{ p.nextDay }}"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div>
+        <div class="bar" aria-label="{{ p.barLabel }}" onClick="{{ p.place }}" onDragOver="{{ p.over }}" onDrop="{{ p.drop }}">
+          <sc-for list="{{ p.blocks }}" as="b" hint-placeholder-count="2"><span class="b-busy" style="{{ b.style }}" title="{{ b.title }}"></span></sc-for>
+          <sc-if value="{{ p.hasSlot }}" hint-placeholder-val="{{ true }}"><span class="{{ p.slotCls }}" style="{{ p.slotStyle }}" draggable="true" role="slider" tabindex="0" aria-label="{{ p.slotAria }}" aria-valuetext="{{ p.slotTime }}" onDragStart="{{ p.grab }}" onKeyDown="{{ p.nudge }}">{{ p.slotTime }}</span></sc-if>
+        </div>
+        <div class="scale" aria-hidden="true"><span>07</span><span>10</span><span>13</span><span>16</span><span>19</span></div>
+      </div>
       </sc-for>
     </div>
-    </sc-if>
-    <sc-if value="{{ dw.hasClash }}" hint-placeholder-val="{{ false }}"><p role="status" style="margin:0;padding:10px 12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);color:var(--gold-ink);font-size:14px">{{ dw.clashText }}</p></sc-if>
+    <sc-if value="{{ dw.hasClash }}" hint-placeholder-val="{{ false }}"><p role="status" style="margin:0;padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);color:var(--gold-ink);font-size:14px">{{ dw.clashText }}</p></sc-if>
+    <sc-if value="{{ dw.hasMoved }}" hint-placeholder-val="{{ false }}"><p class="note">{{ dw.movedText }}</p></sc-if>
   </div>
   <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ assignIt }}">{{ dw.confirmLabel }}</button></div>
   </sc-if>
@@ -229,14 +242,20 @@ const CANCEL = { booking: 'Cancel booking', cleaning: 'Cancel request', visit: '
 const AUTO_ACCEPT = { 'Anna K': true };
 // Each employee's day: booked visits as [from, to, place] in hours, or 'away'.
 const STAFF = ['Anna K', 'Ville R', 'Minna S', 'Jari L'];
-const DAY = {
-  default: { 'Anna K': [[8, 10.5, 'Töölö flat']], 'Ville R': [[12, 15, 'Kamppi office']], 'Minna S': [[9, 12, 'Aurora clinic'], [14, 16, 'Kallio flat']], 'Jari L': 'away' },
-  '2026-12-05': { 'Anna K': [[13, 17, 'Sörnäinen office']], 'Ville R': [], 'Minna S': [[8, 11, 'Aurora clinic']], 'Jari L': [[9, 10, 'Key pickup, Pasila']] },
-};
-// When the work happens: start hour and length. Key requests have only a day.
-const SLOT = { w1: [8, 3], w2: [8, 3], w7: [7, 2], w9: [9, 3] };
-const START = { '4 Dec 2026 09:00': ['2026-12-04', 9], '5 Dec 2026 09:00': ['2026-12-05', 9], '5 Dec 2026 13:00': ['2026-12-05', 13] };
-const hh = h => String(Math.floor(h)).padStart(2, '0') + ':' + (h % 1 ? '30' : '00');
+const TEMPLATES = [
+  { 'Anna K': [[8, 10.5, 'Töölö flat']], 'Ville R': [[12, 15, 'Kamppi office']], 'Minna S': [[9, 12, 'Aurora clinic'], [14, 16, 'Kallio flat']], 'Jari L': 'away' },
+  { 'Anna K': [[13, 17, 'Sörnäinen office']], 'Ville R': [], 'Minna S': [[8, 11, 'Aurora clinic']], 'Jari L': [[9, 10, 'Key pickup, Pasila']] },
+  { 'Anna K': [], 'Ville R': [[7, 9, 'Kesko store, Kamppi'], [10, 13, 'Nordea branch']], 'Minna S': 'away', 'Jari L': [[14, 17, 'Pasila office']] },
+];
+const dayOf = date => TEMPLATES[Number(date.slice(8, 10)) % 3];
+// When the work happens: start hour and length in hours. Key requests have only a day.
+const SLOT = { w1: [8, 3], w2: [8, 3], w3: [9, 3], w7: [7, 2], w9: [9, 3] };
+const addDays = (date, n) => { const d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const dayName = date => new Date(date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const WINDOW = { w3: ['2026-12-04', '2026-12-05'] };
+const daysFor = it => WINDOW[it.id] || [0, 1, 2, 3, 4, 5, 6].map(n => addDays(it.date, n));
+const hh = h => String(Math.floor(h)).padStart(2, '0') + ':' + String(Math.round((h % 1) * 60)).padStart(2, '0');
+const snap = h => Math.round(h * 4) / 4;
 const pos = (a, b) => 'left:' + ((Math.max(a, 7) - 7) / 12 * 100).toFixed(1) + '%;width:' + ((Math.min(b, 19) - Math.max(a, 7)) / 12 * 100).toFixed(1) + '%';
 const PAGE_SIZE = 6;
 
@@ -269,39 +288,66 @@ class Component extends DCLogic {
       : open.kind === 'key' ? [['Customer', open.customer], ['Request', open.keyKind], ['Date', open.when], ['Fee', open.fee], ['Notes', open.notes || 'No notes'], ['Staff member', open.assigned ? open.assigned + '.' : 'Not assigned']]
       : open.kind === 'booking' ? [['Customer', open.customer], ['Status', open.state], ['Start', open.when], ['Contact', open.contact], ['Service', open.service]]
       : [['Customer', open.customer], ['Status', open.state], ['Start', open.when], ['Cleaning type', open.cleanType]];
-    // Availability for the open item: who is free at that time, who overlaps, who is away.
-    let slotText = '', people = [], hasPeople = false, clash = '';
-    if (open && (['visit', 'booking', 'cleaning'].includes(open.kind) || (open.kind === 'key' && !open.assigned))) {
-      let date = open.date, slot = SLOT[open.id] || null;
-      if (open.kind === 'cleaning' && open.multiDay) { const s = START[st.start]; if (s) { date = s[0]; slot = [s[1], 3]; } else slot = 'pick'; }
-      if (slot === 'pick') slotText = 'Choose the planned start to see who is free then.';
-      else {
-        hasPeople = true;
-        const day = DAY[date] || DAY.default;
-        slotText = slot ? 'Showing who is free ' + hh(slot[0]) + '–' + hh(slot[0] + slot[1]) + ' on ' + (START[st.start] ? st.start.slice(0, 10) : open.when.slice(0, 11)) + '. Free people come first.' : 'Key requests have a day but no time. Showing how busy each person is that day.';
-        const rows = STAFF.map(n => {
-          const d = day[n];
-          if (d === 'away') return { n, rank: 3, status: 'Away · holiday', chip: 'chip chip-away', sub: 'Not working this day', blocks: [], away: true, hours: 0 };
-          const hours = d.reduce((t, b) => t + b[1] - b[0], 0);
-          const hit = slot ? d.filter(b => b[0] < slot[0] + slot[1] && b[1] > slot[0]) : [];
-          const blocks = d.map(b => ({ cls: 'b-busy', style: pos(b[0], b[1]) }));
-          if (slot) blocks.push({ cls: hit.length ? 'b-clash' : 'b-slot', style: pos(slot[0], slot[0] + slot[1]) });
-          const sub = (d.length ? d.length + (d.length === 1 ? ' visit' : ' visits') + ', ' + hours + ' h booked' : 'Nothing booked') + (d.length ? ': ' + d.map(b => hh(b[0]) + '–' + hh(b[1]) + ' ' + b[2]).join(', ') : '');
-          return hit.length
-            ? { n, rank: 2, status: 'Overlaps ' + hh(hit[0][0]) + '–' + hh(hit[0][1]), chip: 'chip chip-busy', sub, blocks, away: false, hours, hit: hit[0] }
-            : { n, rank: 1, status: slot ? 'Free' : (d.length ? 'Working' : 'Free all day'), chip: 'chip chip-free', sub, blocks, away: false, hours };
-        }).sort((a, b) => a.rank - b.rank || a.hours - b.hours);
-        people = rows.map((p, i) => ({
-          name: p.n + '.', status: p.status, chip: p.chip, sub: p.sub + (open.kind === 'cleaning' && AUTO_ACCEPT[p.n] ? ' · Accepts automatically' : ''), blocks: p.blocks, away: p.away,
-          best: i === 0 && p.rank === 1, checked: st.pick === p.n ? 'true' : 'false',
-          aria: p.n + '. ' + p.status + '. ' + p.sub,
-          choose: () => this.setState({ pick: p.n, err: '' }),
-        }));
-        const chosen = rows.find(p => p.n === st.pick);
-        if (chosen && chosen.hit) clash = chosen.n + '. already has ' + chosen.hit[2] + ' ' + hh(chosen.hit[0]) + '–' + hh(chosen.hit[1]) + '. You can still go ahead; the Scheduler will show both visits side by side as an overlap.';
-      }
+    // Availability for the open item. One time slot (day + start) is shared by every card: drag or tap a bar to move it,
+    // use the arrows to change the day. Changing it on a card also picks that person.
+    let whenText = '', people = [], clash = '', slotText = '', dayOpts = [], timeOpts = [], hasTime = false, moved = '';
+    const assigning = open && (['visit', 'booking', 'cleaning'].includes(open.kind) || (open.kind === 'key' && !open.assigned));
+    if (assigning) {
+      const days = daysFor(open);
+      const base = SLOT[open.id];
+      const date = days.includes(st.slotDay) ? st.slotDay : days[0];
+      const len = base ? base[1] : 0;
+      const start = base ? (st.slotStart != null ? st.slotStart : base[0]) : null;
+      hasTime = !!base;
+      const di = days.indexOf(date);
+      const setSlot = (patch, who) => this.setState({ ...patch, ...(who ? { pick: who } : {}), err: '' });
+      const clamp = h => Math.max(7, Math.min(19 - len, snap(h)));
+      dayOpts = days.map(d => ({ v: d, t: dayName(d), sel: d === date }));
+      timeOpts = base ? Array.from({ length: (12 - len) * 4 + 1 }, (_, i) => 7 + i / 4).map(h => ({ v: String(h), t: hh(h) + '–' + hh(h + len), sel: h === start })) : [];
+      slotText = base ? 'People are listed least busy first. Drag the outlined block along a person\'s day, or tap their bar, to set the time. Use the arrows to try another day.' : 'Key requests have a day but no time. Use the arrows to see how busy each person is on another day.';
+      if (base && (date !== open.date || start !== base[0])) moved = (open.kind === 'cleaning' && !open.multiDay ? 'The partner asked for ' + open.when + '. ' : 'Originally ' + open.when + '. ') + 'The new time, ' + dayName(date) + ' ' + hh(start) + '–' + hh(start + len) + ', is saved when you ' + (open.kind === 'cleaning' ? 'send the offer.' : 'assign.');
+      whenText = dayName(date) + (base ? ' ' + hh(start) + '–' + hh(start + len) : '');
+      const day = dayOf(date);
+      const rows = STAFF.map(n => {
+        const d = day[n];
+        if (d === 'away') return { n, rank: 3, status: 'Away · holiday', chip: 'chip chip-away', sub: 'Not working on ' + dayName(date), d: [], away: true, hours: 0 };
+        const hours = d.reduce((t, b) => t + b[1] - b[0], 0);
+        const hit = base ? d.filter(b => b[0] < start + len && b[1] > start) : [];
+        const sub = d.length ? d.length + (d.length === 1 ? ' visit' : ' visits') + ', ' + hours + ' h booked: ' + d.map(b => hh(b[0]) + '–' + hh(b[1]) + ' ' + b[2]).join(', ') : 'Nothing booked';
+        return hit.length
+          ? { n, rank: 2, status: 'Overlaps ' + hh(hit[0][0]) + '–' + hh(hit[0][1]), chip: 'chip chip-busy', sub, d, away: false, hours, hit: hit[0] }
+          : { n, rank: 1, status: base ? 'Free' : (d.length ? 'Working' : 'Free all day'), chip: 'chip chip-free', sub, d, away: false, hours };
+      }).sort((a, b) => (a.away - b.away) || a.hours - b.hours);
+      const bestName = (rows.find(p => p.rank === 1) || {}).n;
+      const hourAt = (e, offset, el) => { const r = (el || e.currentTarget).getBoundingClientRect(); return 7 + ((e.clientX - r.left) / r.width) * 12 - offset; };
+      people = rows.map((p, i) => ({
+        cls: 'pp' + (st.pick === p.n ? ' on' : '') + (p.away ? ' off' : ''),
+        name: p.n + '.', status: p.status, chip: p.chip, sub: p.sub + (open.kind === 'cleaning' && AUTO_ACCEPT[p.n] ? ' · Accepts automatically' : ''), away: p.away,
+        best: p.n === bestName, checked: st.pick === p.n ? 'true' : 'false',
+        aria: p.n + '. ' + p.status + '. ' + p.sub,
+        choose: () => this.setState({ pick: p.n, err: '' }),
+        dayLabel: dayName(date), noPrev: di <= 0, noNext: di >= days.length - 1,
+        prevLabel: 'Previous day for ' + p.n + '.', nextLabel: 'Next day for ' + p.n + '.',
+        prevDay: () => di > 0 && setSlot({ slotDay: days[di - 1] }, p.away ? null : p.n),
+        nextDay: () => di < days.length - 1 && setSlot({ slotDay: days[di + 1] }, p.away ? null : p.n),
+        blocks: p.d.map(b => ({ style: pos(b[0], b[1]), title: hh(b[0]) + '–' + hh(b[1]) + ' ' + b[2] })),
+        barLabel: p.n + '. on ' + dayName(date) + ', 07:00 to 19:00',
+        hasSlot: !!base && !p.away,
+        slotCls: p.hit ? 'b-clash' : 'b-slot', slotStyle: base ? pos(start, start + len) : '',
+        slotTime: base ? hh(start) + '–' + hh(start + len) : '', slotAria: 'Time for ' + p.n + '. Arrow keys move it by 15 minutes.',
+        grab: e => { this.grab = base ? (hourAt(e, 0, e.currentTarget.parentElement) - start) : 0; if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; },
+        over: e => { if (base && !p.away) e.preventDefault(); },
+        drop: e => { if (!base || p.away) return; e.preventDefault(); setSlot({ slotDay: date, slotStart: clamp(hourAt(e, this.grab || 0)) }, p.n); },
+        place: e => { if (!base || p.away || (e.target && e.target !== e.currentTarget)) return; setSlot({ slotDay: date, slotStart: clamp(hourAt(e, len / 2)) }, p.n); },
+        nudge: e => { const k = e.key === 'ArrowLeft' ? -0.25 : e.key === 'ArrowRight' ? 0.25 : 0; if (!k) return; e.preventDefault(); setSlot({ slotStart: clamp(start + k) }, p.n); },
+      }));
+      const chosen = rows.find(p => p.n === st.pick);
+      if (chosen && chosen.hit) clash = chosen.n + '. already has ' + chosen.hit[2] + ' ' + hh(chosen.hit[0]) + '–' + hh(chosen.hit[1]) + '. Drag the block to a free time, try another day, or go ahead anyway and the Scheduler shows both as an overlap.';
+      if (chosen && chosen.away) clash = '';
     }
     return {
+      onSlotDay: e => this.setState({ slotDay: e.target.value, err: '' }),
+      onSlotStart: e => this.setState({ slotStart: Number(e.target.value), err: '' }),
       onSource: e => this.setState({ source: e.target.value, page: 1 }),
       onType: e => this.setState({ type: e.target.value, page: 1 }),
       onSearch: e => this.setState({ q: e.target.value, page: 1 }),
@@ -317,7 +363,7 @@ class Component extends DCLogic {
         typeLabel: TYPE[it.kind], customer: it.customer, reference: it.reference, when: it.when, state: it.state,
         stateChip: 'chip ' + (it.alert ? 'chip-alert' : 'chip-state'), sourceLabel: SOURCE[it.kind], sourceChip: SOURCE_CHIP[it.kind],
         action: actionOf(it), actionLabel: actionOf(it) + ' ' + TYPE[it.kind].toLowerCase() + ' ' + it.reference,
-        open: () => this.setState({ open: it.id, pick: '', start: '', reason: '', price: '', duration: '', resolution: '', err: '', cancelAsk: false, editing: false, photos: 0 }),
+        open: () => this.setState({ open: it.id, pick: '', slotDay: null, slotStart: null, reason: '', price: '', duration: '', resolution: '', err: '', cancelAsk: false, editing: false, photos: 0 }),
       })),
       pageText: list.length ? 'Showing ' + ((page - 1) * PAGE_SIZE + 1) + '–' + Math.min(list.length, page * PAGE_SIZE) + ' of ' + list.length : 'Showing 0 of 0',
       page: page, pageCount: pageCount, firstPage: page <= 1, lastPage: page >= pageCount,
@@ -330,10 +376,10 @@ class Component extends DCLogic {
         facts: facts.map(([k, v]) => ({ k: k, v: v })),
         hasMessage: open.kind === 'change', message: open.message || '',
         isAssign: ['visit', 'booking', 'cleaning'].includes(open.kind) || (open.kind === 'key' && !open.assigned),
-        isOffer: open.kind === 'cleaning', needsStart: open.kind === 'cleaning' && open.multiDay,
+        isOffer: open.kind === 'cleaning',
         pickLabel: open.kind === 'cleaning' ? 'Offer to' : open.kind === 'key' ? 'Staff member who collects or hands over the keys' : 'Assignee',
         actionLabel: open.kind === 'cleaning' ? 'Send offer' : 'Assign',
-        slotText: slotText, people: people, hasPeople: hasPeople, hasClash: !!clash, clashText: clash,
+        slotText: slotText, people: people, hasClash: !!clash, clashText: clash, dayOpts: dayOpts, timeOpts: timeOpts, hasTime: hasTime, hasMoved: !!moved, movedText: moved,
         confirmLabel: (open.kind === 'cleaning' ? 'Send offer' : 'Assign') + (st.pick ? (open.kind === 'cleaning' ? ' to ' : ' to ') + st.pick + '.' : '') + (clash ? ' anyway' : ''),
         isQuote: open.kind === 'quote',
         isChange: open.kind === 'change', hasRequested: !!open.requested, requested: open.requested || '',
@@ -346,7 +392,6 @@ class Component extends DCLogic {
         hasErr: !!st.err, err: st.err || '',
       },
       onPick: e => this.setState({ pick: e.target.value, err: '' }),
-      onStart: e => this.setState({ start: e.target.value, err: '' }),
       onReason: e => this.setState({ reason: e.target.value, err: '' }),
       onPrice: e => this.setState({ price: e.target.value, err: '' }),
       onVat: e => this.setState({ vat: e.target.value }),
@@ -358,14 +403,13 @@ class Component extends DCLogic {
       closeDrawer: () => this.setState({ open: null, cancelAsk: false, editing: false, err: '' }),
       assignIt: () => {
         if (!st.pick) { err('Choose an employee.'); return; }
-        if (open.kind === 'key') { this.setState({ keyed: { ...keyed, [open.id]: st.pick }, states: { ...states, [open.id]: 'Assigned to ' + st.pick + '. · not completed' }, msg: st.pick + '. will handle the ' + open.keyKind.toLowerCase() + '. Mark it completed when the keys have changed hands.' }); return; }
+        if (open.kind === 'key') { this.setState({ keyed: { ...keyed, [open.id]: st.pick }, states: { ...states, [open.id]: 'Assigned to ' + st.pick + '. · not completed' }, msg: st.pick + '. will handle the ' + open.keyKind.toLowerCase() + ' on ' + whenText + '. Mark it completed when the keys have changed hands.' }); return; }
         if (open.kind === 'cleaning') {
-          if (open.multiDay && !st.start) { err('Choose the planned start inside the window.'); return; }
-          if (AUTO_ACCEPT[st.pick]) { leave(st.pick + '. accepts work automatically, so ' + open.reference + ' is accepted and now shows in the Scheduler.'); return; }
-          this.setState({ states: { ...states, [open.id]: 'Awaiting acceptance · offered to ' + st.pick + '.' }, open: null, msg: 'Offer for ' + open.reference + ' sent to ' + st.pick + '. It moves to the Scheduler when they accept.' });
+          if (AUTO_ACCEPT[st.pick]) { leave(st.pick + '. accepts work automatically, so ' + open.reference + ' (' + whenText + ') is accepted and now shows in the Scheduler.'); return; }
+          this.setState({ states: { ...states, [open.id]: 'Awaiting acceptance · offered to ' + st.pick + '.' }, open: null, msg: 'Offer for ' + open.reference + ', ' + whenText + ', sent to ' + st.pick + '. It moves to the Scheduler when they accept.' });
           return;
         }
-        leave(open.reference + ' is assigned to ' + st.pick + ' and now shows in the Scheduler.');
+        leave(open.reference + ' is assigned to ' + st.pick + '. for ' + whenText + ' and now shows in the Scheduler.');
       },
       savePrice: () => {
         if (!st.price || !st.duration) { err('Enter the price and the estimated duration.'); return; }
