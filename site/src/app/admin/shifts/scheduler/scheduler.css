@@ -37,6 +37,8 @@
 .scheduler .blk-sched{background:var(--line)}
 .scheduler .blk-needs{background:var(--gold-wash);border-color:var(--gold)}
 .scheduler .blk-cancelled{background:var(--wash);color:var(--muted);border-style:dashed;text-decoration:line-through}
+.scheduler .blk-offered{background:var(--wash);color:var(--muted);border-style:dashed;border-color:var(--line-3);opacity:.75}
+.scheduler .blk-offered strong{color:var(--muted)}
 .scheduler .blk-over{border:2px solid var(--gold-ink)}
 .scheduler .blk[aria-pressed='true']{outline:3px solid var(--gold-ink);outline-offset:1px}
 .scheduler .blk.locked{cursor:pointer}

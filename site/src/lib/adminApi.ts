@@ -626,6 +626,8 @@ export interface ScheduleVisit {
   moveLockReason?: string | null;
   /** Why the visit cannot be given to another employee, e.g. a past visit; null when it can. */
   reassignLockReason?: string | null;
+  /** A work order visit offered to this employee who has not accepted it yet; it can be offered to someone else with its OfferRevision. */
+  offerPending?: boolean; offerRevision?: number | null;
 }
 export interface EmployeeDaySchedule { employeeId: string; localDay: string; visits: ScheduleVisit[] }
 export interface OverlapFinding { employeeId: string; earlier: ScheduleVisit; later: ScheduleVisit }

@@ -223,4 +223,70 @@ public class EmployeeScheduleTests
     private static IReadOnlyList<EmployeeDaySchedule> ScheduleVisits_Group(
         IEnumerable<(Guid EmployeeId, EmployeeScheduleVisit Visit)> visits) =>
         ScheduleVisits.GroupByDay(visits, Helsinki);
+    // ---- Work order visits waiting for the employee to accept ----
+
+    private static Shift Main(string name)
+    {
+        var shift = Shift.Create(Guid.NewGuid(), Guid.NewGuid(), name, new ShiftSchedule { Type = ShiftScheduleType.OnCallFlexible }, null, null, null);
+        shift.IsBranchMain = true;
+        return shift;
+    }
+
+    private static ShiftOccurrenceException Offered(Shift shift, Guid employee, int revision = 3)
+    {
+        var visit = ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Added");
+        visit.OfferedEmployeeId = employee; visit.OfferId = Guid.NewGuid(); visit.OfferRevision = revision; visit.Sequence = 4;
+        return visit;
+    }
+
+    private static Task<IReadOnlyList<EmployeeDaySchedule>> Schedule(Shift shift, ShiftOccurrenceException visit) =>
+        new EmployeeScheduleQueryHandler(RosterOf(shift, visit).Object, null!, null!, clock: BeforeTheVisit)
+            .Handle(new EmployeeScheduleQuery(new DateTime(2026, 12, 7), new DateTime(2026, 12, 7)), default);
+
+    [Fact]
+    public async Task A_visit_offered_to_an_employee_shows_in_their_column_as_waiting_for_acceptance()
+    {
+        var employee = Guid.NewGuid(); var shift = Main("Kallio, Lindqvist flat");
+        var visit = Offered(shift, employee, revision: 7);
+        var day = Assert.Single(await Schedule(shift, visit));
+        Assert.Equal(employee, day.EmployeeId);
+        var item = Assert.Single(day.Visits);
+        Assert.True(item.OfferPending);
+        Assert.Equal("Offered", item.WorkStatus);
+        // What the calendar needs to offer it to someone else with the visit's employee endpoint.
+        Assert.Equal(visit.Id, item.ExtraExceptionId);
+        Assert.Equal(7, item.OfferRevision);
+        Assert.Equal(4, item.VisitNumber);
+        Assert.True(item.IsBranchMain);
+        Assert.Empty(item.AssigneeIds);
+        // Its time is fixed by the offer: it can only be offered to someone else.
+        Assert.Equal("Waiting for the employee to accept. Drag it to another employee to offer it to them instead.", item.MoveLockReason);
+        Assert.Null(item.ReassignLockReason);
+    }
+
+    [Fact]
+    public async Task An_accepted_visit_is_an_ordinary_visit_not_a_pending_offer()
+    {
+        var employee = Guid.NewGuid(); var shift = Main("Kallio, Lindqvist flat");
+        var visit = ShiftOccurrenceException.Create(shift.Id, null, Start, Start.AddHours(2), ShiftOccurrenceExceptionStatus.Extra, "Added", employee);
+        var item = Assert.Single(Assert.Single(await Schedule(shift, visit)).Visits);
+        Assert.False(item.OfferPending);
+        Assert.Null(item.OfferRevision);
+        Assert.NotEqual("Offered", item.WorkStatus);
+    }
+
+    [Fact]
+    public async Task Offers_on_inactive_or_ordinary_shifts_and_cancelled_offers_are_not_shown()
+    {
+        var employee = Guid.NewGuid();
+        var inactive = Main("Closed office"); inactive.Deactivate();
+        Assert.Empty(await Schedule(inactive, Offered(inactive, employee)));
+
+        var ordinary = OnCall("Weekly contract");
+        Assert.Empty(await Schedule(ordinary, Offered(ordinary, employee)));
+
+        var main = Main("Kallio, Lindqvist flat");
+        var cancelled = Offered(main, employee); cancelled.Status = ShiftOccurrenceExceptionStatus.CompanyCancelled;
+        Assert.Empty(await Schedule(main, cancelled));
+    }
 }

@@ -13,12 +13,12 @@ const visit = (fields: Record<string, unknown>) => ({ status: null, originalStar
 
 export type SchedulerState = {
   calendarCalls: string[]; scheduleCalls: string[]; saved: { method: string; path: string; body: any }[];
-  workSaved: boolean; failWork: number; failVisit: boolean;
+  workSaved: boolean; failWork: number; failVisit: boolean; failOffer: boolean;
 };
 
-export async function setupScheduler(page: Page, options: { calendar?: boolean; query?: string; thirdOverlap?: boolean } = {}) {
+export async function setupScheduler(page: Page, options: { calendar?: boolean; query?: string; thirdOverlap?: boolean; offered?: boolean } = {}) {
   await setupAdminMocks(page);
-  const state: SchedulerState = { calendarCalls: [], scheduleCalls: [], saved: [], workSaved: false, failWork: 0, failVisit: false };
+  const state: SchedulerState = { calendarCalls: [], scheduleCalls: [], saved: [], workSaved: false, failWork: 0, failVisit: false, failOffer: false };
   const calendar = options.calendar ?? true;
   await page.route(/\/api\/v1\/me$/, route => route.fulfill({ headers, json: { realm: 'readysetsiivous', roles: [JSON.stringify({ roles: ['admin'] })], canUseShiftCalendar: calendar, employee: null } }));
   await page.route(/\/api\/v1\/admin\//, route => {
@@ -32,6 +32,12 @@ export async function setupScheduler(page: Page, options: { calendar?: boolean; 
         state.workSaved = true; return route.fulfill({ headers, json: { id: 'work' } });
       }
       if (path.endsWith('/calendar/work-photos')) return route.fulfill({ headers, json: { id: 'photos' } });
+      // Offering a waiting visit to someone else: Ville accepts work automatically, anyone else gets an offer.
+      if (/\/branch-visits\/shifts\/[^/]+\/visits\/[^/]+\/employee$/.test(path)) {
+        if (state.failOffer) return route.fulfill({ status: 409, headers, json: { detail: 'The visit was offered to someone else. Reload and try again.' } });
+        return route.fulfill({ headers, json: { id: 'offer-1', shiftId: 'toolo', status: body.employeeId === 'ville' ? 'Assigned' : 'Offered', offerRevision: (body.offerRevision ?? 0) + 1,
+          employeeId: body.employeeId === 'ville' ? 'ville' : null, offeredEmployeeId: body.employeeId === 'ville' ? null : body.employeeId } });
+      }
       if (path.endsWith('/branch-visits')) {
         if (state.failVisit) return route.fulfill({ status: 409, headers, json: { detail: 'Anna Korhonen already has a visit at this time.' } });
         return route.fulfill({ headers, json: { id: 'new-visit', shiftId: 'kallio', branchId: 'kallio-branch', number: 4, startUtc: `${DAY}T06:00:00Z`, endUtc: `${DAY}T07:00:00Z` } });
@@ -44,7 +50,11 @@ export async function setupScheduler(page: Page, options: { calendar?: boolean; 
         { employeeId: 'anna', localDay: `${PAST}T00:00:00`, visits: [visit({ shiftId: 'kallio', shiftName: 'Kallio, Lindqvist flat', startUtc: `${PAST}T06:00:00Z`, endUtc: `${PAST}T09:00:00Z`,
           companyName: 'Virtanen Oy', branchName: 'Kallio', workStatus: 'Completed', visitNumber: 3, checklistDone: 12, checklistTotal: 12, assigneeIds: ['anna'], rosterVersion: 'r-kallio',
           isBranchMain: true, moveLockReason: 'Started or completed work cannot be moved or reassigned.' })] },
-        { employeeId: 'anna', localDay: `${DAY}T00:00:00`, visits: [visit({ shiftId: 'espoo', shiftName: 'Espoo, weekly clean', startUtc: `${DAY}T07:00:00Z`, endUtc: `${DAY}T10:00:00Z`,
+        { employeeId: 'anna', localDay: `${DAY}T00:00:00`, visits: [
+          ...(options.offered ? [visit({ shiftId: 'toolo', shiftName: 'Töölö, move-out', startUtc: `${DAY}T11:00:00Z`, endUtc: `${DAY}T13:00:00Z`, companyName: 'Aurora clinic',
+            branchName: 'Töölö', workStatus: 'Offered', status: 4, exceptionId: 'offer-1', extraExceptionId: 'offer-1', visitNumber: 2, isBranchMain: true, assigneeIds: [],
+            offerPending: true, offerRevision: 2, moveLockReason: 'Waiting for the employee to accept. Drag it to another employee to offer it to them instead.' })] : []),
+          visit({ shiftId: 'espoo', shiftName: 'Espoo, weekly clean', startUtc: `${DAY}T07:00:00Z`, endUtc: `${DAY}T10:00:00Z`,
           companyName: 'Virtanen Oy', branchName: 'Espoo', workStatus: 'InProgress', checklistDone: 4, checklistTotal: 10, assigneeIds: ['anna'], rosterVersion: 'r-espoo',
           moveLockReason: 'Started or completed work cannot be moved or reassigned.' })] },
         { employeeId: 'ville', localDay: `${DAY}T00:00:00`, visits: [

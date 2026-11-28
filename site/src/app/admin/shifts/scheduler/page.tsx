@@ -23,16 +23,18 @@ const STATUS_EXTRA = 4;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const LENGTHS = [[30, '0 h 30 min'], [60, '1 h'], [90, '1 h 30 min'], [120, '2 h'], [150, '2 h 30 min'], [180, '3 h'], [240, '4 h'], [300, '5 h'], [360, '6 h'], [480, '8 h']] as const;
 
-type Kind = 'done' | 'progress' | 'sched' | 'needs' | 'cancelled';
+type Kind = 'done' | 'progress' | 'sched' | 'needs' | 'cancelled' | 'offered';
 const KIND: Record<Kind, { text: string; block: string; chip: string; locked: boolean }> = {
   done: { text: 'Done', block: 'blk-done', chip: 'chip chip-done', locked: true },
   progress: { text: 'In progress', block: 'blk-progress', chip: 'chip chip-progress', locked: true },
   sched: { text: 'Scheduled', block: 'blk-sched', chip: 'chip chip-sched', locked: false },
   needs: { text: 'Needs action', block: 'blk-needs', chip: 'chip chip-needs', locked: false },
   cancelled: { text: 'Cancelled', block: 'blk-cancelled', chip: 'chip chip-mute', locked: true },
+  // Offered to the employee, who has not accepted yet: greyed, and it can only be offered to someone else.
+  offered: { text: 'Waiting for acceptance', block: 'blk-offered', chip: 'chip chip-mute', locked: true },
 };
 const kindOf = (status?: string | null): Kind =>
-  status === 'Completed' ? 'done' : status === 'InProgress' ? 'progress' : status === 'NeedsAction' ? 'needs' : 'sched';
+  status === 'Offered' ? 'offered' : status === 'Completed' ? 'done' : status === 'InProgress' ? 'progress' : status === 'NeedsAction' ? 'needs' : 'sched';
 
 type Block = {
   key: string; employeeId: string; day: string; start: number; end: number; kind: Kind; overlap: boolean;
@@ -141,6 +143,7 @@ export default function SchedulerPage() {
   const [newStart, setNewStart] = useState('08:00');
   const [newLength, setNewLength] = useState(60);
   const [newError, setNewError] = useState('');
+  const [offerTo, setOfferTo] = useState('');
   const [workFor, setWorkFor] = useState<Block | null>(null);
   const [workStart, setWorkStart] = useState(''); const [workEnd, setWorkEnd] = useState(''); const [workReason, setWorkReason] = useState('');
   const [workError, setWorkError] = useState('');
@@ -319,8 +322,10 @@ export default function SchedulerPage() {
   // ---- Moving, resizing and reassigning ----
   const isManual = (visit: ScheduleVisit) => visit.status === STATUS_EXTRA;
   const locked = (block: Block) => KIND[block.kind].locked || !block.visit || !!block.visit.moveLockReason || typeof block.visit.rosterVersion !== 'string';
-  const movable = (block: Block) => canDrag && !saving && !locked(block);
-  const canDropOn = (drag: Drag, column: Column) => column.employeeId === drag.block.employeeId && (!drag.resize || column.day === drag.block.day)
+  const isOffer = (block: Block) => block.kind === 'offered' && !!block.visit?.offerPending && !!block.visit.extraExceptionId;
+  const movable = (block: Block) => canDrag && !saving && (!locked(block) || isOffer(block));
+  const canDropOn = (drag: Drag, column: Column) => isOffer(drag.block) ? !drag.resize && column.employeeId !== drag.block.employeeId && column.day === drag.block.day
+    : column.employeeId === drag.block.employeeId && (!drag.resize || column.day === drag.block.day)
     || (!drag.resize && !!drag.block.visit && !drag.block.visit.isBranchMain && !drag.block.visit.reassignLockReason
       && !(drag.block.visit.assigneeIds ?? []).includes(column.employeeId));
 
@@ -377,6 +382,7 @@ export default function SchedulerPage() {
     if (!drag || !drag.block.visit || !canDropOn(drag, column)) return;
     event.preventDefault();
     const { block } = drag; const visit = drag.block.visit;
+    if (isOffer(block)) { await reoffer(block, column.employeeId); return; }
     const next = target(drag, event);
     const startUtc = zonedToUtc(column.day, next.start);
     const endUtc = drag.resize ? zonedToUtc(column.day, next.end) : new Date(Date.parse(startUtc) + (Date.parse(visit.endUtc) - Date.parse(visit.startUtc))).toISOString();
@@ -411,6 +417,29 @@ export default function SchedulerPage() {
           if (!current) throw new Error('The visit changed again, so it cannot be undone here. Reload and check it.');
           await reassign(current, column.employeeId, block.employeeId, UNDO_REASON);
         } : undefined });
+    } finally {
+      setSaving(false); setReloadKey(key => key + 1);
+    }
+  };
+  /** Offers a visit waiting for acceptance to another employee instead; Undo offers it back. */
+  const reoffer = async (block: Block, to: string) => {
+    const visit = block.visit!;
+    const fromName = nameOf(staff.find(employee => employee.id === block.employeeId));
+    const toName = nameOf(staff.find(employee => employee.id === to));
+    setSaving(true); setNotice({ text: 'Saving…' }); setSelectedKey(null);
+    try {
+      const result = await adminBranchVisits.setEmployee(visit.shiftId, visit.extraExceptionId!, to, visit.offerRevision ?? 0);
+      if (!result.ok) { setNotice({ error: true, text: result.message }); return; }
+      const accepted = result.value.status === 'Assigned';
+      setNotice({ text: accepted
+        ? `${toName} accepts work automatically, so ${visit.shiftName} is now assigned to them instead of waiting for ${fromName}.`
+        : `Offered ${visit.shiftName} to ${toName} instead of ${fromName}. It waits for ${toName} to accept.`,
+        undo: async () => {
+          const back = await adminBranchVisits.setEmployee(visit.shiftId, visit.extraExceptionId!, block.employeeId, result.value.offerRevision);
+          if (!back.ok) throw new Error(back.message);
+        } });
+    } catch (failure) {
+      setNotice({ error: true, text: failureText(failure) });
     } finally {
       setSaving(false); setReloadKey(key => key + 1);
     }
@@ -541,12 +570,15 @@ export default function SchedulerPage() {
     const access = calendarAccess === 'yes';
     const canRecord = access && !!person?.canRecord && !selected.calVisit?.ambiguous;
     const canPhoto = access && !!person?.version;
-    const actionNote = !access ? deniedText || 'Shift calendar access is needed to record work times and add photos. Ask an owner to enable it, then reload.'
+    const actionNote = selected.kind === 'offered' ? 'Work times and photos can be added once the visit is accepted.'
+      : !access ? deniedText || 'Shift calendar access is needed to record work times and add photos. Ask an owner to enable it, then reload.'
       : selected.kind === 'cancelled' ? 'Cancelled visits have no work times or photos.'
       : selected.calVisit?.ambiguous ? 'Overlapping visits need review before work times can be recorded.'
       : !canRecord ? 'Start and end times and photos can be added once the visit day has passed, if the assignee did not record them.'
       : !canPhoto ? 'Photos can be added once start and end times are recorded.' : '';
-    const lockText = kind.locked ? `Status: ${kind.text}. It cannot be moved or reassigned now.` : visit?.moveLockReason ?? '';
+    const lockText = selected.kind === 'offered'
+      ? `Waiting for ${nameOf(assignee)} to accept.${canDrag ? ' Drag it to another employee to offer it to them instead.' : ''}`
+      : kind.locked ? `Status: ${kind.text}. It cannot be moved or reassigned now.` : visit?.moveLockReason ?? '';
     return <aside className="panel" aria-label="Visit details">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
@@ -563,7 +595,7 @@ export default function SchedulerPage() {
       <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '10px 16px', fontSize: 14, margin: '16px 0' }}>
         <dt style={{ color: 'var(--muted)' }}>Visit</dt><dd style={{ margin: 0, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{dayLabel(selected.day)}, {formatTime(selected.startUtc)}–{formatTime(selected.endUtc)}</dd>
         {visit?.visitNumber != null && <><dt style={{ color: 'var(--muted)' }}>Number</dt><dd style={{ margin: 0 }}>Visit {visit.visitNumber}</dd></>}
-        <dt style={{ color: 'var(--muted)' }}>Assignee</dt><dd style={{ margin: 0, fontWeight: 600 }}>{nameOf(assignee) || person?.name}</dd>
+        <dt style={{ color: 'var(--muted)' }}>{selected.kind === 'offered' ? 'Offered to' : 'Assignee'}</dt><dd style={{ margin: 0, fontWeight: 600 }}>{nameOf(assignee) || person?.name}</dd>
         <dt style={{ color: 'var(--muted)' }}>Duration</dt><dd style={{ margin: 0 }}>{duration}</dd>
         <dt style={{ color: 'var(--muted)' }}>Actual</dt><dd style={{ margin: 0, fontVariantNumeric: 'tabular-nums' }}>{actual}</dd>
         <dt style={{ color: 'var(--muted)' }}>Checklist</dt><dd style={{ margin: 0 }}>{checklist}</dd>
@@ -572,6 +604,13 @@ export default function SchedulerPage() {
       </dl>
       {selected.overlap && <p style={{ margin: '0 0 12px', padding: 12, border: '1px solid var(--gold-ink)', borderRadius: 12, background: 'var(--gold-wash)', fontSize: 14 }}>This visit overlaps another visit by the same assignee. Move or reassign one of them.</p>}
       {lockText && <p className="note" style={{ marginBottom: 12 }}>{lockText}</p>}
+      {isOffer(selected) && <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+        <label className="field">Offer to someone else<select className="input" value={offerTo} onChange={event => setOfferTo(event.currentTarget.value)}>
+          <option value="">Choose an employee</option>
+          {staff.filter(employee => employee.id !== selected.employeeId).map(employee => <option key={employee.id} value={employee.id}>{nameOf(employee)}</option>)}
+        </select></label>
+        <button type="button" className="btn btn-primary" disabled={!offerTo || saving} onClick={() => { void reoffer(selected, offerTo); setOfferTo(''); }}>Send offer</button>
+      </div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button type="button" className="btn btn-primary" disabled={!canRecord} onClick={() => openWork(selected)}>{person?.actualStartUtc ? 'Edit work times' : 'Record start and end'}</button>
         <button type="button" className="btn btn-ghost" disabled={!canPhoto} onClick={() => openPhotos(selected)}>Add photos</button>
@@ -659,7 +698,7 @@ export default function SchedulerPage() {
                   const left = `calc(${place.lane * width}% + 4px)`; const blockWidth = `calc(${width}% - 8px)`;
                   return <div key={block.key} style={{ display: 'contents' }}>
                     {blockButton(block, { top, height, left, width: blockWidth })}
-                    {movable(block) && <div className="handle" role="separator" aria-label={`Drag to change the end time of ${block.name}`} draggable
+                    {movable(block) && !isOffer(block) && <div className="handle" role="separator" aria-label={`Drag to change the end time of ${block.name}`} draggable
                       style={{ top: top + height - 8, left, width: blockWidth }}
                       onDragStart={event => { dragged.current = { block, grab: 0, resize: true }; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', block.key); }}
                       onDragEnd={() => { dragged.current = null; setDropHint(null); }} />}
@@ -669,7 +708,7 @@ export default function SchedulerPage() {
             })}
           </div>
         </div>
-        <p className="note">Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same assignee.</p>
+        <p className="note">Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same assignee. Grey dashed: offered, waiting for the employee to accept.</p>
       </>}
 
       {details}
