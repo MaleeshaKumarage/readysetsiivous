@@ -89,9 +89,9 @@ a{color:var(--muted)}
       <sc-for list="{{ items }}" as="it" hint-placeholder-count="6">
       <div role="listitem" class="{{ it.cls }}">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
-          <span style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="{{ it.sourceChip }}">{{ it.sourceLabel }}</span><span class="chip chip-type">{{ it.typeLabel }}</span><strong>{{ it.customer }}</strong></span>
+          <strong>{{ it.customer }}</strong>
           <span style="font-size:14px;color:var(--muted)">{{ it.reference }} · {{ it.when }}</span>
-          <span style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="{{ it.stateChip }}">{{ it.state }}</span></span>
+          <span style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="{{ it.sourceChip }}">{{ it.sourceLabel }}</span><span class="chip chip-type">{{ it.typeLabel }}</span><span class="{{ it.stateChip }}">{{ it.state }}</span></span>
         </div>
         <button type="button" class="btn btn-primary" onClick="{{ it.open }}" aria-label="{{ it.actionLabel }}">{{ it.action }}</button>
       </div>
