@@ -69,6 +69,12 @@ a{color:var(--muted)}
 .when{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:12px;border:1px solid var(--line-2);border-radius:12px;background:var(--wash)}
 .when .field{flex:1 1 120px;min-width:0}
 .when .input{width:100%;min-width:0;box-sizing:border-box}
+/* Help text lives behind an "i": shown on hover or keyboard focus. */
+.info{position:relative;display:inline-flex;vertical-align:middle}
+.info-btn{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);cursor:help}
+.info-btn:hover{color:var(--ink);background:var(--wash)}
+.info .tip{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:60;width:260px;max-width:70vw;padding:12px;border:2px solid var(--line-3);border-radius:12px;background:var(--surface);font-size:13px;font-weight:400;line-height:1.45;color:var(--ink-2)}
+.info:hover .tip,.info:focus-within .tip{display:block}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100%;box-sizing:border-box;overflow-y:auto;padding:20px;background:var(--surface);border-left:2px solid var(--line-2);z-index:50;display:flex;flex-direction:column;gap:12px}
 </style>
 </helmet>
@@ -141,8 +147,7 @@ a{color:var(--muted)}
   <sc-if value="{{ dw.hasMessage }}" hint-placeholder-val="{{ false }}"><p style="margin:0;padding:12px;border:1px solid var(--line-2);border-radius:12px;background:var(--wash);font-size:14px;white-space:pre-wrap">{{ dw.message }}</p></sc-if>
 
   <sc-if value="{{ dw.isChange }}" hint-placeholder-val="{{ false }}">
-  <p style="margin:0;font-weight:600">{{ dw.requested }}</p>
-  <span class="note">{{ dw.changeHelp }}</span>
+  <p style="margin:0;font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap">{{ dw.requested }}<span class="info"><button type="button" class="info-btn" aria-label="More information"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.5M8 4.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><span class="tip" role="tooltip">{{ dw.changeHelp }}</span></span></p>
   <sc-if value="{{ dw.isDetailsReq }}" hint-placeholder-val="{{ false }}">
   <label class="field">Access notes for this site, shown to the assignee<textarea class="input" rows="3" style="padding:12px" defaultValue="{{ dw.siteNotes }}" onChange="{{ onNotes }}"></textarea></label>
   </sc-if>
@@ -156,10 +161,8 @@ a{color:var(--muted)}
   </sc-if>
 
   <sc-if value="{{ dw.isAssign }}" hint-placeholder-val="{{ false }}">
-  <sc-if value="{{ dw.isOffer }}" hint-placeholder-val="{{ false }}"><p class="note">The employee gets an offer to accept. Once accepted, the visit moves to the Scheduler. Employees with automatic acceptance take it straight away.</p></sc-if>
   <div style="display:flex;flex-direction:column;gap:8px">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><strong style="font-size:15px">{{ dw.pickLabel }}</strong><a href="Scheduler.dc.html" style="font-size:14px">Open this day in the Scheduler</a></div>
-    <span class="note">{{ dw.slotText }}</span>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="display:flex;align-items:center;gap:4px"><strong style="font-size:15px">{{ dw.pickLabel }}</strong><span class="info"><button type="button" class="info-btn" aria-label="More information"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.5M8 4.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><span class="tip" role="tooltip">{{ dw.helpText }}</span></span></span><a href="Scheduler.dc.html" style="font-size:14px">Open this day in the Scheduler</a></div>
     <div style="display:flex;flex-direction:column;gap:8px">
       <sc-for list="{{ dw.people }}" as="p" hint-placeholder-count="4">
       <div class="{{ p.cls }}">
@@ -184,7 +187,7 @@ a{color:var(--muted)}
   </sc-if>
 
   <sc-if value="{{ dw.isQuote }}" hint-placeholder-val="{{ false }}">
-  <p class="note">New requests for this property use this price. Existing requests keep their agreed price.</p>
+  <span style="display:flex;align-items:center;gap:4px"><strong style="font-size:15px">Price for this property</strong><span class="info"><button type="button" class="info-btn" aria-label="More information"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.5M8 4.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><span class="tip" role="tooltip">New requests for this property use this price. Existing requests keep their agreed price.</span></span></span>
   <div class="two">
     <label class="field">Price excl. VAT (€)<input class="input" type="number" min="0" step="0.01" onChange="{{ onPrice }}"></label>
     <label class="field">VAT (%)<input class="input" type="number" min="0" max="100" step="0.01" value="25.5" onChange="{{ onVat }}"></label>
@@ -204,8 +207,7 @@ a{color:var(--muted)}
 
   <sc-if value="{{ dw.isEditing }}" hint-placeholder-val="{{ false }}">
   <div style="display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line-2);border-radius:12px">
-    <strong>Edit or reschedule</strong>
-    <p class="note">Changes withdraw any offer, so the request needs a new employee offer.</p>
+    <span style="display:flex;align-items:center;gap:4px"><strong>Edit or reschedule</strong><span class="info"><button type="button" class="info-btn" aria-label="More information"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.5M8 4.5v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button><span class="tip" role="tooltip">Changes withdraw any offer, so the request needs a new employee offer.</span></span></span>
     <div class="two">
       <label class="field">From<select class="input" onChange="{{ onFrom }}"><option value="2026-12-04">4 Dec 2026</option><option value="2026-12-05">5 Dec 2026</option><option value="2026-12-08">8 Dec 2026</option></select></label>
       <label class="field">To<select class="input" onChange="{{ onTo }}"><option value="2026-12-05">5 Dec 2026</option><option value="2026-12-08">8 Dec 2026</option><option value="2026-12-09">9 Dec 2026</option></select></label>
@@ -422,7 +424,7 @@ class Component extends DCLogic {
         isOffer: open.kind === 'cleaning',
         pickLabel: open.kind === 'change' ? 'Move the visit' : open.kind === 'cleaning' ? 'Offer to' : open.kind === 'key' ? 'Staff member who collects or hands over the keys' : 'Assignee',
         actionLabel: open.kind === 'cleaning' ? 'Send offer' : 'Assign',
-        slotText: slotText, people: people, hasClash: !!clash, clashText: clash, dayOpts: dayOpts, timeOpts: timeOpts, lenOpts: lenOpts, empOpts: empOpts, hasTime: hasTime, hasMoved: !!moved, movedText: moved,
+        slotText: slotText, helpText: (open.kind === 'cleaning' ? 'The employee gets an offer to accept. Once accepted, it moves to the Scheduler; people with automatic acceptance take it straight away. ' : '') + slotText, people: people, hasClash: !!clash, clashText: clash, dayOpts: dayOpts, timeOpts: timeOpts, lenOpts: lenOpts, empOpts: empOpts, hasTime: hasTime, hasMoved: !!moved, movedText: moved,
         confirmLabel: (open.kind === 'cleaning' ? 'Send offer' : 'Assign') + (pickNow ? ' to ' + pickNow + '.' : '') + (clash ? ' anyway' : ''),
         isQuote: open.kind === 'quote',
         isChange: open.kind === 'change', isDetailsReq: open.changeKind === 'details', isCancelReq: open.changeKind === 'cancel', siteNotes: open.siteNotes || '',
