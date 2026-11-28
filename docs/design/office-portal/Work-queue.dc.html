@@ -34,6 +34,7 @@ a{color:var(--muted)}
 .chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
 .chip-state{background:var(--line);color:var(--ink)}
 .chip-alert{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-sub{background:var(--wash);border:1px dashed var(--line-3);color:var(--ink-2)}
 .chip-type{background:transparent;border:1px solid var(--line-3);color:var(--ink)}
 /* Where an item comes from: one colour each. */
 .src-admin{background:var(--ink);color:var(--surface)}
@@ -108,7 +109,7 @@ a{color:var(--muted)}
         <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
           <strong>{{ it.customer }}</strong>
           <span style="font-size:14px;color:var(--muted)">{{ it.reference }} · {{ it.when }}</span>
-          <span style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="{{ it.sourceChip }}">{{ it.sourceLabel }}</span><span class="chip chip-type">{{ it.typeLabel }}</span><span class="{{ it.stateChip }}">{{ it.state }}</span></span>
+          <span style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="{{ it.sourceChip }}">{{ it.sourceLabel }}</span><span class="chip chip-type">{{ it.typeLabel }}</span><sc-if value="{{ it.hasClean }}" hint-placeholder-val="{{ true }}"><span class="chip chip-sub">{{ it.cleanType }}</span></sc-if><span class="{{ it.stateChip }}">{{ it.state }}</span></span>
         </div>
         <button type="button" class="btn btn-primary" onClick="{{ it.open }}" aria-label="{{ it.actionLabel }}">{{ it.action }}</button>
       </div>
@@ -124,7 +125,7 @@ a{color:var(--muted)}
 
 <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
 <aside class="drawer" role="dialog" aria-modal="true" aria-label="{{ dw.title }}">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><span style="display:flex;flex-direction:column;gap:4px"><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="{{ dw.sourceChip }}">{{ dw.sourceLabel }}</span><span class="chip chip-type">{{ dw.typeLabel }}</span></span><strong style="font-size:18px">{{ dw.title }}</strong></span><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDrawer }}" style="min-width:44px">×</button></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><span style="display:flex;flex-direction:column;gap:4px"><span style="display:flex;flex-wrap:wrap;gap:6px"><span class="{{ dw.sourceChip }}">{{ dw.sourceLabel }}</span><span class="chip chip-type">{{ dw.typeLabel }}</span><sc-if value="{{ dw.hasClean }}" hint-placeholder-val="{{ false }}"><span class="chip chip-sub">{{ dw.cleanType }}</span></sc-if></span><strong style="font-size:18px">{{ dw.title }}</strong></span><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDrawer }}" style="min-width:44px">×</button></div>
   <dl style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;margin:0">
     <sc-for list="{{ dw.facts }}" as="f" hint-placeholder-count="4"><dt style="color:var(--muted)">{{ f.k }}</dt><dd style="margin:0">{{ f.v }}</dd></sc-for>
   </dl>
@@ -204,20 +205,20 @@ a{color:var(--muted)}
 // work order visits and public bookings get an assignee, partner cleaning requests get an employee offer, quote requests get a price,
 // change requests get a resolution and key requests get a staff member and then completion. Assigned visits move to the Scheduler.
 const ITEMS = [
-  { id: 'w1', kind: 'visit', customer: 'Lindqvist household', reference: 'Kallio, Lindqvist flat, visit 4', when: '24 Nov 2026 08:00', date: '2026-11-24', state: 'Overdue · not started', alert: true },
-  { id: 'w2', kind: 'booking', customer: 'Eeva Mäkinen', reference: 'B-1042', when: '30 Nov 2026 08:00', date: '2026-11-30', state: 'New booking', alert: false, contact: '040 123 4567 · eeva@example.fi', service: 'Kotisiivous, 180 min' },
+  { id: 'w1', kind: 'visit', customer: 'Lindqvist household', reference: 'Kallio, Lindqvist flat, visit 4', when: '24 Nov 2026 08:00', date: '2026-11-24', state: 'Overdue · not started', alert: true, cleanType: 'Normal' },
+  { id: 'w2', kind: 'booking', customer: 'Eeva Mäkinen', reference: 'B-1042', when: '30 Nov 2026 08:00', date: '2026-11-30', state: 'New booking', alert: false, contact: '040 123 4567 · eeva@example.fi', service: 'Kotisiivous, 180 min', cleanType: 'Home cleaning' },
   { id: 'w4', kind: 'quote', customer: 'Kamppi Apartments Oy', reference: 'Kamppi studio 12, Helsinki', when: 'Waiting since 1 Dec 2026', date: '2026-12-01', state: 'Quote requested', alert: false, rooms: '2', beds: '2' },
   { id: 'w5', kind: 'change', customer: 'Nordea branch, Mannerheimintie', reference: 'Partner request P-309 · Reschedule', when: 'Sent 2 Dec 2026', date: '2026-12-02', state: 'Awaiting response', alert: false,
     message: 'The office is closed on Friday. Could you come next week instead?', requested: '8 Dec 2026 to 9 Dec 2026' },
   { id: 'w3', kind: 'cleaning', customer: 'Nordea branch, Mannerheimintie', reference: 'Partner request P-311', when: '4–5 Dec 2026', date: '2026-12-04', state: 'Needs an employee', alert: false,
-    window: '4–5 Dec 2026', exact: 'Any time in the window', duration: '3 h', type: 'Normal', price: '€180.00 excl. VAT (25.5%)', notes: 'Keys at reception.', multiDay: true },
+    window: '4–5 Dec 2026', exact: 'Any time in the window', duration: '3 h', type: 'Normal', cleanType: 'Normal', price: '€180.00 excl. VAT (25.5%)', notes: 'Keys at reception.', multiDay: true },
   { id: 'w6', kind: 'key', customer: 'Kesko store, Kamppi', reference: 'Key pickup', when: '6 Dec 2026', date: '2026-12-06', state: 'Needs a staff member', alert: false, keyKind: 'Key pickup', fee: '€25.00 excl. VAT', notes: 'Pick up from the security desk.' },
   { id: 'w7', kind: 'cleaning', customer: 'Kesko store, Kamppi', reference: 'Partner request P-314', when: '7 Dec 2026 07:00', date: '2026-12-07', state: 'Awaiting acceptance · offered to Ville R.', alert: false,
-    window: '7 Dec 2026', exact: '07:00', duration: '2 h', type: 'Deep clean', price: '€140.00 excl. VAT (25.5%)', notes: 'Store opens at 09:00.', multiDay: false },
+    window: '7 Dec 2026', exact: '07:00', duration: '2 h', type: 'Deep clean', cleanType: 'Deep clean', price: '€140.00 excl. VAT (25.5%)', notes: 'Store opens at 09:00.', multiDay: false },
   { id: 'w8', kind: 'change', customer: 'Kesko store, Kamppi', reference: 'Message', when: 'Sent 3 Dec 2026', date: '2026-12-03', state: 'Awaiting response', alert: false,
     message: 'Please use the side entrance from now on.', requested: '' },
   { id: 'w10', kind: 'key', customer: 'Aurora clinic', reference: 'Key handover', when: '9 Dec 2026', date: '2026-12-09', state: 'Assigned to Minna S. · not completed', alert: false, keyKind: 'Key handover', fee: '€25.00 excl. VAT', notes: '', assigned: 'Minna S' },
-  { id: 'w9', kind: 'visit', customer: 'Virtanen Oy', reference: 'Helsinki showroom, visit 6', when: '12 Dec 2026 09:00', date: '2026-12-12', state: 'Unassigned', alert: false },
+  { id: 'w9', kind: 'visit', customer: 'Virtanen Oy', reference: 'Helsinki showroom, visit 6', when: '12 Dec 2026 09:00', date: '2026-12-12', state: 'Unassigned', alert: false, cleanType: 'Office cleaning' },
 ];
 const TYPE = { visit: 'Cleaning', booking: 'Cleaning', cleaning: 'Cleaning', quote: 'Quote', change: 'Change request', key: 'Key handling' };
 const SOURCE = { visit: 'Admin', booking: 'Public booking', cleaning: 'Partner portal', quote: 'Partner portal', change: 'Partner portal', key: 'Partner portal' };
@@ -267,7 +268,7 @@ class Component extends DCLogic {
       : open.kind === 'cleaning' ? [['Customer', open.customer], ['Status', open.state], ['Window', open.window], ['Start', open.exact], ['Duration', open.duration], ['Cleaning type', open.type], ['Price', open.price], ['Notes', open.notes || 'No notes']]
       : open.kind === 'key' ? [['Customer', open.customer], ['Request', open.keyKind], ['Date', open.when], ['Fee', open.fee], ['Notes', open.notes || 'No notes'], ['Staff member', open.assigned ? open.assigned + '.' : 'Not assigned']]
       : open.kind === 'booking' ? [['Customer', open.customer], ['Status', open.state], ['Start', open.when], ['Contact', open.contact], ['Service', open.service]]
-      : [['Customer', open.customer], ['Status', open.state], ['Start', open.when]];
+      : [['Customer', open.customer], ['Status', open.state], ['Start', open.when], ['Cleaning type', open.cleanType]];
     // Availability for the open item: who is free at that time, who overlaps, who is away.
     let slotText = '', people = [], hasPeople = false, clash = '';
     if (open && (['visit', 'booking', 'cleaning'].includes(open.kind) || (open.kind === 'key' && !open.assigned))) {
@@ -312,6 +313,7 @@ class Component extends DCLogic {
       emptyText: q ? 'Nothing waiting matches “' + st.q + '”.' : 'New visits, bookings and partner requests appear here when they need the office.',
       items: pageItems.map(it => ({
         cls: 'item' + (it.alert ? ' alert' : ''),
+        hasClean: !!it.cleanType, cleanType: it.cleanType || '',
         typeLabel: TYPE[it.kind], customer: it.customer, reference: it.reference, when: it.when, state: it.state,
         stateChip: 'chip ' + (it.alert ? 'chip-alert' : 'chip-state'), sourceLabel: SOURCE[it.kind], sourceChip: SOURCE_CHIP[it.kind],
         action: actionOf(it), actionLabel: actionOf(it) + ' ' + TYPE[it.kind].toLowerCase() + ' ' + it.reference,
@@ -323,6 +325,7 @@ class Component extends DCLogic {
       nextPage: () => this.setState({ page: Math.min(pageCount, page + 1) }),
       drawerOpen: !!open,
       dw: !open ? {} : {
+        hasClean: !!open.cleanType, cleanType: open.cleanType || '',
         typeLabel: TYPE[open.kind], sourceLabel: SOURCE[open.kind], sourceChip: SOURCE_CHIP[open.kind], title: open.kind === 'booking' ? 'Booking ' + open.reference : open.kind === 'quote' ? 'Price ' + open.reference : open.reference,
         facts: facts.map(([k, v]) => ({ k: k, v: v })),
         hasMessage: open.kind === 'change', message: open.message || '',
