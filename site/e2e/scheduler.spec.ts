@@ -327,3 +327,81 @@ test('overlapping visits shrink to share their column; the column keeps the same
   const time = ville.getByRole('button', { name: /^Hietaniemi office/ }).getByText('10:00–14:00');
   expect(await time.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
+
+// ---- Visits offered to an employee who has not accepted yet ----
+
+const offered = (page: import('@playwright/test').Page) => column(page, 'Anna Korhonen').getByRole('button', { name: /^Töölö, move-out, 13:00–15:00, Waiting for acceptance$/ });
+
+test('a visit waiting for acceptance shows greyed in the offered employee’s column', async ({ page, isMobile }) => {
+  await setupScheduler(page, { offered: true });
+  await expect(offered(page)).toHaveClass(/blk-offered/);
+  expect(Number(await offered(page).evaluate(el => getComputedStyle(el).opacity))).toBeLessThan(1);
+  await expect(offered(page).getByText('Waiting for acceptance')).toBeVisible();
+  // Its time is set by the offer, so it has no end-time handle.
+  await expect(column(page, 'Anna Korhonen').getByRole('separator', { name: /Töölö/ })).toHaveCount(0);
+  await expect(page.getByText('08:00–16:00 · 2 visits')).toBeVisible();
+  await offered(page).click();
+  const details = panel(page);
+  await expect(details.getByText('Waiting for acceptance', { exact: true })).toBeVisible();
+  await expect(details.getByText(isMobile ? 'Waiting for Anna Korhonen to accept.' : 'Waiting for Anna Korhonen to accept. Drag it to another employee to offer it to them instead.', { exact: true })).toBeVisible();
+  await expect(details.getByText('Visit 2')).toBeVisible();
+  await expect(details.getByRole('term').filter({ hasText: 'Offered to' })).toBeVisible();
+  await expect(page.getByText('Grey dashed: offered, waiting for the employee to accept.', { exact: false })).toBeVisible();
+  await expect(details.getByRole('button', { name: 'Record start and end' })).toBeDisabled();
+  await expect(details.getByRole('button', { name: 'Add photos' })).toBeDisabled();
+  await expect(details.getByText('Work times and photos can be added once the visit is accepted.')).toBeVisible();
+  // The offer can go to anyone but the employee who already has it.
+  await expect(details.getByRole('combobox', { name: 'Offer to someone else' }).locator('option')).toHaveText(['Choose an employee', 'Ville Rantanen', 'Minna Salo']);
+  await expect(details.getByRole('button', { name: 'Send offer' })).toBeDisabled();
+});
+
+test('a waiting visit can be offered to someone else from its panel, and Undo offers it back', async ({ page }) => {
+  const state = await setupScheduler(page, { offered: true });
+  await offered(page).click();
+  await panel(page).getByRole('combobox', { name: 'Offer to someone else' }).selectOption({ label: 'Minna Salo' });
+  await panel(page).getByRole('button', { name: 'Send offer' }).click();
+  await expect(page.getByRole('status')).toContainText('Offered Töölö, move-out to Minna Salo instead of Anna Korhonen. It waits for Minna Salo to accept.');
+  const offers = () => state.saved.filter(item => item.path.endsWith('/branch-visits/shifts/toolo/visits/offer-1/employee'));
+  expect(offers()[0].body).toEqual({ employeeId: 'minna', offerRevision: 2 });
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('status')).toContainText('Change undone.');
+  expect(offers()[1].body).toEqual({ employeeId: 'anna', offerRevision: 3 });
+});
+
+test('offering a waiting visit to an employee who accepts automatically assigns it to them', async ({ page }) => {
+  await setupScheduler(page, { offered: true });
+  await offered(page).click();
+  await panel(page).getByRole('combobox', { name: 'Offer to someone else' }).selectOption({ label: 'Ville Rantanen' });
+  await panel(page).getByRole('button', { name: 'Send offer' }).click();
+  await expect(page.getByRole('status')).toContainText('Ville Rantanen accepts work automatically, so Töölö, move-out is now assigned to them instead of waiting for Anna Korhonen.');
+});
+
+test('a refused re-offer shows the server reason and offers no undo', async ({ page }) => {
+  const state = await setupScheduler(page, { offered: true });
+  state.failOffer = true;
+  await offered(page).click();
+  await panel(page).getByRole('combobox', { name: 'Offer to someone else' }).selectOption({ label: 'Minna Salo' });
+  await panel(page).getByRole('button', { name: 'Send offer' }).click();
+  await expect(page.getByRole('status')).toContainText('The visit was offered to someone else. Reload and try again.');
+  await expect(page.getByRole('status').getByRole('button', { name: 'Undo' })).toHaveCount(0);
+});
+
+test.describe('desktop drag', () => {
+  test.skip(({ isMobile }) => isMobile, 'Drag and drop is off on phones.');
+  test.use({ viewport: { width: 1400, height: 1400 } });
+
+  test('dragging a waiting visit to another employee offers it to them; its own column does nothing', async ({ page }) => {
+    const state = await setupScheduler(page, { offered: true });
+    await expect(offered(page)).toHaveAttribute('draggable', 'true');
+    // Dropped in its own column at another time: not allowed, nothing is saved.
+    await offered(page).dragTo(column(page, 'Anna Korhonen'), { sourcePosition: { x: 20, y: 2 }, targetPosition: { x: 40, y: 500 } });
+    await expect(page.getByRole('status')).toHaveCount(0);
+    // Dropped on Minna's column: offered to Minna, at the same time.
+    await offered(page).dragTo(column(page, 'Minna Salo'), { sourcePosition: { x: 20, y: 2 }, targetPosition: { x: 40, y: 400 } });
+    await expect(page.getByRole('status')).toContainText('Offered Töölö, move-out to Minna Salo instead of Anna Korhonen.');
+    const offers = state.saved.filter(item => item.path.endsWith('/employee'));
+    expect(offers).toHaveLength(1);
+    expect(offers[0].body).toEqual({ employeeId: 'minna', offerRevision: 2 });
+    expect(state.saved.some(item => item.path.endsWith('/occurrence-exceptions'))).toBe(false);
+  });
+});

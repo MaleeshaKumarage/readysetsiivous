@@ -62,6 +62,8 @@ a{color:var(--muted)}
 .chip-sched{background:var(--gold-wash);color:var(--gold-ink)}
 .blk-cancelled{background:var(--wash);color:var(--muted);border-style:dashed;text-decoration:line-through}
 .blk-unassigned{border-style:dashed}
+.blk-offered{background:var(--wash);color:var(--muted);border-style:dashed;border-color:var(--line-3);opacity:.75}
+.blk-offered strong{color:var(--muted)}
 .chip-mute{background:var(--line);color:var(--muted)}
 .field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
 .input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
@@ -172,7 +174,7 @@ a{color:var(--muted)}
         </sc-for>
       </div>
     </div>
-    <p class="note">Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same assignee.</p>
+    <p class="note">Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same assignee. Grey dashed: offered, waiting for the employee to accept.</p>
   </main>
 </div>
 
@@ -213,7 +215,7 @@ a{color:var(--muted)}
   <dl style="display:grid;grid-template-columns:auto 1fr;gap:10px 16px;font-size:14px;margin:16px 0">
     <dt style="color:var(--muted)">Visit</dt><dd style="margin:0;font-weight:600;font-variant-numeric:tabular-nums">{{ sel.when }}</dd>
     <dt style="color:var(--muted)">Number</dt><dd style="margin:0">Visit {{ sel.number }}</dd>
-    <dt style="color:var(--muted)">Assignee</dt><dd style="margin:0;font-weight:600">{{ sel.cleanerName }}</dd>
+    <dt style="color:var(--muted)">{{ sel.assigneeLabel }}</dt><dd style="margin:0;font-weight:600">{{ sel.cleanerName }}</dd>
     <dt style="color:var(--muted)">Duration</dt><dd style="margin:0">{{ sel.duration }}</dd>
     <dt style="color:var(--muted)">Actual</dt><dd style="margin:0;font-variant-numeric:tabular-nums">{{ sel.actualText }}</dd>
     <dt style="color:var(--muted)">Checklist</dt><dd style="margin:0">{{ sel.checklist }}</dd>
@@ -221,7 +223,14 @@ a{color:var(--muted)}
     <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><dt style="color:var(--muted)">Review</dt><dd style="margin:0">{{ sel.reviewLabel }}</dd></sc-if>
   </dl>
   <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><p style="margin:0 0 12px;padding:12px;border:1px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);font-size:14px">This visit overlaps another visit by the same assignee. Move or reassign one of them.</p></sc-if>
-  <sc-if value="{{ sel.locked }}" hint-placeholder-val="{{ false }}"><p class="note" style="margin-bottom:12px">Status: {{ sel.statusText }}. It cannot be moved or reassigned now.</p></sc-if>
+  <sc-if value="{{ sel.lockedNotOffer }}" hint-placeholder-val="{{ false }}"><p class="note" style="margin-bottom:12px">Status: {{ sel.statusText }}. It cannot be moved or reassigned now.</p></sc-if>
+  <sc-if value="{{ sel.isOffer }}" hint-placeholder-val="{{ false }}">
+  <p class="note" style="margin-bottom:12px">Waiting for {{ sel.cleanerName }} to accept. Drag it to another employee to offer it to them instead.</p>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+    <label class="field">Offer to someone else<select class="input" onChange="{{ sel.onOfferTo }}"><option value="">Choose an employee</option><sc-for list="{{ sel.offerChoices }}" as="o" hint-placeholder-count="2"><option value="{{ o.id }}">{{ o.name }}</option></sc-for></select></label>
+    <button type="button" class="btn btn-primary" onClick="{{ sel.sendOffer }}" disabled="{{ sel.noOfferTo }}">Send offer</button>
+  </div>
+  </sc-if>
   <div style="display:flex;flex-direction:column;gap:10px">
     <button type="button" class="btn btn-primary" onClick="{{ sel.record }}" disabled="{{ sel.noRecord }}">{{ sel.recordLabel }}</button>
     <button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}" disabled="{{ sel.noPhoto }}">Add photos</button>
@@ -292,6 +301,7 @@ const SEED = [
   { id: 'v7', emp: 'anna', day: 3, start: 13 * 60, end: 16 * 60, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 2, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'v8', emp: 'minna', day: 4, start: 8 * 60, end: 11 * 60, title: 'Töölö, Minna S.', place: 'Töölö · Aurora clinic', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'v9', emp: 'minna', day: 1, start: 7 * 60 + 30, end: 9 * 60 + 30, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 3, status: 'needs', checklist: 'No checklist yet', notes: 'Not started. Call the assignee.', actual: '', hours: null, version: false, review: { kind: 'Missing completion', label: 'No start or end recorded' } },
+  { id: 'o1', emp: 'anna', day: 1, start: 13 * 60, end: 15 * 60, title: 'Töölö, move-out', place: 'Töölö · Aurora clinic', number: 2, status: 'offered', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'c1', emp: 'ville', day: 2, start: 9 * 60, end: 12 * 60, title: 'Helsinki showroom', place: 'Virtanen Oy · Helsinki showroom', number: 1, status: 'cancelled', checklist: 'Not needed', actual: '', hours: null, version: false, review: null },
 ];
 const STATUS = {
@@ -300,6 +310,8 @@ const STATUS = {
   sched: { text: 'Scheduled', cls: 'blk-sched', chip: 'chip chip-sched', locked: false },
   needs: { text: 'Needs action', cls: 'blk-needs', chip: 'chip chip-needs', locked: false },
   cancelled: { text: 'Cancelled', cls: 'blk-cancelled', chip: 'chip chip-mute', locked: true },
+  // Offered to the employee, who has not accepted yet: greyed; it can only be offered to someone else.
+  offered: { text: 'Waiting for acceptance', cls: 'blk-offered', chip: 'chip chip-mute', locked: true },
 };
 const PLACE = { 'Kallio, Lindqvist flat': 'Kallio · Virtanen Oy', 'Töölö, move-out': 'Töölö · Aurora clinic', 'Hietaniemi office': 'Hietaniemi · Hietaniemi office Oy', 'Espoo, weekly clean': 'Espoo · Virtanen Oy', 'Helsinki showroom': 'Virtanen Oy · Helsinki showroom' };
 const EMP_BY_ID = Object.fromEntries(EMPLOYEES.map(e => [e.id, e.name]));
@@ -335,8 +347,16 @@ class Component extends DCLogic {
     if (!v || STATUS[v.status].locked || v.emp === emp) return;
     this.change(id, { emp: emp }, v.title + ' moved to ' + EMP_BY_ID[emp] + '.');
   }
+  reoffer(id, emp) {
+    const v = this.visits().find(x => x.id === id);
+    if (!v || v.status !== 'offered' || v.emp === emp) return;
+    const name = x => EMP_BY_ID[x].replace(/\.$/, '');
+    this.change(id, { emp: emp }, 'Offered ' + v.title + ' to ' + name(emp) + ' instead of ' + name(v.emp) + '. It waits for ' + name(emp) + ' to accept.');
+    this.setState({ sel: null, offerTo: '' });
+  }
   dropAt(id, emp, day, e) {
     const v = this.visits().find(x => x.id === id);
+    if (v && v.status === 'offered') { if (v.emp !== emp && v.day === day) this.reoffer(id, emp); return; }
     if (!v || STATUS[v.status].locked) { this.say('This visit is ' + STATUS[v.status].text.toLowerCase() + ' and cannot be moved.'); return; }
     let start = v.start;
     if (e && e.clientY != null && e.currentTarget && e.currentTarget.getBoundingClientRect) {
@@ -431,7 +451,7 @@ class Component extends DCLogic {
         reviewTag: v.review ? 'Needs review' : '',
         cls: s.cls + (over ? ' blk-over' : '') + (v.emp === null ? ' blk-unassigned' : ''),
         box: box(v),
-        draggable: !s.locked ? 'true' : 'false',
+        draggable: !s.locked || v.status === 'offered' ? 'true' : 'false',
         selected: selId === v.id,
         canResize: !s.locked,
         handleBox: { position: 'absolute', left: box(v).left, width: box(v).width, top: (((v.end - FIRST) / 60) * HOUR_PX - 8) + 'px' },
@@ -491,6 +511,13 @@ class Component extends DCLogic {
           reviewKind: sel.review ? sel.review.kind : '',
           reviewLabel: sel.review ? sel.review.label : '',
           locked: s.locked,
+          lockedNotOffer: s.locked && sel.status !== 'offered',
+          isOffer: sel.status === 'offered',
+          offerChoices: EMPLOYEES.filter(e => e.id !== sel.emp).map(e => ({ id: e.id, name: e.name })),
+          assigneeLabel: sel.status === 'offered' ? 'Offered to' : 'Assignee',
+          onOfferTo: e => this.setState({ offerTo: e.target.value }),
+          noOfferTo: !st.offerTo || st.offerTo === sel.emp,
+          sendOffer: () => this.reoffer(sel.id, st.offerTo),
           when: DAYS[sel.day] + ', ' + fmt(sel.start) + '–' + fmt(sel.end),
           cleanerName: sel.emp ? EMP_BY_ID[sel.emp] : 'Unassigned',
           empValue: sel.emp || 'anna',
@@ -504,7 +531,7 @@ class Component extends DCLogic {
           noRecord: !canRecord,
           noPhoto: !sel.version,
           hasActionNote: !canRecord || !sel.version,
-          actionNote: sel.status === 'cancelled' ? 'Cancelled visits have no work times or photos.' : !canRecord ? 'Start and end times and photos can be added once the visit day has passed, if the assignee did not record them.' : 'Photos can be added once start and end times are recorded.',
+          actionNote: sel.status === 'offered' ? 'Work times and photos can be added once the visit is accepted.' : sel.status === 'cancelled' ? 'Cancelled visits have no work times or photos.' : !canRecord ? 'Start and end times and photos can be added once the visit day has passed, if the assignee did not record them.' : 'Photos can be added once start and end times are recorded.',
           earlier: () => this.move(sel.id, -15),
           later: () => this.move(sel.id, 15),
           onReassign: e => this.reassign(sel.id, e.target.value),

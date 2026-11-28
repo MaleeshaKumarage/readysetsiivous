@@ -101,6 +101,13 @@ public sealed record EmployeeScheduleVisit(Guid ShiftId, string ShiftName, DateT
     public string? MoveLockReason { get; init; }
     /// <summary>Why the visit cannot be given to another employee (also past visits); null when it can.</summary>
     public string? ReassignLockReason { get; init; }
+    /// <summary>
+    /// True for a work order visit offered to this employee who has not accepted it yet. It is shown greyed in their column
+    /// and can be offered to someone else with the visit's employee endpoint, using ExtraExceptionId and OfferRevision.
+    /// </summary>
+    public bool OfferPending { get; init; }
+    /// <summary>The offer's revision, sent back when the visit is offered to someone else; null when no offer is waiting.</summary>
+    public int? OfferRevision { get; init; }
 }
 
 public sealed record EmployeeDaySchedule(Guid EmployeeId, DateTime LocalDay, IReadOnlyList<EmployeeScheduleVisit> Visits);
@@ -229,6 +236,39 @@ public sealed class EmployeeScheduleQueryHandler(IShiftRepository repository, IT
                 MoveLockReason = moveLock,
                 ReassignLockReason = reassignLock,
             }));
+        }
+        // Work order visits offered to an employee who has not accepted yet: not on the roster, but shown in that employee's column.
+        foreach (var shift in (await repository.ListForReportingAsync(ct)).Where(s => s.IsActive && s.IsBranchMain))
+        {
+            var pending = (await repository.ListOccurrenceExceptionsAsync(shift.Id, windowFrom, windowTo, ct) ?? [])
+                .Where(x => x.Status == ShiftOccurrenceExceptionStatus.Extra && x.EmployeeId is null && x.OfferedEmployeeId is { } offered && offered != Guid.Empty
+                    && x.StartUtc < windowTo && x.EndUtc > windowFrom)
+                .GroupBy(x => x.Id).Select(x => x.First());
+            foreach (var offer in pending)
+            {
+                if (!companyNames.TryGetValue(shift.CompanyId, out var companyName))
+                    companyNames[shift.CompanyId] = companyName = companies is null ? null : (await companies.GetAsync(shift.CompanyId, ct))?.Name;
+                if (!branchRecords.TryGetValue(shift.BranchId, out var branch))
+                    branchRecords[shift.BranchId] = branch = branches is null ? null : await branches.GetAsync(shift.BranchId, ct);
+                visits.Add((offer.OfferedEmployeeId!.Value, new EmployeeScheduleVisit(shift.Id, shift.Name, offer.StartUtc, offer.EndUtc)
+                {
+                    ExceptionId = offer.Id,
+                    ExtraExceptionId = offer.Id,
+                    Status = offer.Status,
+                    CompanyName = companyName,
+                    BranchName = branch?.Name,
+                    Address = ScheduleVisits.Address(branch),
+                    WorkStatus = "Offered",
+                    VisitNotes = offer.Notes,
+                    VisitNumber = offer.Sequence,
+                    IsBranchMain = true,
+                    IsPartnerBooking = offer.PartnerRequestId is not null,
+                    OfferPending = true,
+                    OfferRevision = offer.OfferRevision,
+                    // Its time is set by the offer; only who it is offered to can change from the calendar.
+                    MoveLockReason = "Waiting for the employee to accept. Drag it to another employee to offer it to them instead.",
+                }));
+            }
         }
         return ScheduleVisits.GroupByDay(visits, zone);
     }
