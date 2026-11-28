@@ -47,30 +47,32 @@ async function setup(page: Page, options: { scheduleStatus?: number; empty?: boo
     if (path.endsWith('/tenant')) return route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } });
     return route.fulfill({ headers, json: [] });
   });
-  await page.goto(`/admin/shifts/employee-schedule/${options.query ?? `?date=${MONDAY}`}`);
+  await page.goto(`/admin/shifts/scheduler/${options.query ?? `?date=${MONDAY}`}`);
   await expect.poll(() => requests.length).toBeGreaterThan(0);
   return { requests, stopFailing: () => { failing = false; } };
 }
 
 test('admin sees each employee on the chosen day with visits and overlaps flagged', async ({ page }) => {
   await setup(page);
-  await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Scheduler', exact: true })).toBeVisible();
   const column = page.getByRole('group', { name: `Test Employee, ${MONDAY}` });
-  await expect(column.getByRole('button', { name: /^Morning clean, 08:00–10:00, Scheduled, overlaps another visit$/ })).toBeVisible();
-  await expect(column.getByRole('button', { name: /^Evening deep clean, 08:30–10:30, Scheduled, overlaps another visit$/ })).toBeVisible();
-  await expect(column.getByText('Overlap', { exact: true })).toHaveCount(2);
+  await expect(column.getByRole('button', { name: /^Morning clean, 08:00–10:00, Scheduled, overlaps another visit$/ })).toHaveClass(/blk-over/);
+  await expect(column.getByRole('button', { name: /^Evening deep clean, 08:30–10:30, Scheduled, overlaps another visit$/ })).toHaveClass(/blk-over/);
   // The second employee has no visit on Monday; partners never get a column.
   await expect(page.getByRole('group', { name: `Second Employee, ${MONDAY}` }).getByRole('button')).toHaveCount(0);
   await expect(page.getByRole('group', { name: /Active Partner/ })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Next day' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   const tuesday = page.getByRole('group', { name: `Second Employee, ${addDay(MONDAY, 1)}` });
-  await expect(tuesday.getByRole('button', { name: /^Morning clean, 08:00–10:00, Scheduled$/ })).toBeVisible();
-  await expect(tuesday.getByText('Overlap', { exact: true })).toHaveCount(0);
+  await expect(tuesday.getByRole('button', { name: /^Morning clean, 08:00–10:00, Scheduled$/ })).not.toHaveClass(/blk-over/);
+  await tuesday.getByRole('button', { name: /^Morning clean/ }).click();
+  await expect(page.getByRole('complementary', { name: 'Visit details' }).getByText('Overlap', { exact: true })).toHaveCount(0);
 });
 
-test('a week with no visits says so and points to other weeks', async ({ page }) => {
+test('a day with no visits says so', async ({ page }) => {
   await setup(page, { empty: true });
-  await expect(page.getByText('No visits this week. Choose another week or check the shift schedules.')).toBeVisible();
+  await expect(page.getByText('No visits on this day.')).toBeVisible();
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
+  await expect(page.getByText('No visits this week.')).toBeVisible();
 });
 
 test('a failed load explains the problem and can be retried', async ({ page }) => {
@@ -81,40 +83,38 @@ test('a failed load explains the problem and can be retried', async ({ page }) =
   await expect(page.getByRole('group', { name: `Test Employee, ${MONDAY}` }).getByRole('button', { name: /^Morning clean/ })).toBeVisible();
 });
 
-test('previous day from a Monday loads the week before', async ({ page }) => {
+test('Previous from a Monday loads the week before', async ({ page }) => {
   const state = await setup(page);
   expect(state.requests[0]).toBe(MONDAY);
-  await page.getByRole('button', { name: 'Previous day' }).click();
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
   await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, -7));
-  await expect(page.getByLabel('Date', { exact: true })).toHaveValue(addDay(MONDAY, -1));
+  await expect(page.getByText(/^Day view, Sun 13 Jan\./)).toBeVisible();
 });
 
-test('previous and next week move the requested range by seven days', async ({ page }) => {
+test('in week view Previous and Next move the requested range by seven days', async ({ page }) => {
   const state = await setup(page);
   await page.getByRole('button', { name: 'Week', exact: true }).click();
-  await page.getByRole('button', { name: 'Next week' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, 7));
-  await page.getByRole('button', { name: 'Previous week' }).click();
-  await page.getByRole('button', { name: 'Previous week' }).click();
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
+  await page.getByRole('button', { name: 'Previous', exact: true }).click();
   await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, -7));
 });
 
-test('this week returns to the current week after moving away', async ({ page }) => {
+test('Today returns to the current week after moving away', async ({ page }) => {
   const state = await setup(page);
   await page.getByRole('button', { name: 'Week', exact: true }).click();
-  await page.getByRole('button', { name: 'Next week' }).click();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect.poll(() => state.requests.at(-1)).toBe(addDay(MONDAY, 7));
-  await page.getByRole('button', { name: 'This week' }).click();
+  await page.getByRole('button', { name: 'Today', exact: true }).click();
   await expect.poll(() => state.requests.at(-1)).toBe(mondayOf(new Date()));
 });
 
-test('a date typed into Week starting jumps to the Monday of that week', async ({ page }) => {
-  const state = await setup(page);
-  await page.getByRole('button', { name: 'Week', exact: true }).click();
+test('a link with a mid-week date opens the week that starts on its Monday', async ({ page }) => {
   // 2026-10-14 is a Wednesday, so the requested week starts on Monday 2026-10-12.
-  await page.getByLabel('Week starting').fill('2026-10-14');
+  const state = await setup(page, { query: '?employee=employee&date=2026-10-14' });
   await expect.poll(() => state.requests.at(-1)).toBe('2026-10-12');
-  await expect(page.getByLabel('Week starting')).toHaveValue('2026-10-12');
+  await expect(page.getByText(/^Week of 12 October for Test Employee\./)).toBeVisible();
 });
 
 test('a failed time-zone load blocks the schedule instead of showing times in the browser zone', async ({ page }) => {
@@ -122,18 +122,17 @@ test('a failed time-zone load blocks the schedule instead of showing times in th
   await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ status: 500, headers, json: { detail: 'boom' } }));
   await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
-  await page.goto('/admin/shifts/employee-schedule/');
-  await expect(page.getByText('Time zone unavailable')).toBeVisible();
-  await expect(page.getByText('Could not load the workplace time zone')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Previous day' })).toHaveCount(0);
+  await page.goto('/admin/shifts/scheduler/');
+  await expect(page.getByText('Could not load the workplace time zone, so visit times cannot be shown correctly. Reload the page to try again.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous', exact: true })).toHaveCount(0);
 });
 
 test('a failed overlap audit shows a retryable error instead of reporting no overlaps', async ({ page }) => {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ status: 500, headers, json: { detail: 'boom' } }));
-  await page.goto('/admin/shifts/employee-schedule/');
+  await page.goto('/admin/shifts/scheduler/');
   await expect(page.getByText('Could not load the schedule. Check your connection, then retry.')).toBeVisible();
-  await expect(page.getByText('Overlap', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Schedule grid' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
 });
 
@@ -143,23 +142,19 @@ test('an empty staff list says there are no active employees yet', async ({ page
   await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } }));
-  await page.goto('/admin/shifts/employee-schedule/');
+  await page.goto('/admin/shifts/scheduler/');
   await expect(page.getByText('No active employees yet. Add employees, then their visits appear here.')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Employees' })).toHaveCount(0);
 });
 
-test('the Employee schedule navigation item opens the page', async ({ page }) => {
+test('the old Employee schedule address opens the Scheduler', async ({ page }) => {
   await setupAdminMocks(page);
   await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/employees/, route => route.fulfill({ headers, json: [] }));
-  await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Europe/Helsinki' } }));
-  await page.goto('/admin/');
-  // On phones the navigation sits in a drawer behind the toggle; open it when the toggle is visible.
-  const toggle = page.getByRole('button', { name: 'Toggle navigation' });
-  await toggle.click({ timeout: 3000 }).catch(() => undefined);
-  await page.getByRole('link', { name: 'Employee schedule', exact: true }).first().click();
-  await expect(page).toHaveURL(/\/admin\/shifts\/employee-schedule\/?$/);
-  await expect(page.getByRole('heading', { name: 'Employee schedule' })).toBeVisible();
+  await page.goto('/admin/shifts/employee-schedule/');
+  await expect(page).toHaveURL(/\/admin\/shifts\/scheduler\/$/);
+  await expect(page.getByRole('heading', { name: 'Scheduler', exact: true })).toBeVisible();
 });
 
 test('the Reload button in the time-zone error recovers the schedule once the zone loads', async ({ page }) => {
@@ -173,16 +168,16 @@ test('the Reload button in the time-zone error recovers the schedule once the zo
   await page.route(/\/api\/v1\/admin\/shifts\/employee-schedule/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/shifts\/overlap-audit/, route => route.fulfill({ headers, json: [] }));
   await page.route(/\/api\/v1\/admin\/employees/, route => route.fulfill({ headers, json: [] }));
-  await page.goto('/admin/shifts/employee-schedule/');
-  await expect(page.getByText('Time zone unavailable')).toBeVisible();
+  await page.goto('/admin/shifts/scheduler/');
+  await expect(page.getByText(/Could not load the workplace time zone/)).toBeVisible();
   zoneHealthy = true;
   await page.getByRole('button', { name: 'Reload', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Previous day' })).toBeVisible();
-  await expect(page.getByText('Time zone unavailable')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Previous', exact: true })).toBeVisible();
+  await expect(page.getByText(/Could not load the workplace time zone/)).toHaveCount(0);
   expect(tenantCalls).toBeGreaterThanOrEqual(2);
 });
 
-test('conflict deep link opens the selected employee and week, with a way back to all employees', async ({ page }) => {
+test('a conflict link opens the employee’s week, and Day shows everyone again', async ({ page }) => {
   const state = await setup(page, { query: '?employee=employee&date=2030-01-15' });
   await expect.poll(() => state.requests.at(-1)).toBe(MONDAY);
   // Week view: one column per day for the linked employee only.
@@ -191,7 +186,7 @@ test('conflict deep link opens the selected employee and week, with a way back t
   await expect(page.getByRole('group', { name: `Test Employee, ${addDay(MONDAY, 4)}` })).toBeVisible();
   await expect(page.getByRole('group', { name: `Test Employee, ${addDay(MONDAY, 6)}` })).toHaveCount(0);
   await expect(page.getByRole('group', { name: /^Second Employee/ })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Show all employees', exact: true }).click();
+  await page.getByRole('button', { name: 'Day', exact: true }).click();
   await expect(page.getByRole('group', { name: `Second Employee, 2030-01-15` })).toBeVisible();
   await expect(page.getByRole('group', { name: `Test Employee, 2030-01-15` })).toBeVisible();
 });

@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Companies for the cleaning company: customers, their properties and prices, partner access and safe removal.">
+<title>Companies</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.card{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+textarea.input{padding:8px 12px;min-height:72px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:820px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.sub{font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.check{display:flex;align-items:flex-start;gap:12px;min-height:44px}
+.check input{width:20px;height:20px;margin-top:4px}
+.step{display:flex;align-items:center;gap:8px}
+.step span{min-width:96px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+.dlg{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg>section{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);max-height:92%;overflow:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html" aria-current="page">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Companies</h1><p style="margin:4px 0 0" class="sub">Customers, their properties and prices.</p></div>
+      <button type="button" class="btn btn-primary" onClick="{{ addCompany }}">Add company</button>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+    <form role="search" onSubmit="{{ onSearchSubmit }}" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:0">
+      <label class="field" style="flex:1 1 320px">Search companies<input class="input" type="search" placeholder="Name or business ID" onInput="{{ onSearch }}"></label>
+      <button type="submit" class="btn btn-ghost">Search</button>
+    </form>
+    <div class="seg" role="tablist" aria-label="Company activity"><button type="button" role="tab" aria-pressed="{{ isActiveTab }}" aria-selected="{{ isActiveTab }}" onClick="{{ showActive }}">Active {{ nActive }}</button><button type="button" role="tab" aria-pressed="{{ isInactiveTab }}" aria-selected="{{ isInactiveTab }}" onClick="{{ showInactive }}">Inactive {{ nInactive }}</button></div>
+    <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">{{ emptyText }}</p></sc-if>
+    <div class="tablebox" role="region" aria-label="Companies" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Business ID</th><th scope="col">Contact</th><th scope="col">Properties</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="c" hint-placeholder-count="4">
+          <tr>
+            <td><strong>{{ c.name }}</strong><sc-if value="{{ c.partner }}" hint-placeholder-val="{{ false }}"><div><span class="chip chip-gold">Partner access</span></div></sc-if></td>
+            <td style="font-variant-numeric:tabular-nums">{{ c.bid }}</td><td>{{ c.contact }}</td>
+            <td><button type="button" class="btn btn-ghost" aria-expanded="{{ c.open }}" onClick="{{ c.toggle }}">{{ c.propLabel }}</button></td>
+            <td><div style="display:flex;flex-wrap:wrap;gap:8px"><a class="btn btn-ghost" href="Company-detail.dc.html">Open</a><button type="button" class="btn btn-ghost" onClick="{{ c.edit }}">Edit</button><button type="button" class="btn btn-ghost" onClick="{{ c.activity }}">{{ c.activityLabel }}</button><sc-if value="{{ c.inactive }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ c.del }}">Delete</button></sc-if></div></td>
+          </tr>
+          <sc-if value="{{ c.open }}" hint-placeholder-val="{{ false }}">
+          <tr><td colspan="5" style="background:var(--wash)">
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><div class="seg" role="tablist" aria-label="Property activity"><button type="button" role="tab" aria-pressed="{{ bActive }}" aria-selected="{{ bActive }}" onClick="{{ showBActive }}">Active {{ c.nbActive }}</button><button type="button" role="tab" aria-pressed="{{ bInactive }}" aria-selected="{{ bInactive }}" onClick="{{ showBInactive }}">Inactive {{ c.nbInactive }}</button></div><button type="button" class="btn btn-primary" onClick="{{ c.addProp }}">Add property</button></div>
+              <sc-if value="{{ c.noProps }}" hint-placeholder-val="{{ false }}"><span class="sub">{{ c.noPropsText }}</span></sc-if>
+              <sc-for list="{{ c.props }}" as="p" hint-placeholder-count="2">
+              <div class="card" style="flex-direction:row;flex-wrap:wrap;justify-content:space-between;align-items:center">
+                <div style="display:flex;flex-direction:column;gap:4px"><strong>{{ p.name }}</strong><span class="sub">{{ p.line }}</span><div style="display:flex;flex-wrap:wrap;gap:8px"><sc-if value="{{ p.ready }}" hint-placeholder-val="{{ true }}"><span class="chip">Partner booking ready</span></sc-if><sc-if value="{{ p.quote }}" hint-placeholder-val="{{ false }}"><span class="chip chip-gold">Quote requested</span></sc-if><sc-if value="{{ p.inactive }}" hint-placeholder-val="{{ false }}"><span class="chip">Inactive</span></sc-if></div></div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ p.edit }}">{{ p.editLabel }}</button><button type="button" class="btn btn-ghost" onClick="{{ p.activity }}">{{ p.activityLabel }}</button><sc-if value="{{ p.inactive }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ p.del }}">Delete</button></sc-if></div>
+              </div>
+              </sc-for>
+            </div>
+          </td></tr>
+          </sc-if>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px">
+      <label class="field" style="flex-direction:row;align-items:center">Companies per page<select class="input"><option>25</option><option>50</option><option>100</option></select></label>
+      <nav aria-label="Pages" style="display:flex;gap:8px"><button type="button" class="btn btn-ghost" disabled >First</button><button type="button" class="btn btn-ghost" disabled >Previous</button><button type="button" class="btn btn-primary" aria-current="page">1</button><button type="button" class="btn btn-ghost" disabled >Next</button><button type="button" class="btn btn-ghost" disabled >Last</button></nav>
+    </div>
+  </main>
+</div>
+
+<sc-if value="{{ companyOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ companyTitle }}">
+  <section style="width:min(560px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ companyTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeCompany }}" style="min-width:44px">×</button></div>
+    <div class="grid2">
+      <label class="field">Business ID (required)<input class="input" type="text" value="{{ cf.bid }}" onChange="{{ onBid }}"></label>
+      <label class="field">Name (required)<input class="input" type="text" value="{{ cf.name }}" onChange="{{ onCName }}"></label>
+      <label class="field">Contact name<input class="input" type="text" value="{{ cf.contact }}"></label>
+      <label class="field">Contact phone<input class="input" type="tel"></label>
+    </div>
+    <label class="field">Contact email<input class="input" type="email"></label>
+    <label class="field">Notes<textarea class="input"></textarea></label>
+    <label class="check"><input type="checkbox" checked="{{ cf.partner }}" onChange="{{ togglePartner }}"><span><strong>Enable partner access</strong><br><span class="sub">Partners linked to this company can see its properties and request cleanings.</span></span></label>
+    <sc-if value="{{ cf.partner }}" hint-placeholder-val="{{ false }}">
+    <label class="check"><input type="checkbox" checked="{{ cf.qc }}" onChange="{{ toggleQc }}"><span><strong>Quality cycle</strong><br><span class="sub">Every accepted partner request for this company gets the quality cycle checklist. Staff cover it through My shifts like a normal cleaning.</span></span></label>
+    <sc-if value="{{ cf.qc }}" hint-placeholder-val="{{ false }}"><label class="field">Quality cycle template (required)<select class="input"><option>Weekly office cleaning</option><option>Home check</option></select></label></sc-if>
+    </sc-if>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeCompany }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveCompany }}">{{ companySave }}</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ propOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ propTitle }}">
+  <section style="width:min(620px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ propTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeProp }}" style="min-width:44px">×</button></div>
+    <label class="field">Name (required)<input class="input" type="text" value="{{ pf.name }}" onChange="{{ onPName }}"></label>
+    <div class="grid2">
+      <label class="field">Street<input class="input" type="text" value="{{ pf.street }}"></label>
+      <label class="field">Postal code<input class="input" type="text"></label>
+      <label class="field">City<input class="input" type="text" value="{{ pf.city }}"></label>
+      <label class="field">Country<input class="input" type="text" value="FI"></label>
+      <label class="field">Contact email<input class="input" type="email"></label>
+      <label class="field">Phone<input class="input" type="tel"></label>
+    </div>
+    <div class="grid2">
+      <div class="field"><span>Rooms (optional)</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Fewer rooms" onClick="{{ roomsDown }}" style="min-width:44px">−</button><span>{{ pf.rooms }}</span><button type="button" class="btn btn-ghost" aria-label="More rooms" onClick="{{ roomsUp }}" style="min-width:44px">+</button></div></div>
+      <div class="field"><span>Beds (optional)</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Fewer beds" onClick="{{ bedsDown }}" style="min-width:44px">−</button><span>{{ pf.beds }}</span><button type="button" class="btn btn-ghost" aria-label="More beds" onClick="{{ bedsUp }}" style="min-width:44px">+</button></div></div>
+      <div class="field"><span>Size, needed to schedule</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Smaller by 10 square metres" onClick="{{ sizeDown }}" style="min-width:44px">−</button><span>{{ pf.size }} m²</span><button type="button" class="btn btn-ghost" aria-label="Larger by 10 square metres" onClick="{{ sizeUp }}" style="min-width:44px">+</button></div></div>
+      <div class="field"><span>Estimated cleaning time</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="15 minutes less" onClick="{{ durDown }}" style="min-width:44px">−</button><span>{{ pf.dur }} min</span><button type="button" class="btn btn-ghost" aria-label="15 minutes more" onClick="{{ durUp }}" style="min-width:44px">+</button></div></div>
+    </div>
+    <div class="card" style="background:var(--wash)">
+      <strong>Cleaning price</strong>
+      <label class="field">Pricing basis<select class="input" onChange="{{ onMode }}"><option>Per completed visit</option><option>Fixed monthly fee</option><option>Per scheduled hour</option></select></label>
+      <div class="field"><span>Price excl. VAT ({{ pf.mode }})</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Lower price by 5 euros" onClick="{{ priceDown }}" style="min-width:44px">−</button><span>{{ priceText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise price by 5 euros" onClick="{{ priceUp }}" style="min-width:44px">+</button><button type="button" class="btn btn-ghost" onClick="{{ clearPrice }}">No price yet</button></div><span class="sub">Leave unset until a quote is agreed. New work orders and requests use this price; existing ones keep their agreed price. VAT is added on the invoice.</span></div>
+      <label class="field">Price applies from<select class="input"><option>Today, 26 Nov 2026</option><option>1 Dec 2026</option><option>1 Jan 2027</option></select></label>
+      <sc-if value="{{ hasHistory }}" hint-placeholder-val="{{ false }}">
+      <table aria-label="Price history" style="min-width:0"><thead><tr><th scope="col">Period</th><th scope="col">Price excl. VAT</th></tr></thead><tbody><sc-for list="{{ history }}" as="h" hint-placeholder-count="2"><tr><td>{{ h.range }}</td><td style="font-variant-numeric:tabular-nums">{{ h.price }}</td></tr></sc-for></tbody></table>
+      </sc-if>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeProp }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveProp }}">{{ propSave }}</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ clearOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Clear related work orders and properties">
+  <section style="width:min(520px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Clear related work orders and properties?</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeClear }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">{{ clearName }} still has active work orders and properties, so it can’t be deactivated yet.</p>
+    <p style="margin:0" class="sub">Clearing deletes the company’s properties and work orders, unassigns every cleaner, removes its partner requests and voids its open invoices. Checklist submissions are kept. Paid invoices stop the clear: issue a credit note first.</p>
+    <label class="check"><input type="checkbox" checked="{{ delAgreements }}" onChange="{{ toggleDelAgreements }}"><span>Also delete this company’s signed agreements<br><span class="sub">Off keeps them on record.</span></span></label>
+    <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeClear }}">Keep everything</button><button type="button" class="btn btn-primary" onClick="{{ doClear }}">Clear and deactivate</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ removeOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Remove company">
+  <section style="width:min(560px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Remove {{ rmName }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeRemove }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">This company has records, so it can’t simply be deleted. Tick what to remove; anything not ticked is kept.</p>
+    <label class="check"><input type="checkbox" checked="{{ rm.places }}" onChange="{{ rmPlaces }}"><span><strong>Properties (2)</strong><br><span class="sub">Removing properties also removes their work orders.</span></span></label>
+    <label class="check"><input type="checkbox" checked="{{ rm.shifts }}" onChange="{{ rmShifts }}"><span><strong>Work orders (5, 3 with completed checklists)</strong><br><span class="sub">Unassigns cleaners and removes the work orders, completed ones included.</span></span></label>
+    <label class="check"><input type="checkbox" checked="{{ rm.invoices }}" onChange="{{ rmInvoices }}"><span><strong>Invoices (4, 1 paid)</strong><br><span class="sub">Paid invoices need the company name typed below.</span></span></label>
+    <sc-if value="{{ rmAll }}" hint-placeholder-val="{{ false }}"><p style="margin:0" class="sub">With all three ticked the company record goes too, with 1 signed agreement, 12 checklist submissions and 3 partner requests. 1 partner account is deactivated. 2 templates and 1 lead are kept and unlinked.</p></sc-if>
+    <sc-if value="{{ rm.invoices }}" hint-placeholder-val="{{ false }}"><label class="field">Type “{{ rmName }}” to confirm removing 1 paid invoice<input class="input" type="text" onInput="{{ onRmName }}"></label></sc-if>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeRemove }}">Cancel</button><button type="button" class="btn btn-primary" disabled="{{ rmBlocked }}" onClick="{{ doRemove }}">Remove selected</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ confirmTitle }}" style="z-index:60">
+  <section style="width:min(440px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ confirmTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeConfirm }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">{{ confirmText }}</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeConfirm }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ doConfirm }}">Delete</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const COMPANIES = [
+  { id: 'c1', name: 'Virtanen Oy', bid: '2345678-9', contact: 'Päivi Virtanen', active: true, partner: true, qc: true, hasWork: true, props: [
+    { id: 'p1', name: 'Espoo head office', city: 'Espoo', street: 'Keilaranta 10', price: 145, mode: 'Per completed visit', size: 420, rooms: 0, beds: 0, dur: 180, active: true, quote: false, history: [{ range: '01/09/2026 - Present', price: 'EUR 145.00' }, { range: '01/01/2026 - 01/09/2026', price: 'EUR 135.00' }] },
+    { id: 'p2', name: 'Tampere warehouse', city: 'Tampere', street: 'Hatanpään valtatie 34', price: null, mode: 'Per completed visit', size: 900, rooms: 0, beds: 0, dur: 240, active: true, quote: true, history: [] },
+    { id: 'p3', name: 'Old Vantaa office', city: 'Vantaa', street: 'Tikkurilantie 2', price: 90, mode: 'Fixed monthly fee', size: 120, rooms: 0, beds: 0, dur: 90, active: false, quote: false, history: [] }] },
+  { id: 'c2', name: 'Hietaniemi office Oy', bid: '3456789-0', contact: 'Olli Hietanen', active: true, partner: false, qc: false, hasWork: false, props: [
+    { id: 'p4', name: 'Hietaniemi', city: 'Helsinki', street: 'Hietaniemenkatu 7', price: 38, mode: 'Per scheduled hour', size: 300, rooms: 0, beds: 0, dur: 240, active: true, quote: false, history: [] }] },
+  { id: 'c3', name: 'Lindqvist household', bid: '1234567-1', contact: 'Eva Lindqvist', active: true, partner: false, qc: false, hasWork: false, props: [] },
+  { id: 'c4', name: 'Sörnäinen Bakery Oy', bid: '2987001-5', contact: 'Juha Mäki', active: false, partner: false, qc: false, hasWork: false, props: [] },
+];
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  list() { return this.st().companies || COMPANIES; }
+  put(id, ch) { return this.list().map(c => (c.id === id ? { ...c, ...ch } : c)); }
+  renderVals() {
+    const st = this.st();
+    const all = this.list();
+    const tab = st.tab || 'active';
+    const btab = st.btab || 'active';
+    const q = (st.q || '').toLowerCase();
+    const rows = all.filter(c => (tab === 'active' ? c.active : !c.active) && (!q || (c.name + ' ' + c.bid).toLowerCase().includes(q)));
+    const cf = st.cf || null;
+    const pf = st.pf || null;
+    const rm = st.rm || null;
+    const cfm = st.confirm || null;
+    const setPf = ch => this.setState({ pf: { ...pf, ...ch } });
+    const rmName = rm ? all.find(c => c.id === rm.id).name : '';
+    return {
+      addCompany: () => this.setState({ cf: { id: null, bid: '', name: '', contact: '', partner: false, qc: false } }),
+      onSearch: e => this.setState({ qDraft: e.target.value }),
+      onSearchSubmit: e => { e.preventDefault(); this.setState({ q: st.qDraft || '' }); },
+      isActiveTab: tab === 'active', isInactiveTab: tab === 'inactive',
+      nActive: all.filter(c => c.active).length, nInactive: all.filter(c => !c.active).length,
+      showActive: () => this.setState({ tab: 'active', open: null }), showInactive: () => this.setState({ tab: 'inactive', open: null }),
+      listEmpty: rows.length === 0, emptyText: q ? 'No companies match this search.' : 'No ' + tab + ' companies.',
+      bActive: btab === 'active', bInactive: btab === 'inactive',
+      showBActive: () => this.setState({ btab: 'active' }), showBInactive: () => this.setState({ btab: 'inactive' }),
+      rows: rows.map(c => {
+        const open = st.open === c.id;
+        const vis = c.props.filter(p => (btab === 'active' ? p.active : !p.active));
+        return {
+          name: c.name, bid: c.bid, contact: c.contact || 'No contact', partner: c.partner, open: open, inactive: !c.active,
+          propLabel: open ? 'Hide ' + c.props.length + ' properties' : 'Properties',
+          toggle: () => this.setState({ open: open ? null : c.id, btab: 'active' }),
+          edit: () => this.setState({ cf: { id: c.id, bid: c.bid, name: c.name, contact: c.contact, partner: c.partner, qc: c.qc } }),
+          activityLabel: c.active ? 'Deactivate' : 'Reactivate',
+          activity: () => (c.active && c.hasWork ? this.setState({ clear: c.id, delAgreements: false }) : this.setState({ companies: this.put(c.id, { active: !c.active }), msg: c.name + (c.active ? ' deactivated.' : ' reactivated.') })),
+          del: () => this.setState({ rm: { id: c.id, places: false, shifts: false, invoices: false, typed: '' } }),
+          nbActive: c.props.filter(p => p.active).length, nbInactive: c.props.filter(p => !p.active).length,
+          noProps: vis.length === 0, noPropsText: c.props.length ? 'No ' + btab + ' properties.' : 'No properties yet.',
+          addProp: () => this.setState({ pf: { cid: c.id, id: null, name: '', street: '', city: '', rooms: 0, beds: 0, size: 100, dur: 120, price: null, mode: 'Per completed visit', history: [] } }),
+          props: vis.map(p => ({
+            name: p.name, line: p.city + ' · ' + (p.price == null ? 'No price yet' : '€' + p.price.toFixed(2) + ' excl. VAT, ' + p.mode.toLowerCase()) + ' · ' + p.size + ' m²',
+            ready: p.price != null && p.active, quote: p.quote && p.active && p.price == null, inactive: !p.active,
+            editLabel: p.quote && p.price == null ? 'Set price' : 'Edit',
+            edit: () => this.setState({ pf: { cid: c.id, ...p } }),
+            activityLabel: p.active ? 'Deactivate' : 'Reactivate',
+            activity: () => this.setState({ companies: this.put(c.id, { props: c.props.map(x => (x.id === p.id ? { ...x, active: !x.active } : x)) }) }),
+            del: () => this.setState({ confirm: { kind: 'prop', cid: c.id, pid: p.id, title: 'Delete property?', text: 'Permanently delete the inactive property “' + p.name + '”? Properties with work order or checklist history are kept.' } }),
+          })),
+        };
+      }),
+      hasMsg: !!st.msg, msg: st.msg || '',
+      companyOpen: !!cf, companyTitle: cf && cf.id ? 'Edit company' : 'Add company', companySave: cf && cf.id ? 'Save changes' : 'Create company',
+      cf: cf || { bid: '', name: '', contact: '', partner: false, qc: false },
+      onBid: e => this.setState({ cf: { ...cf, bid: e.target.value } }), onCName: e => this.setState({ cf: { ...cf, name: e.target.value } }),
+      togglePartner: () => this.setState({ cf: { ...cf, partner: !cf.partner, qc: cf.partner ? false : cf.qc } }),
+      toggleQc: () => this.setState({ cf: { ...cf, qc: !cf.qc } }),
+      closeCompany: () => this.setState({ cf: null }),
+      saveCompany: () => {
+        if (!cf.bid.trim() || !cf.name.trim()) { this.setState({ msg: 'Business ID and name are required.' }); return; }
+        if (cf.id) this.setState({ companies: this.put(cf.id, { bid: cf.bid, name: cf.name, partner: cf.partner, qc: cf.qc }), cf: null, msg: 'Company saved.' });
+        else this.setState({ companies: [{ id: 'c' + Date.now(), bid: cf.bid, name: cf.name, contact: '', active: true, partner: cf.partner, qc: cf.qc, hasWork: false, props: [] }].concat(all), cf: null, tab: 'active', msg: 'Company created.' });
+      },
+      propOpen: !!pf, propTitle: pf && pf.id ? 'Edit property' : 'Add property', propSave: pf && pf.id ? 'Save changes' : 'Add property',
+      pf: pf || { name: '', street: '', city: '', rooms: 0, beds: 0, size: 0, dur: 0, mode: '' },
+      onPName: e => setPf({ name: e.target.value }),
+      roomsDown: () => setPf({ rooms: Math.max(0, pf.rooms - 1) }), roomsUp: () => setPf({ rooms: pf.rooms + 1 }),
+      bedsDown: () => setPf({ beds: Math.max(0, pf.beds - 1) }), bedsUp: () => setPf({ beds: pf.beds + 1 }),
+      sizeDown: () => setPf({ size: Math.max(10, pf.size - 10) }), sizeUp: () => setPf({ size: pf.size + 10 }),
+      durDown: () => setPf({ dur: Math.max(15, pf.dur - 15) }), durUp: () => setPf({ dur: pf.dur + 15 }),
+      onMode: e => setPf({ mode: e.target.value }),
+      priceText: pf && pf.price != null ? '€' + pf.price.toFixed(2) : 'No price yet',
+      priceDown: () => setPf({ price: Math.max(0, (pf.price || 0) - 5) }), priceUp: () => setPf({ price: (pf.price || 0) + 5 }),
+      clearPrice: () => setPf({ price: null }),
+      hasHistory: !!pf && pf.history && pf.history.length > 0, history: pf && pf.history ? pf.history : [],
+      closeProp: () => this.setState({ pf: null }),
+      saveProp: () => {
+        if (!pf.name.trim()) { this.setState({ msg: 'Enter the property name.' }); return; }
+        const c = all.find(x => x.id === pf.cid);
+        const item = { ...pf, quote: pf.price == null ? !!pf.quote : false, active: pf.id ? pf.active : true, id: pf.id || 'p' + Date.now() };
+        const props = pf.id ? c.props.map(x => (x.id === pf.id ? item : x)) : c.props.concat([item]);
+        this.setState({ companies: this.put(c.id, { props: props }), pf: null, msg: 'Property saved.' });
+      },
+      clearOpen: !!st.clear, clearName: st.clear ? all.find(c => c.id === st.clear).name : '',
+      delAgreements: !!st.delAgreements, toggleDelAgreements: () => this.setState({ delAgreements: !st.delAgreements }),
+      closeClear: () => this.setState({ clear: null }),
+      doClear: () => this.setState({ companies: this.put(st.clear, { active: false, hasWork: false, props: [] }), clear: null, msg: 'Work orders and properties cleared; company deactivated.' }),
+      removeOpen: !!rm, rmName: rmName, rm: rm || { places: false, shifts: false, invoices: false },
+      rmPlaces: () => this.setState({ rm: { ...rm, places: !rm.places, shifts: !rm.places ? true : rm.shifts } }),
+      rmShifts: () => this.setState({ rm: { ...rm, shifts: !rm.shifts, places: rm.shifts ? false : rm.places } }),
+      rmInvoices: () => this.setState({ rm: { ...rm, invoices: !rm.invoices } }),
+      rmAll: !!rm && rm.places && rm.shifts && rm.invoices,
+      onRmName: e => this.setState({ rm: { ...rm, typed: e.target.value } }),
+      rmBlocked: !rm || (!rm.places && !rm.shifts && !rm.invoices) || (rm.invoices && rm.typed.trim() !== rmName),
+      closeRemove: () => this.setState({ rm: null }),
+      doRemove: () => this.setState(rm.places && rm.shifts && rm.invoices ? { companies: all.filter(c => c.id !== rm.id), rm: null, msg: rmName + ' removed.' } : { rm: null, msg: 'Selected records removed from ' + rmName + '.' }),
+      confirmOpen: !!cfm, confirmTitle: cfm ? cfm.title : '', confirmText: cfm ? cfm.text : '',
+      closeConfirm: () => this.setState({ confirm: null }),
+      doConfirm: () => { const c = all.find(x => x.id === cfm.cid); this.setState({ companies: this.put(c.id, { props: c.props.filter(p => p.id !== cfm.pid) }), confirm: null, msg: 'Property deleted.' }); },
+    };
+  }
+}
+</script>
+</body>
+</html>

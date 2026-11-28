@@ -250,7 +250,7 @@ test('an ended visit nobody started needs action as overdue, with or without an 
   await expect(page.getByRole('listitem').filter({ hasText: 'Weekly office clean' }).getByText('Unassigned', { exact: true })).toHaveCount(0);
 });
 
-test('a past assigned company visit nobody started reads Not started, and Open company shift opens the calendar', async ({ page }) => {
+test('a past assigned company visit nobody started reads Not started, and Open company shift opens the Scheduler', async ({ page }) => {
   const state = await setup(page);
   const missed: QueueItem = { source: 'shift', id: 'occurrence-missed', reference: 'Weekly office clean', customerName: 'Owner company', scheduledLocal: '2026-10-20 10:00', status: 'scheduled', stateLabel: 'Not started', assigneeName: 'Test Employee', href: '/admin/shifts/calendar/' };
   const upcoming: QueueItem = { ...missed, id: 'occurrence-upcoming', scheduledLocal: '2026-11-12 10:00', stateLabel: 'Scheduled' };
@@ -264,8 +264,9 @@ test('a past assigned company visit nobody started reads Not started, and Open c
   // Unstarted work stays in Scheduled with a red border; upcoming work keeps the plain row.
   await expect(page.getByRole('listitem').filter({ hasText: '2026-10-20 10:00' })).toHaveAttribute('data-state', 'not-started');
   await expect(page.getByRole('listitem').filter({ hasText: '2026-11-12 10:00' })).not.toHaveAttribute('data-state', 'not-started');
+  // The work queue still links to the old calendar address, which now opens the Scheduler.
   await missedRow.focus(); await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/admin\/shifts\/calendar\/?$/);
+  await expect(page).toHaveURL(/\/admin\/shifts\/scheduler\/?$/);
 });
 
 test('date range and assignee filters are sent to the server and restored from the URL', async ({ page }) => {

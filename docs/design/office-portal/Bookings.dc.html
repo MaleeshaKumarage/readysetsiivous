@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Customer bookings for the cleaning company: confirm, complete, cancel and assign, with a day view per employee.">
+<title>Bookings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+a{color:var(--muted)}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 16px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:720px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.st-New{background:var(--gold-wash);color:var(--gold-ink)}
+.st-Confirmed{background:var(--line);color:var(--ink)}
+.st-Completed{background:var(--wash);color:var(--muted)}
+.st-Cancelled{background:var(--ink);color:var(--surface)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html" aria-current="page">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:20px">
+    <header style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px">
+      <div>
+        <h1 style="margin:0;font-size:28px;line-height:1.2">Bookings</h1>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:15px">Bookings customers made on the booking page. {{ newCount }} new.</p>
+      </div>
+      <label class="field">Filter by status<select class="input" onChange="{{ onStatus }}"><option value="">All statuses</option><option value="New">New</option><option value="Confirmed">Confirmed</option><option value="Completed">Completed</option><option value="Cancelled">Cancelled</option></select></label>
+    </header>
+
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" aria-pressed="{{ isList }}" onClick="{{ showList }}">Bookings</button>
+      <button type="button" aria-pressed="{{ isDay }}" onClick="{{ showDay }}">Day view</button>
+    </div>
+
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+
+    <sc-if value="{{ isList }}" hint-placeholder-val="{{ true }}">
+    <div class="tablebox" role="region" aria-label="Bookings" tabindex="0">
+    <table>
+      <thead><tr><th scope="col">Booking</th><th scope="col">When</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">Status</th><th scope="col">Employee</th><th scope="col"><span style="position:absolute;width:1px;height:1px;overflow:hidden">Details</span></th></tr></thead>
+      <tbody>
+        <sc-for list="{{ rows }}" as="b" hint-placeholder-count="4">
+        <tr>
+          <td><strong>{{ b.number }}</strong></td>
+          <td style="font-variant-numeric:tabular-nums">{{ b.when }}</td>
+          <td>{{ b.customer }}</td>
+          <td>{{ b.service }}</td>
+          <td><span class="{{ b.chip }}">{{ b.status }}</span></td>
+          <td>{{ b.employee }}</td>
+          <td><button type="button" class="btn btn-ghost" onClick="{{ b.open }}">Details</button></td>
+        </tr>
+        </sc-for>
+      </tbody>
+    </table>
+    </div>
+    <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:0;color:var(--muted)">{{ emptyText }}</p></sc-if>
+    </sc-if>
+
+    <sc-if value="{{ isDay }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <label class="field">Day<select class="input" onChange="{{ onDay }}"><option value="">Choose a day</option><option value="2026-11-30">Mon 30 Nov 2026</option><option value="2026-12-01">Tue 1 Dec 2026</option><option value="2026-12-02">Wed 2 Dec 2026</option><option value="2026-12-03">Thu 3 Dec 2026</option></select></label>
+      <label class="field">Employee<select class="input" onChange="{{ onDayEmp }}"><option value="">Choose employee</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+    </div>
+    <sc-if value="{{ dayPrompt }}" hint-placeholder-val="{{ true }}"><p style="margin:0;color:var(--muted)">Choose a day and an employee to see their bookings.</p></sc-if>
+    <sc-if value="{{ dayNone }}" hint-placeholder-val="{{ false }}"><p style="margin:0;color:var(--muted)">{{ dayNoneText }}</p></sc-if>
+    <sc-if value="{{ dayHas }}" hint-placeholder-val="{{ false }}">
+    <div class="tablebox" role="region" aria-label="Day schedule" tabindex="0">
+    <table>
+      <thead><tr><th scope="col">Time</th><th scope="col">Booking</th><th scope="col">Customer</th><th scope="col">Service</th><th scope="col">Status</th></tr></thead>
+      <tbody>
+        <sc-for list="{{ dayRows }}" as="b" hint-placeholder-count="2">
+        <tr><td style="font-variant-numeric:tabular-nums">{{ b.time }}</td><td><strong>{{ b.number }}</strong></td><td>{{ b.customer }}</td><td>{{ b.service }}</td><td><span class="{{ b.chip }}">{{ b.status }}</span></td></tr>
+        </sc-for>
+      </tbody>
+    </table>
+    </div>
+    </sc-if>
+    </sc-if>
+  </main>
+</div>
+
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Booking details" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(520px,100%);max-height:92%;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Booking {{ sel.number }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeSel }}" style="min-width:44px">×</button></div>
+    <dl style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;margin:0">
+      <dt style="color:var(--muted)">Status</dt><dd style="margin:0"><span class="{{ sel.chip }}">{{ sel.status }}</span></dd>
+      <dt style="color:var(--muted)">When</dt><dd style="margin:0;font-variant-numeric:tabular-nums">{{ sel.when }}</dd>
+      <dt style="color:var(--muted)">Customer</dt><dd style="margin:0">{{ sel.customer }}<br><span style="color:var(--muted)">{{ sel.contact }}</span></dd>
+      <dt style="color:var(--muted)">Service</dt><dd style="margin:0">{{ sel.service }} ({{ sel.minutes }} min)</dd>
+      <dt style="color:var(--muted)">Employee</dt><dd style="margin:0">{{ sel.employee }}</dd>
+    </dl>
+    <section aria-label="History" style="display:flex;flex-direction:column;gap:4px">
+      <strong style="font-size:14px">History</strong>
+      <sc-for list="{{ sel.history }}" as="h" hint-placeholder-count="2"><span style="font-size:13px;color:var(--muted)">{{ h.text }}</span></sc-for>
+    </section>
+    <sc-if value="{{ sel.final }}" hint-placeholder-val="{{ false }}"><p style="margin:0;font-size:14px;color:var(--muted)">This booking is {{ sel.statusLower }}. No further changes are available.</p></sc-if>
+    <sc-if value="{{ sel.isNew }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ confirmIt }}">Confirm</button><button type="button" class="btn btn-ghost" onClick="{{ cancelIt }}">Cancel booking</button></div></sc-if>
+    <sc-if value="{{ sel.isConfirmed }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ completeIt }}">Mark completed</button><button type="button" class="btn btn-ghost" onClick="{{ cancelIt }}">Cancel booking</button></div></sc-if>
+    <sc-if value="{{ sel.canAssign }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+      <label class="field">Assign to<select class="input" onChange="{{ onAssignee }}"><option value="">Choose employee</option><option value="Anna K.">Anna K.</option><option value="Ville R.">Ville R.</option><option value="Minna S.">Minna S.</option></select></label>
+      <button type="button" class="btn btn-ghost" onClick="{{ assign }}">Assign</button>
+      <sc-if value="{{ sel.hasEmployee }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ unassign }}">Unassign</button></sc-if>
+    </div>
+    </sc-if>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const SEED = [
+  { id: 'b1', number: 'B-1042', date: '2026-11-30', time: '08:00', customer: 'Eeva Mäkinen', contact: '040 123 4567 · eeva@example.fi', service: 'Kotisiivous', minutes: 180, status: 'New', employee: null, history: ['2026-11-26 07:12 UTC · New · Customer'] },
+  { id: 'b2', number: 'B-1043', date: '2026-12-01', time: '10:00', customer: 'Jonas Berg', contact: '050 987 6543 · jonas@example.fi', service: 'Toimistosiivous', minutes: 240, status: 'Confirmed', employee: 'Ville R.', history: ['2026-11-24 09:30 UTC · New · Customer', '2026-11-24 11:02 UTC · Confirmed · Office'] },
+  { id: 'b3', number: 'B-1044', date: '2026-12-01', time: '13:00', customer: 'Sara Lind', contact: '045 222 3333 · sara@example.fi', service: 'Muuttosiivous', minutes: 150, status: 'Confirmed', employee: 'Ville R.', history: ['2026-11-20 15:40 UTC · New · Customer', '2026-11-21 08:15 UTC · Confirmed · Office'] },
+  { id: 'b4', number: 'B-1039', date: '2026-11-25', time: '09:00', customer: 'Matti Virtanen', contact: '040 555 0101 · matti@example.fi', service: 'Kotisiivous', minutes: 120, status: 'Completed', employee: 'Anna K.', history: ['2026-11-18 10:00 UTC · New · Customer', '2026-11-18 12:00 UTC · Confirmed · Office', '2026-11-25 12:05 UTC · Completed · Office'] },
+  { id: 'b5', number: 'B-1037', date: '2026-11-22', time: '14:00', customer: 'Liisa Koski', contact: '044 777 8888 · liisa@example.fi', service: 'Ikkunanpesu', minutes: 90, status: 'Cancelled', employee: null, history: ['2026-11-15 18:20 UTC · New · Customer', '2026-11-19 07:45 UTC · Cancelled · Office · Customer asked to cancel'] },
+];
+const STAMP = '2026-11-26 10:30 UTC';
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  list() { return this.st().list || SEED; }
+  update(id, patch, note, msg) {
+    const list = this.list().map(b => (b.id === id ? { ...b, ...patch, history: b.history.concat([STAMP + ' · ' + (patch.status || b.status) + ' · Office' + (note ? ' · ' + note : '')]) } : b));
+    this.setState({ list: list, msg: msg });
+  }
+  renderVals() {
+    const st = this.st();
+    const status = st.status || '';
+    const all = this.list();
+    const fmtWhen = b => b.date + ' ' + b.time;
+    const rows = all.filter(b => !status || b.status === status).map(b => ({
+      number: b.number, when: fmtWhen(b), customer: b.customer, service: b.service, status: b.status, chip: 'chip st-' + b.status,
+      employee: b.employee || 'Unassigned',
+      open: () => this.setState({ sel: b.id, assignee: '', msg: '' }),
+    }));
+    const dayRowsAll = st.day && st.dayEmp ? all.filter(b => b.date === st.day && b.employee === st.dayEmp) : [];
+    const b = all.find(x => x.id === st.sel);
+    let selOut = { hasSel: false, sel: {} };
+    if (b) {
+      const open = b.status === 'New' || b.status === 'Confirmed';
+      selOut = {
+        hasSel: true,
+        sel: {
+          number: b.number, status: b.status, statusLower: b.status.toLowerCase(), chip: 'chip st-' + b.status, when: fmtWhen(b),
+          customer: b.customer, contact: b.contact, service: b.service, minutes: b.minutes, employee: b.employee || 'Unassigned',
+          history: b.history.map(h => ({ text: h })),
+          isNew: b.status === 'New', isConfirmed: b.status === 'Confirmed', final: !open, canAssign: open, hasEmployee: !!b.employee,
+        },
+      };
+    }
+    return Object.assign({
+      newCount: all.filter(x => x.status === 'New').length,
+      onStatus: e => this.setState({ status: e.target.value }),
+      isList: (st.view || 'list') === 'list',
+      isDay: st.view === 'day',
+      showList: () => this.setState({ view: 'list' }),
+      showDay: () => this.setState({ view: 'day' }),
+      rows: rows,
+      listEmpty: rows.length === 0,
+      emptyText: status ? 'No bookings with status ' + status + '.' : 'No bookings.',
+      onDay: e => this.setState({ day: e.target.value }),
+      onDayEmp: e => this.setState({ dayEmp: e.target.value }),
+      dayPrompt: !st.day || !st.dayEmp,
+      dayNone: !!st.day && !!st.dayEmp && dayRowsAll.length === 0,
+      dayNoneText: 'No bookings for this employee on ' + (st.day || '') + '.',
+      dayHas: dayRowsAll.length > 0,
+      dayRows: dayRowsAll.map(x => ({ time: x.time, number: x.number, customer: x.customer, service: x.service, status: x.status, chip: 'chip st-' + x.status })),
+      closeSel: () => this.setState({ sel: null }),
+      confirmIt: () => this.update(b.id, { status: 'Confirmed' }, '', b.number + ' is now Confirmed.'),
+      completeIt: () => this.update(b.id, { status: 'Completed' }, '', b.number + ' is now Completed.'),
+      cancelIt: () => this.update(b.id, { status: 'Cancelled' }, '', b.number + ' is now Cancelled.'),
+      onAssignee: e => this.setState({ assignee: e.target.value }),
+      assign: () => { if (!st.assignee) { this.setState({ msg: 'Choose an employee first.' }); return; } this.update(b.id, { employee: st.assignee }, 'Assigned to ' + st.assignee, b.number + ' assigned to ' + st.assignee + '.'); },
+      unassign: () => this.update(b.id, { employee: null }, 'Unassigned', b.number + ' is unassigned.'),
+      hasMsg: !!st.msg,
+      msg: st.msg || '',
+    }, selOut);
+  }
+}
+</script>
+</body>
+</html>

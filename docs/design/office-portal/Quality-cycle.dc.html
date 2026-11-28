@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Quality Cycle for the cleaning company: checklist templates, quality reports, exports and shared report links.">
+<title>Quality Cycle</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+a{color:var(--muted)}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 16px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.panel{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.card{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-ink{background:var(--ink);color:var(--surface)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:880px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.sub{font-size:14px;color:var(--muted)}
+.check{display:flex;align-items:center;gap:8px;min-height:44px}
+.check input{width:20px;height:20px}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html" aria-current="page">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Quality Cycle</h1><p style="margin:4px 0 0" class="sub">Create checklist templates and prepare, export or share client quality reports.</p></div>
+      <div class="seg" role="group" aria-label="Section"><button type="button" aria-pressed="{{ isTemplates }}" onClick="{{ showTemplates }}">Checklist templates</button><button type="button" aria-pressed="{{ isReports }}" onClick="{{ showReports }}">Reports</button></div>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+
+    <sc-if value="{{ isTemplates }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" onClick="{{ newTemplate }}">New template</button></div>
+    <section class="panel" aria-labelledby="tpl-h">
+      <h2 id="tpl-h" style="margin:0;font-size:18px">Existing templates</h2>
+      <div class="seg" role="tablist" aria-label="Checklist template activity"><button type="button" role="tab" aria-pressed="{{ tActive }}" aria-selected="{{ tActive }}" onClick="{{ showActive }}">Active {{ nActive }}</button><button type="button" role="tab" aria-pressed="{{ tInactive }}" aria-selected="{{ tInactive }}" onClick="{{ showInactive }}">Inactive {{ nInactive }}</button></div>
+      <sc-if value="{{ tplEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:0" class="sub">{{ tplEmptyText }}</p></sc-if>
+      <sc-for list="{{ templates }}" as="t" hint-placeholder-count="2">
+      <article class="card">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px">
+          <div><strong>{{ t.title }}</strong><div class="sub">{{ t.desc }}</div></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ t.edit }}">Edit</button><button type="button" class="btn btn-ghost" onClick="{{ t.toggle }}">{{ t.toggleLabel }}</button><sc-if value="{{ t.inactive }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ t.del }}">Delete</button></sc-if></div>
+        </div>
+        <span class="sub">Checklist items ({{ t.count }}):</span>
+        <ul style="margin:0;padding-left:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 16px;font-size:14px"><sc-for list="{{ t.items }}" as="i" hint-placeholder-count="3"><li>{{ i.text }}</li></sc-for></ul>
+      </article>
+      </sc-for>
+    </section>
+    </sc-if>
+
+    <sc-if value="{{ isReports }}" hint-placeholder-val="{{ false }}">
+    <section class="panel" aria-labelledby="rep-h">
+      <h2 id="rep-h" style="margin:0;font-size:18px">Quality reports</h2>
+      <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 12px;margin:0;display:flex;flex-wrap:wrap;gap:4px 16px"><legend class="sub" style="padding:0 4px">Work orders (up to 50)</legend><sc-for list="{{ shiftChoices }}" as="c" hint-placeholder-count="4"><label class="check"><input type="checkbox" checked="{{ c.on }}" onChange="{{ c.toggle }}">{{ c.name }}</label></sc-for></fieldset>
+      <div class="seg" role="group" aria-label="Report period type"><button type="button" aria-pressed="{{ byMonths }}" onClick="{{ useMonths }}">Months</button><button type="button" aria-pressed="{{ byRange }}" onClick="{{ useRange }}">Date range</button></div>
+      <sc-if value="{{ byMonths }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+        <label class="field">Year<select class="input" onChange="{{ onYear }}"><option>2026</option><option>2025</option></select></label>
+        <fieldset style="border:1px solid var(--line-2);border-radius:12px;padding:8px 12px;margin:0;display:flex;flex-wrap:wrap;gap:4px 12px"><legend class="sub" style="padding:0 4px">Months (up to 12)</legend><sc-for list="{{ monthChoices }}" as="m" hint-placeholder-count="12"><label class="check"><input type="checkbox" checked="{{ m.on }}" onChange="{{ m.toggle }}">{{ m.name }}</label></sc-for></fieldset>
+      </div>
+      </sc-if>
+      <sc-if value="{{ byRange }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <label class="field">From date<select class="input" onChange="{{ onFrom }}"><option value="1 Nov 2026">1 Nov 2026</option><option value="15 Nov 2026">15 Nov 2026</option></select></label>
+        <label class="field">To date (inclusive)<select class="input" onChange="{{ onTo }}"><option value="30 Nov 2026">30 Nov 2026</option><option value="26 Nov 2026">26 Nov 2026</option></select></label>
+      </div>
+      </sc-if>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px">
+        <button type="button" class="btn btn-primary" onClick="{{ loadReport }}">Load report</button>
+        <label class="field">Report language<select class="input" onChange="{{ onLang }}"><option value="EN">English</option><option value="FI">Finnish</option><option value="SV">Swedish</option></select></label>
+      </div>
+    </section>
+
+    <sc-if value="{{ reportLoaded }}" hint-placeholder-val="{{ false }}">
+    <section class="panel" aria-label="Loaded report">
+      <div style="margin:0;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:14px;color:var(--muted)"><div>Period: {{ periodText }}</div><div>Time zone: Europe/Helsinki</div><div>Language: {{ lang }}</div></div>
+      <p style="margin:0" class="sub">Scheduled hours count each visit once. Actual hours add up each employee’s submitted work time; incomplete timings are left out.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-primary" onClick="{{ exportAll }}">Export all selected</button><button type="button" class="btn btn-ghost" onClick="{{ shareAll }}">Share all selected</button></div>
+      <div class="tablebox" role="region" aria-label="Report rows" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Company</th><th scope="col">Property</th><th scope="col">Work order</th><th scope="col">Scheduled visits</th><th scope="col">Completed visits</th><th scope="col">Scheduled hours</th><th scope="col">Actual hours</th><th scope="col">Actions</th></tr></thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="2">
+          <tr><td>{{ r.company }}</td><td>{{ r.branch }}</td><td>{{ r.shift }}</td><td>{{ r.sched }}</td><td>{{ r.done }}</td><td>{{ r.hours }}</td><td>{{ r.actual }}</td><td><div style="display:flex;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ r.exp }}">Export</button><button type="button" class="btn btn-ghost" onClick="{{ r.share }}">Share</button></div></td></tr>
+          </sc-for>
+        </tbody>
+      </table>
+      </div>
+    </section>
+    </sc-if>
+
+    <section class="panel" aria-labelledby="shared-h">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2 id="shared-h" style="margin:0;font-size:18px">Shared reports</h2><button type="button" class="btn btn-ghost" onClick="{{ refreshShares }}">Refresh shared reports</button></div>
+      <p style="margin:0" class="sub">Links expire after 30 days and include report photos and notes. Acknowledgment records receipt through the link, not a signature.</p>
+      <sc-for list="{{ shares }}" as="s" hint-placeholder-count="2">
+      <article class="card">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><strong>{{ s.to }}</strong><span class="{{ s.chip }}">{{ s.status }}</span><sc-if value="{{ s.inactive }}" hint-placeholder-val="{{ false }}"><span class="chip">Inactive</span></sc-if></div>
+        <span class="sub">{{ s.line }}</span>
+        <sc-if value="{{ s.hasError }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;color:var(--gold-ink)">{{ s.error }}</span></sc-if>
+        <sc-if value="{{ s.active }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ s.open }}">Open report</button><sc-if value="{{ s.canRetry }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ s.retry }}">Retry email</button></sc-if><button type="button" class="btn btn-ghost" onClick="{{ s.revoke }}">Revoke</button></div></sc-if>
+      </article>
+      </sc-for>
+    </section>
+    </sc-if>
+  </main>
+</div>
+
+<sc-if value="{{ editorOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="{{ editorTitle }}" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(560px,100%);max-height:92%;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">{{ editorTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeEditor }}" style="min-width:44px">×</button></div>
+    <label class="field">Template title<input class="input" type="text" placeholder="For example: Weekly office cleaning" onChange="{{ onTitle }}"></label>
+    <label class="field">Description<input class="input" type="text" placeholder="Optional description or guidance" onChange="{{ onDesc }}"></label>
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="sub">Checklist items (up to 10)</span><sc-if value="{{ canAddItem }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ addItem }}">Add item</button></sc-if></div>
+    <sc-for list="{{ editItems }}" as="ei" hint-placeholder-count="3"><div style="display:flex;gap:8px;align-items:center"><span class="sub" style="width:24px">{{ ei.n }}.</span><input class="input" type="text" aria-label="Item {{ ei.n }}" placeholder="{{ ei.placeholder }}" onChange="{{ ei.onChange }}" style="flex:1"><sc-if value="{{ ei.canRemove }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" aria-label="Remove item {{ ei.n }}" onClick="{{ ei.remove }}" style="min-width:44px">×</button></sc-if></div></sc-for>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeEditor }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveTemplate }}">{{ saveLabel }}</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ delOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Delete template" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(440px,100%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Delete template?</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeDel }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">Permanently delete the inactive template “{{ delName }}”? Templates used by a work order or checklist history are kept.</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeDel }}">Keep template</button><button type="button" class="btn btn-primary" onClick="{{ confirmDel }}">Delete</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ shareOpen }}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-modal="true" aria-label="Share quality report" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px">
+  <section style="display:flex;flex-direction:column;gap:16px;padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);width:min(480px,100%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:18px">Share quality report</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeShare }}" style="min-width:44px">×</button></div>
+    <p style="margin:0" class="sub">Send {{ shareCount }} selected work order(s) as one report. The link expires in 30 days.</p>
+    <label class="field">Recipient source<select class="input" onChange="{{ onSource }}"><option value="paivi@virtanen.fi">Päivi Virtanen, office manager (paivi@virtanen.fi)</option><option value="other">Other email address</option></select></label>
+    <sc-if value="{{ otherEmail }}" hint-placeholder-val="{{ false }}"><label class="field">Recipient email<input class="input" type="email" onChange="{{ onEmail }}"></label></sc-if>
+    <label class="field">PDF and email language<select class="input" onChange="{{ onShareLang }}"><option value="EN">English</option><option value="FI">Finnish</option><option value="SV">Swedish</option></select></label>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeShare }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ sendShare }}">Send report</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const TEMPLATES = [
+  { id: 't1', title: 'Weekly office cleaning', desc: 'For offices cleaned once or twice a week.', active: true, items: ['Empty bins and replace liners', 'Wipe desks and shared surfaces', 'Clean kitchen counters and sink', 'Vacuum and mop floors', 'Clean toilets and refill supplies'] },
+  { id: 't2', title: 'Home check', desc: 'Standard home visit.', active: true, items: ['Dust surfaces', 'Clean bathroom', 'Vacuum all rooms'] },
+  { id: 't3', title: 'Move-out check (old)', desc: 'Replaced by the 2026 version.', active: false, items: ['Clean inside cupboards', 'Clean oven and fridge', 'Wash windows'] },
+];
+const SHIFTS = ['Hietaniemi office', 'Espoo, weekly clean', 'Kallio, Lindqvist flat', 'Tampere warehouse (inactive)'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const ROWS = {
+  'Hietaniemi office': { company: 'Hietaniemi office Oy', branch: 'Hietaniemi', sched: 8, done: 7, hours: '32.00', actual: '30.50', incomplete: 1 },
+  'Espoo, weekly clean': { company: 'Virtanen Oy', branch: 'Espoo head office', sched: 4, done: 4, hours: '16.00', actual: '16.25', incomplete: 0 },
+  'Kallio, Lindqvist flat': { company: 'Lindqvist household', branch: 'Kallio', sched: 12, done: 12, hours: '36.00', actual: '35.75', incomplete: 0 },
+  'Tampere warehouse (inactive)': { company: 'Virtanen Oy', branch: 'Tampere warehouse', sched: 0, done: 0, hours: '0.00', actual: 'Not available', incomplete: 0 },
+};
+const SHARES = [
+  { id: 's1', to: 'paivi@virtanen.fi', status: 'Acknowledged', period: 'October 2026', lang: 'FI', expires: '12 Dec 2026', note: 'Acknowledged: 14 Nov 2026 09:20', error: '', inactive: false },
+  { id: 's2', to: 'facilities@hietaniemi.fi', status: 'Email failed', period: '1 Nov – 15 Nov 2026', lang: 'EN', expires: '15 Dec 2026', note: '', error: 'The email provider rejected the address.', inactive: false },
+  { id: 's3', to: 'Existing report link', status: 'Link created', period: 'September 2026', lang: 'EN', expires: '20 Oct 2026', note: '', error: '', inactive: true },
+];
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  tpls() { return this.st().tpls || TEMPLATES; }
+  shares() { return this.st().shares || SHARES; }
+  renderVals() {
+    const st = this.st();
+    const isReports = st.section === 'reports';
+    const tab = st.tplTab || 'active';
+    const tpls = this.tpls();
+    const visible = tpls.filter(t => (tab === 'active' ? t.active : !t.active));
+    const ed = st.editor || null;
+    const chosen = st.chosen || ['Hietaniemi office', 'Espoo, weekly clean'];
+    const months = st.months || ['Nov'];
+    const byRange = st.mode === 'range';
+    const shares = this.shares();
+    const delT = st.del ? tpls.find(t => t.id === st.del) : null;
+    const share = st.share || null;
+    return {
+      isTemplates: !isReports, isReports: isReports,
+      showTemplates: () => this.setState({ section: 'templates', msg: '' }),
+      showReports: () => this.setState({ section: 'reports', msg: '' }),
+      newTemplate: () => this.setState({ editor: { id: null, title: '', desc: '', items: [''] } }),
+      tActive: tab === 'active', tInactive: tab === 'inactive',
+      nActive: tpls.filter(t => t.active).length, nInactive: tpls.filter(t => !t.active).length,
+      showActive: () => this.setState({ tplTab: 'active' }), showInactive: () => this.setState({ tplTab: 'inactive' }),
+      tplEmpty: visible.length === 0,
+      tplEmptyText: tpls.length === 0 ? 'No quality cycle templates created yet.' : 'No ' + tab + ' checklist templates. Select ' + (tab === 'active' ? 'Inactive' : 'Active') + ' to view your other templates.',
+      templates: visible.map(t => ({
+        title: t.title, desc: t.desc, count: t.items.length, items: t.items.map(x => ({ text: x })),
+        inactive: !t.active, toggleLabel: t.active ? 'Deactivate' : 'Reactivate',
+        edit: () => this.setState({ editor: { id: t.id, title: t.title, desc: t.desc, items: t.items.slice() } }),
+        toggle: () => this.setState({ tpls: tpls.map(x => (x.id === t.id ? { ...x, active: !x.active } : x)), msg: t.title + (t.active ? ' deactivated.' : ' reactivated.') }),
+        del: () => this.setState({ del: t.id }),
+      })),
+      editorOpen: !!ed,
+      editorTitle: ed && ed.id ? 'Edit template' : 'Create new template',
+      saveLabel: ed && ed.id ? 'Update template' : 'Create template',
+      onTitle: e => this.setState({ editor: { ...ed, title: e.target.value } }),
+      onDesc: e => this.setState({ editor: { ...ed, desc: e.target.value } }),
+      canAddItem: !!ed && ed.items.length < 10,
+      addItem: () => this.setState({ editor: { ...ed, items: ed.items.concat(['']) } }),
+      editItems: ed ? ed.items.map((it, i) => ({
+        n: i + 1, placeholder: it || 'Item ' + (i + 1) + ' task', canRemove: ed.items.length > 1,
+        onChange: e => this.setState({ editor: { ...ed, items: ed.items.map((x, j) => (j === i ? e.target.value : x)) } }),
+        remove: () => this.setState({ editor: { ...ed, items: ed.items.filter((x, j) => j !== i) } }),
+      })) : [],
+      closeEditor: () => this.setState({ editor: null }),
+      saveTemplate: () => {
+        if (!ed.title) { this.setState({ msg: 'Enter a template title.' }); return; }
+        const items = ed.items.filter(x => x.trim());
+        if (!items.length) { this.setState({ msg: 'Add at least one checklist item.' }); return; }
+        const next = ed.id ? tpls.map(t => (t.id === ed.id ? { ...t, title: ed.title, desc: ed.desc, items: items } : t)) : tpls.concat([{ id: 't' + Date.now(), title: ed.title, desc: ed.desc, active: true, items: items }]);
+        this.setState({ tpls: next, editor: null, msg: ed.id ? 'Template updated.' : 'Template created.' });
+      },
+      delOpen: !!delT, delName: delT ? delT.title : '',
+      closeDel: () => this.setState({ del: null }),
+      confirmDel: () => this.setState({ tpls: tpls.filter(t => t.id !== st.del), del: null, msg: 'Template deleted.' }),
+      shiftChoices: SHIFTS.map(n => ({ name: n, on: chosen.includes(n), toggle: () => this.setState({ chosen: chosen.includes(n) ? chosen.filter(x => x !== n) : chosen.concat([n]) }) })),
+      byMonths: !byRange, byRange: byRange,
+      useMonths: () => this.setState({ mode: 'months' }), useRange: () => this.setState({ mode: 'range' }),
+      onYear: e => this.setState({ year: e.target.value }),
+      monthChoices: MONTHS.map(m => ({ name: m, on: months.includes(m), toggle: () => this.setState({ months: months.includes(m) ? months.filter(x => x !== m) : months.concat([m]) }) })),
+      onFrom: e => this.setState({ from: e.target.value }), onTo: e => this.setState({ to: e.target.value }),
+      onLang: e => this.setState({ lang: e.target.value }),
+      loadReport: () => {
+        if (!chosen.length) { this.setState({ msg: 'Choose at least one work order.' }); return; }
+        if (!byRange && !months.length) { this.setState({ msg: 'Choose at least one month.' }); return; }
+        this.setState({ loaded: chosen.slice(), msg: 'Report loaded.' });
+      },
+      reportLoaded: !!st.loaded,
+      periodText: byRange ? (st.from || '1 Nov 2026') + ' – ' + (st.to || '30 Nov 2026') : months.join(', ') + ' ' + (st.year || '2026'),
+      lang: st.lang || 'EN',
+      rows: (st.loaded || []).map(n => { const r = ROWS[n]; return { company: r.company, branch: r.branch, shift: n, sched: r.sched, done: r.done, hours: r.hours, actual: r.actual + (r.incomplete ? ' (' + r.incomplete + ' incomplete)' : ''), exp: () => this.setState({ msg: 'PDF for ' + n + ' downloaded. (Prototype: no file.)' }), share: () => this.setState({ share: { count: 1, source: 'paivi@virtanen.fi' } }) }; }),
+      exportAll: () => this.setState({ msg: 'PDF for all selected work orders downloaded. (Prototype: no file.)' }),
+      shareAll: () => this.setState({ share: { count: (st.loaded || []).length, source: 'paivi@virtanen.fi' } }),
+      shareOpen: !!share, shareCount: share ? share.count : 0,
+      otherEmail: !!share && share.source === 'other',
+      onSource: e => this.setState({ share: { ...share, source: e.target.value } }),
+      onEmail: e => this.setState({ share: { ...share, email: e.target.value } }),
+      onShareLang: e => this.setState({ share: { ...share, lang: e.target.value } }),
+      closeShare: () => this.setState({ share: null }),
+      sendShare: () => {
+        const to = share.source === 'other' ? share.email : share.source;
+        if (!to) { this.setState({ msg: 'Enter the recipient email.' }); return; }
+        this.setState({ shares: [{ id: 's' + Date.now(), to: to, status: 'Email sent', period: this.periodTextFor(st), lang: share.lang || 'EN', expires: '26 Dec 2026', note: 'Accepted by email provider: 26 Nov 2026 10:31', error: '', inactive: false }].concat(shares), share: null, msg: 'Report sent to ' + to + '.' });
+      },
+      refreshShares: () => this.setState({ msg: 'Shared reports refreshed.' }),
+      shares: shares.map(s => ({
+        to: s.to, status: s.status, inactive: s.inactive, active: !s.inactive,
+        chip: 'chip ' + (s.status === 'Acknowledged' ? 'chip-ink' : s.status === 'Email failed' ? 'chip-gold' : ''),
+        line: s.period + ' · ' + s.lang + ' · Expires ' + s.expires + (s.note ? ' · ' + s.note : ''),
+        hasError: !!s.error, error: s.error, canRetry: s.status === 'Email failed',
+        open: () => this.setState({ msg: 'The report opens in a new tab. (Prototype: no page.)' }),
+        retry: () => this.setState({ shares: shares.map(x => (x.id === s.id ? { ...x, status: 'Email sent', error: '', note: 'Accepted by email provider: 26 Nov 2026 10:32' } : x)), msg: 'Email sent again.' }),
+        revoke: () => this.setState({ shares: shares.map(x => (x.id === s.id ? { ...x, inactive: true } : x)), msg: 'Link revoked.' }),
+      })),
+      hasMsg: !!st.msg, msg: st.msg || '',
+    };
+  }
+  periodTextFor(st) { return st.mode === 'range' ? (st.from || '1 Nov 2026') + ' – ' + (st.to || '30 Nov 2026') : (st.months || ['Nov']).join(', ') + ' ' + (st.year || '2026'); }
+}
+</script>
+</body>
+</html>

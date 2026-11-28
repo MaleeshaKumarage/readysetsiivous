@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Employees for the cleaning company: cleaners, managers, admins and partners, their access, skills and default hours.">
+<title>Employees</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif;--c1:#32406f;--c2:#7d6220;--c3:#2f6b5a;--c4:#8a3b4f;--c5:#4b5d9c;--c6:#6b5a2f}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.card{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+textarea.input{padding:8px 12px;min-height:72px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.chip button{border:0;background:transparent;font:inherit;cursor:pointer;min-width:24px;min-height:24px;color:inherit}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.sub{font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:999px;margin-right:8px}
+.swatch{width:44px;height:44px;border-radius:999px;border:3px solid var(--surface);cursor:pointer;box-shadow:0 0 0 1px var(--line-3)}
+.swatch[aria-pressed='true']{box-shadow:0 0 0 3px var(--gold)}
+.step{display:flex;align-items:center;gap:8px}
+.step span{min-width:96px;text-align:center;font-variant-numeric:tabular-nums;font-weight:600}
+.dlg{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg>section{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);max-height:92%;overflow:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html" aria-current="page">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div><h1 style="margin:0;font-size:28px;line-height:1.2">Employees</h1><p style="margin:4px 0 0" class="sub">Cleaners, managers, admins and partner contacts, and their sign-in access.</p></div>
+      <button type="button" class="btn btn-primary" onClick="{{ addEmployee }}">Add employee</button>
+    </header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+    <div class="seg" role="tablist" aria-label="Employee activity"><button type="button" role="tab" aria-pressed="{{ tActive }}" aria-selected="{{ tActive }}" onClick="{{ showActive }}">Active {{ nActive }}</button><button type="button" role="tab" aria-pressed="{{ tInactive }}" aria-selected="{{ tInactive }}" onClick="{{ showInactive }}">Inactive {{ nInactive }}</button></div>
+    <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">{{ emptyText }}</p></sc-if>
+    <div class="tablebox" role="region" aria-label="Employees" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Sign-in</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="e" hint-placeholder-count="5">
+          <tr>
+            <td><strong><span class="dot" style="{{ e.dot }}"></span>{{ e.name }}</strong></td>
+            <td>{{ e.email }}</td>
+            <td>{{ e.role }}<div class="sub">{{ e.roleNote }}</div></td>
+            <td><span class="{{ e.regChip }}">{{ e.reg }}</span></td>
+            <td><div style="display:flex;flex-wrap:wrap;gap:8px">
+              <button type="button" class="btn btn-ghost" onClick="{{ e.edit }}">Edit</button>
+              <sc-if value="{{ e.active }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ e.invite }}">{{ e.inviteLabel }}</button></sc-if>
+              <sc-if value="{{ e.calendarAllowed }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ e.calendar }}">{{ e.calendarLabel }}</button></sc-if>
+              <sc-if value="{{ e.pending }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ e.retry }}">Retry reactivation</button></sc-if>
+              <sc-if value="{{ e.active }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-ghost" onClick="{{ e.deactivate }}">Deactivate</button></sc-if>
+              <sc-if value="{{ e.inactive }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ e.reactivate }}">Reactivate</button><button type="button" class="btn btn-ghost" onClick="{{ e.del }}">Delete</button></sc-if>
+            </div></td>
+          </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+    <nav aria-label="Employee pages" style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px"><span class="sub">{{ pageText }}</span><div style="display:flex;align-items:center;gap:8px"><button type="button" class="btn btn-ghost" disabled>Previous page</button><span class="sub">Page 1 of 1</span><button type="button" class="btn btn-ghost" disabled>Next page</button></div></nav>
+  </main>
+</div>
+
+<sc-if value="{{ formOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ formTitle }}">
+  <section style="width:min(720px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ formTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeForm }}" style="min-width:44px">×</button></div>
+    <sc-if value="{{ isEdit }}" hint-placeholder-val="{{ false }}"><div class="seg" role="tablist" aria-label="Employee form sections"><sc-for list="{{ ftabs }}" as="t" hint-placeholder-count="3"><button type="button" role="tab" aria-pressed="{{ t.on }}" aria-selected="{{ t.on }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for></div></sc-if>
+
+    <sc-if value="{{ fAccount }}" hint-placeholder-val="{{ true }}">
+    <label class="field">Email (required)<input class="input" type="email" value="{{ f.email }}" readonly="{{ f.linked }}" onChange="{{ onEmail }}"><sc-if value="{{ f.linked }}" hint-placeholder-val="{{ false }}"><span class="sub">Locked: this profile is linked to a sign-in account.</span></sc-if></label>
+    <div class="grid2">
+      <label class="field">First name (required)<input class="input" type="text" value="{{ f.first }}" onChange="{{ onFirst }}"></label>
+      <label class="field">Last name (required)<input class="input" type="text" value="{{ f.last }}" onChange="{{ onLast }}"></label>
+      <label class="field">Phone<input class="input" type="tel" value="{{ f.phone }}"></label>
+      <label class="field">Role<select class="input" onChange="{{ onRole }}"><option value="employee">Employee (cleaner)</option><option value="manager">Manager</option><option value="admin">Admin</option><option value="partner">Partner</option></select></label>
+    </div>
+    <sc-if value="{{ isPartner }}" hint-placeholder-val="{{ false }}"><label class="field">Partner company (required)<select class="input"><option>Virtanen Oy</option></select><span class="sub">Only active companies with partner access are listed.</span></label></sc-if>
+    </sc-if>
+
+    <sc-if value="{{ fProfile }}" hint-placeholder-val="{{ false }}">
+    <div class="field"><span>Skills</span><div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ skills }}" as="s" hint-placeholder-count="2"><span class="chip">{{ s.text }}<button type="button" aria-label="Remove {{ s.text }}" onClick="{{ s.remove }}">×</button></span></sc-for></div><div style="display:flex;gap:8px"><input class="input" style="flex:1" type="text" placeholder="Add a skill, then press Add" onChange="{{ onSkillDraft }}"><button type="button" class="btn btn-ghost" onClick="{{ addSkill }}">Add</button></div></div>
+    <div class="field"><span>Service areas</span><div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ areas }}" as="a" hint-placeholder-count="2"><span class="chip">{{ a.text }}<button type="button" aria-label="Remove {{ a.text }}" onClick="{{ a.remove }}">×</button></span></sc-for></div><div style="display:flex;gap:8px"><input class="input" style="flex:1" type="text" placeholder="Add an area, then press Add" onChange="{{ onAreaDraft }}"><button type="button" class="btn btn-ghost" onClick="{{ addArea }}">Add</button></div></div>
+    <div class="field"><span>Calendar colour</span><div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ colours }}" as="c" hint-placeholder-count="6"><button type="button" class="swatch" style="{{ c.style }}" aria-label="{{ c.label }}" aria-pressed="{{ c.on }}" onClick="{{ c.pick }}"></button></sc-for></div></div>
+    <div class="field"><span>Pay rate per hour</span><div class="step"><button type="button" class="btn btn-ghost" aria-label="Lower by 50 cents" onClick="{{ payDown }}" style="min-width:44px">−</button><span>{{ payText }}</span><button type="button" class="btn btn-ghost" aria-label="Raise by 50 cents" onClick="{{ payUp }}" style="min-width:44px">+</button></div></div>
+    <label class="field">Notes<textarea class="input"></textarea></label>
+    <div class="field"><span>Certifications</span>
+      <sc-for list="{{ certs }}" as="c" hint-placeholder-count="1"><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input class="input" style="flex:1 1 200px" type="text" value="{{ c.name }}" aria-label="Certification {{ c.n }} name"><select class="input" aria-label="Certification {{ c.n }} expiry"><option>{{ c.exp }}</option><option>No expiry</option><option>Dec 2027</option><option>Dec 2028</option></select><button type="button" class="btn btn-ghost" onClick="{{ c.remove }}">Remove</button></div></sc-for>
+      <button type="button" class="btn btn-ghost" style="width:fit-content" onClick="{{ addCert }}">Add certification</button>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ fHours }}" hint-placeholder-val="{{ false }}">
+    <p style="margin:0" class="sub">Usual working hours. The employee schedule uses them to show who is free. Leave a day off to mark it as not working.</p>
+    <sc-for list="{{ hours }}" as="h" hint-placeholder-count="7">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <label style="display:flex;align-items:center;gap:8px;min-height:44px;width:160px"><input type="checkbox" checked="{{ h.on }}" onChange="{{ h.toggle }}" style="width:20px;height:20px">{{ h.day }}</label>
+      <sc-if value="{{ h.on }}" hint-placeholder-val="{{ true }}">
+      <div class="step"><button type="button" class="btn btn-ghost" aria-label="{{ h.day }} start earlier" onClick="{{ h.startDown }}" style="min-width:44px">−</button><span style="min-width:64px">{{ h.start }}</span><button type="button" class="btn btn-ghost" aria-label="{{ h.day }} start later" onClick="{{ h.startUp }}" style="min-width:44px">+</button></div>
+      <span class="sub">to</span>
+      <div class="step"><button type="button" class="btn btn-ghost" aria-label="{{ h.day }} end earlier" onClick="{{ h.endDown }}" style="min-width:44px">−</button><span style="min-width:64px">{{ h.end }}</span><button type="button" class="btn btn-ghost" aria-label="{{ h.day }} end later" onClick="{{ h.endUp }}" style="min-width:44px">+</button></div>
+      </sc-if>
+      <sc-if value="{{ h.off }}" hint-placeholder-val="{{ false }}"><span class="sub">Not working</span></sc-if>
+    </div>
+    </sc-for>
+    </sc-if>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeForm }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ saveForm }}">{{ saveLabel }}</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ confirmTitle }}" style="z-index:60">
+  <section style="width:min(440px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ confirmTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeConfirm }}" style="min-width:44px">×</button></div>
+    <p style="margin:0">{{ confirmText }}</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeConfirm }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ doConfirm }}">{{ confirmLabel }}</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const COLOURS = [['--c1', 'Navy'], ['--c2', 'Ochre'], ['--c3', 'Pine'], ['--c4', 'Plum'], ['--c5', 'Cornflower'], ['--c6', 'Olive']];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const WEEKDAY_HOURS = { Monday: [14, 32], Tuesday: [14, 32], Wednesday: [14, 32], Thursday: [14, 32], Friday: [14, 28] };
+const PEOPLE = [
+  { id: 'e1', first: 'Aino', last: 'Korhonen', email: 'aino@readysetsiivous.fi', role: 'employee', active: true, invited: true, colour: '--c3', pay: 16.5, skills: ['Office cleaning', 'Window cleaning'], areas: ['Helsinki', 'Espoo'], certs: [{ name: 'Hygiene passport', exp: 'Mar 2028' }], hours: WEEKDAY_HOURS },
+  { id: 'e2', first: 'Mikael', last: 'Nieminen', email: 'mikael@readysetsiivous.fi', role: 'employee', active: true, invited: false, colour: '--c5', pay: 15, skills: ['Deep cleaning'], areas: ['Vantaa'], certs: [], hours: {} },
+  { id: 'e3', first: 'Satu', last: 'Laine', email: 'satu@readysetsiivous.fi', role: 'admin', active: true, invited: true, calendar: true, colour: '--c1', pay: 0, skills: [], areas: [], certs: [], hours: {} },
+  { id: 'e4', first: 'Jari', last: 'Koski', email: 'jari@readysetsiivous.fi', role: 'manager', active: true, invited: true, pending: true, colour: '--c2', pay: 0, skills: [], areas: [], certs: [], hours: {} },
+  { id: 'e5', first: 'Päivi', last: 'Virtanen', email: 'paivi@virtanen.fi', role: 'partner', company: 'Virtanen Oy', active: true, invited: true, colour: '--c6', pay: 0, skills: [], areas: [], certs: [], hours: {} },
+  { id: 'e6', first: 'Leena', last: 'Ojala', email: 'leena@readysetsiivous.fi', role: 'employee', active: false, invited: true, colour: '--c4', pay: 15.5, skills: [], areas: [], certs: [], hours: {} },
+];
+const ROLE_TEXT = { employee: 'Employee (cleaner)', manager: 'Manager', admin: 'Admin', partner: 'Partner' };
+const time = h => String(Math.floor(h / 2)).padStart(2, '0') + ':' + (h % 2 ? '30' : '00');
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  all() { return this.st().people || PEOPLE; }
+  put(id, ch) { return this.all().map(p => (p.id === id ? { ...p, ...ch } : p)); }
+  renderVals() {
+    const st = this.st();
+    const all = this.all();
+    const tab = st.tab || 'active';
+    const rows = all.filter(p => (tab === 'active' ? p.active : !p.active));
+    const f = st.form || null;
+    const ft = st.ftab || 'account';
+    const cf = st.confirm || null;
+    const setF = ch => this.setState({ form: { ...f, ...ch } });
+    const setHours = (day, v) => setF({ hours: { ...f.hours, [day]: v } });
+    return {
+      addEmployee: () => this.setState({ form: { id: null, email: '', first: '', last: '', phone: '', role: 'employee', linked: false, colour: '--c1', pay: 15, skills: [], areas: [], certs: [], hours: {} }, ftab: 'account' }),
+      hasMsg: !!st.msg, msg: st.msg || '',
+      tActive: tab === 'active', tInactive: tab === 'inactive',
+      nActive: all.filter(p => p.active).length, nInactive: all.filter(p => !p.active).length,
+      showActive: () => this.setState({ tab: 'active' }), showInactive: () => this.setState({ tab: 'inactive' }),
+      listEmpty: rows.length === 0, emptyText: 'No ' + tab + ' employees. Check the ' + (tab === 'active' ? 'Inactive' : 'Active') + ' tab.',
+      pageText: rows.length ? 'Showing 1–' + rows.length + ' of ' + rows.length + ' employees' : '',
+      rows: rows.map(p => ({
+        name: p.first + ' ' + p.last, email: p.email, dot: { background: 'var(' + p.colour + ')' },
+        role: ROLE_TEXT[p.role], roleNote: p.role === 'partner' ? p.company : p.calendar ? 'Sees the work order calendar' : '',
+        reg: p.invited ? 'Invited' : 'Not invited', regChip: 'chip' + (p.invited ? '' : ' chip-gold'),
+        active: p.active, inactive: !p.active, pending: !!p.pending && p.active,
+        edit: () => this.setState({ form: { ...p, phone: '', linked: p.invited }, ftab: 'account' }),
+        inviteLabel: p.invited ? 'Resend setup email' : 'Invite',
+        invite: () => this.setState({ people: this.put(p.id, { invited: true }), msg: (p.invited ? 'A setup email was sent recently to ' + p.email + '. Please check the inbox.' : 'Account setup email sent to ' + p.email + '.') }),
+        calendarAllowed: p.role === 'admin' && p.active && !p.pending,
+        calendarLabel: p.calendar ? 'Hide work order calendar' : 'Show work order calendar',
+        calendar: () => this.setState({ people: this.put(p.id, { calendar: !p.calendar }), msg: 'Scheduler ' + (p.calendar ? 'hidden from ' : 'shown to ') + p.first + ' ' + p.last + '.' }),
+        retry: () => this.setState({ people: this.put(p.id, { pending: false }), msg: p.first + ' ' + p.last + ' reactivated. Account and history kept.' }),
+        deactivate: () => (p.id === 'e1' ? this.setState({ msg: 'Aino Korhonen still has upcoming visits. Reassign them before deactivating.' }) : this.setState({ people: this.put(p.id, { active: false }), msg: p.first + ' ' + p.last + ' deactivated.' })),
+        reactivate: () => this.setState({ people: this.put(p.id, { active: true }), msg: p.first + ' ' + p.last + ' reactivated. Account and history kept.' }),
+        del: () => this.setState({ confirm: { id: p.id, title: 'Delete profile?', label: 'Delete', text: 'Permanently delete ' + p.first + ' ' + p.last + '’s inactive profile? Profiles with a login or work history are kept.' } }),
+      })),
+      formOpen: !!f, isEdit: !!f && !!f.id, formTitle: f && f.id ? 'Edit employee' : 'Add employee', saveLabel: f && f.id ? 'Save changes' : 'Create employee',
+      ftabs: [['account', 'Account'], ['profile', 'Profile'], ['hours', 'Default hours']].map(([k, l]) => ({ label: l, on: ft === k, go: () => this.setState({ ftab: k }) })),
+      fAccount: !f || !f.id || ft === 'account', fProfile: !!f && !!f.id && ft === 'profile', fHours: !!f && !!f.id && ft === 'hours',
+      f: f || { email: '', first: '', last: '', phone: '', linked: false },
+      onEmail: e => setF({ email: e.target.value }), onFirst: e => setF({ first: e.target.value }), onLast: e => setF({ last: e.target.value }),
+      onRole: e => setF({ role: e.target.value }), isPartner: !!f && f.role === 'partner',
+      skills: f ? f.skills.map(s => ({ text: s, remove: () => setF({ skills: f.skills.filter(x => x !== s) }) })) : [],
+      onSkillDraft: e => this.setState({ skillDraft: e.target.value }),
+      addSkill: () => { if (st.skillDraft) setF({ skills: f.skills.concat([st.skillDraft]) }); },
+      areas: f ? f.areas.map(s => ({ text: s, remove: () => setF({ areas: f.areas.filter(x => x !== s) }) })) : [],
+      onAreaDraft: e => this.setState({ areaDraft: e.target.value }),
+      addArea: () => { if (st.areaDraft) setF({ areas: f.areas.concat([st.areaDraft]) }); },
+      colours: COLOURS.map(([v, l]) => ({ label: l, on: !!f && f.colour === v, style: { background: 'var(' + v + ')' }, pick: () => setF({ colour: v }) })),
+      payText: f ? '€' + f.pay.toFixed(2) : '',
+      payDown: () => setF({ pay: Math.max(0, f.pay - 0.5) }), payUp: () => setF({ pay: f.pay + 0.5 }),
+      certs: f ? f.certs.map((c, i) => ({ n: i + 1, name: c.name, exp: c.exp || 'No expiry', remove: () => setF({ certs: f.certs.filter((x, j) => j !== i) }) })) : [],
+      addCert: () => setF({ certs: f.certs.concat([{ name: '', exp: '' }]) }),
+      hours: f ? DAYS.map(d => { const v = f.hours[d]; return { day: d, on: !!v, off: !v, start: v ? time(v[0]) : '', end: v ? time(v[1]) : '',
+        toggle: () => setHours(d, v ? undefined : [16, 32]),
+        startDown: () => setHours(d, [Math.max(0, v[0] - 1), v[1]]), startUp: () => setHours(d, [Math.min(v[1] - 1, v[0] + 1), v[1]]),
+        endDown: () => setHours(d, [v[0], Math.max(v[0] + 1, v[1] - 1)]), endUp: () => setHours(d, [v[0], Math.min(47, v[1] + 1)]) }; }) : [],
+      closeForm: () => this.setState({ form: null }),
+      saveForm: () => {
+        if (!f.email.trim() || !f.first.trim() || !f.last.trim()) { this.setState({ msg: 'Email, first and last name are required.' }); return; }
+        if (f.id) this.setState({ people: this.put(f.id, f), form: null, msg: 'Employee saved.' });
+        else this.setState({ people: all.concat([{ ...f, id: 'e' + Date.now(), active: true, invited: false }]), form: null, tab: 'active', msg: f.first + ' ' + f.last + ' added. Send an invite so they can sign in.' });
+      },
+      confirmOpen: !!cf, confirmTitle: cf ? cf.title : '', confirmText: cf ? cf.text : '', confirmLabel: cf ? cf.label : '',
+      closeConfirm: () => this.setState({ confirm: null }),
+      doConfirm: () => this.setState({ people: all.filter(p => p.id !== cf.id), confirm: null, msg: 'Profile deleted.' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

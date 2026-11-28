@@ -1,0 +1,178 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-26T09:00:00Z"
+  },
+  "title": "Office portal redesign",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 1040,
+      "title": "Dashboard",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Work-queue.dc.html": {
+      "x": 1400,
+      "y": 0,
+      "w": 1280,
+      "h": 1040,
+      "title": "Work queue",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Shifts.dc.html": {
+      "x": 0,
+      "y": 1160,
+      "w": 1280,
+      "h": 1040,
+      "title": "Work orders",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Bookings.dc.html": {
+      "x": 0,
+      "y": 2320,
+      "w": 1280,
+      "h": 1040,
+      "title": "Bookings",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Partner-operations.dc.html": {
+      "x": 1400,
+      "y": 2320,
+      "w": 1280,
+      "h": 1040,
+      "title": "Partner operations",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Quality-cycle.dc.html": {
+      "x": 2800,
+      "y": 2320,
+      "w": 1280,
+      "h": 1040,
+      "title": "Quality Cycle",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Leads.dc.html": {
+      "x": 0,
+      "y": 3480,
+      "w": 1280,
+      "h": 1040,
+      "title": "Leads",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Companies.dc.html": {
+      "x": 1400,
+      "y": 3480,
+      "w": 1280,
+      "h": 1040,
+      "title": "Companies",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Company-detail.dc.html": {
+      "x": 2800,
+      "y": 3480,
+      "w": 1280,
+      "h": 1040,
+      "title": "Company detail",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Agreements.dc.html": {
+      "x": 0,
+      "y": 4640,
+      "w": 1280,
+      "h": 1040,
+      "title": "Agreements",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Employees.dc.html": {
+      "x": 1400,
+      "y": 4640,
+      "w": 1280,
+      "h": 1040,
+      "title": "Employees",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Invoices.dc.html": {
+      "x": 2800,
+      "y": 4640,
+      "w": 1280,
+      "h": 1040,
+      "title": "Invoices",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Services.dc.html": {
+      "x": 0,
+      "y": 5800,
+      "w": 1280,
+      "h": 1040,
+      "title": "Services",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Inventory.dc.html": {
+      "x": 1400,
+      "y": 5800,
+      "w": 1280,
+      "h": 1040,
+      "title": "Inventory",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Menus-and-dropdowns.dc.html": {
+      "x": 2800,
+      "y": 5800,
+      "w": 1280,
+      "h": 1040,
+      "title": "Menus and dropdowns",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Scheduler.dc.html": {
+      "x": 1400,
+      "y": 1160,
+      "w": 1280,
+      "h": 1040,
+      "title": "Scheduler",
+      "expand": "fill",
+      "is_interactive": true
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Work-queue.dc.html",
+    "Shifts.dc.html",
+    "Scheduler.dc.html",
+    "Bookings.dc.html",
+    "Partner-operations.dc.html",
+    "Quality-cycle.dc.html",
+    "Leads.dc.html",
+    "Companies.dc.html",
+    "Company-detail.dc.html",
+    "Agreements.dc.html",
+    "Employees.dc.html",
+    "Invoices.dc.html",
+    "Services.dc.html",
+    "Inventory.dc.html",
+    "Menus-and-dropdowns.dc.html"
+  ],
+  "notes": {},
+  "designSystems": []
+}

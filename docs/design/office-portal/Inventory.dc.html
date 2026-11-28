@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Inventory for the cleaning company: what cleaners took, partner acknowledgments, storage locations, items and supply requests.">
+<title>Inventory</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+/* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+:focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.btn,button{white-space:nowrap}
+.nav a{display:flex;align-items:center;min-height:44px;padding:0 12px;border-radius:10px;color:var(--ink-2);text-decoration:none;font-size:15px}
+.nav a:hover{background:var(--wash)}
+.nav a[aria-current='page']{background:var(--line);font-weight:600;color:var(--ink)}
+.nav .grp{font-size:14px;color:var(--ink);font-weight:700;padding:16px 12px 8px;margin-top:12px;border-top:1px solid var(--line-2)}
+.btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line-2)}
+.tabs button{min-height:44px;padding:0 16px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.tabs button[aria-selected='true']{border-bottom-color:var(--gold);color:var(--ink);font-weight:600}
+.seg{display:flex;flex-wrap:wrap;padding:4px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);gap:4px;width:fit-content}
+.seg button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;cursor:pointer}
+.seg button[aria-pressed='true']{background:var(--ink);color:var(--surface);font-weight:600}
+.field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)}
+textarea.input{padding:8px 12px;min-height:72px}
+.chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.chip-ink{background:var(--ink);color:var(--surface)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
+td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
+.sub{font-size:14px;color:var(--muted)}
+.msg{padding:12px 16px;border:1px solid var(--line-2);border-radius:14px;background:var(--surface)}
+.linkbtn{border:0;background:transparent;padding:0;min-height:44px;font:inherit;color:var(--muted);text-decoration:underline;cursor:pointer}
+.thumb{width:200px;height:150px;border-radius:12px;background:var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.dlg{position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg>section{display:flex;flex-direction:column;gap:16px;padding:20px;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-pop);max-height:92%;overflow:auto;box-sizing:border-box}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+</style>
+</helmet>
+<div style="display:flex;flex-wrap:wrap;min-height:1040px">
+  <aside class="nav" aria-label="Office navigation" style="flex:0 0 240px;max-width:100%;box-sizing:border-box;padding:20px 16px;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px">
+    <strong style="font-size:18px;padding:0 12px 16px">ReadySetSiivous Office</strong>
+    <a href="Main.dc.html">Dashboard</a>
+    <div class="grp">Operations</div>
+    <a href="Shifts.dc.html">Work orders</a>
+    <a href="Bookings.dc.html">Bookings</a>
+    <a href="Scheduler.dc.html">Scheduler</a>
+    <a href="Work-queue.dc.html">Work queue</a>
+    <a href="Partner-operations.dc.html">Partner operations</a>
+    <a href="Quality-cycle.dc.html">Quality Cycle</a>
+    <div class="grp">Customers</div>
+    <a href="Leads.dc.html">Leads</a>
+    <a href="Companies.dc.html">Companies</a>
+    <a href="Agreements.dc.html">Agreements</a>
+    <div class="grp">People</div>
+    <a href="Employees.dc.html">Employees</a>
+    <div class="grp">Finance</div>
+    <a href="Invoices.dc.html">Invoices</a>
+    <div class="grp">Catalog and stock</div>
+    <a href="Services.dc.html">Services</a>
+    <a href="Inventory.dc.html" aria-current="page">Inventory</a>
+  </aside>
+
+  <main style="flex:999 1 640px;min-width:0;box-sizing:border-box;padding:24px 32px;display:flex;flex-direction:column;gap:16px">
+    <header><h1 style="margin:0;font-size:28px;line-height:1.2">Inventory</h1><p style="margin:4px 0 0" class="sub">Cleaning supplies your team takes, where they are kept, and what they ask for.</p></header>
+    <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
+    <div class="tabs" role="tablist" aria-label="Inventory sections"><sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4"><button type="button" role="tab" aria-selected="{{ t.on }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for></div>
+
+    <sc-if value="{{ tLog }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <label class="field">Employee<select class="input" onChange="{{ onEmp }}"><option value="">All employees</option><option>Aino Korhonen</option><option>Mikael Nieminen</option><option>Leena Ojala (inactive)</option></select></label>
+      <label class="field">From<select class="input"><option>Any date</option><option>1 Nov 2026</option><option>1 Oct 2026</option></select></label>
+      <label class="field">To<select class="input"><option>Any date</option><option>30 Nov 2026</option><option>31 Oct 2026</option></select></label>
+      <button type="button" class="btn btn-primary" onClick="{{ applyFilters }}">Apply</button>
+      <button type="button" class="btn btn-ghost" onClick="{{ exportCsv }}">Export CSV</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)">
+      <span class="sub" style="flex:1 1 280px">Tick up to 50 entries with photos to ask the partner to confirm them. Answers don’t change the log.</span>
+      <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-ghost" onClick="{{ clearSel }}">Clear selection</button></sc-if>
+      <button type="button" class="btn btn-primary" disabled="{{ noSel }}" onClick="{{ openRequest }}">Request acknowledgment ({{ selCount }})</button>
+    </div>
+    <sc-if value="{{ logEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">No entries match these filters.</p></sc-if>
+    <div class="tablebox" role="region" aria-label="Take log" tabindex="0"><table style="min-width:1000px">
+      <thead><tr><th scope="col"><span class="sub">Select</span></th><th scope="col">Taken</th><th scope="col">Employee</th><th scope="col">Location</th><th scope="col">Item</th><th scope="col">Quantity</th><th scope="col">Note</th><th scope="col">Photos</th><th scope="col">Partner check</th></tr></thead>
+      <tbody><sc-for list="{{ log }}" as="r" hint-placeholder-count="4">
+        <tr><td><input type="checkbox" aria-label="Select {{ r.item }} by {{ r.emp }}" style="width:20px;height:20px" checked="{{ r.on }}" disabled="{{ r.locked }}" onChange="{{ r.toggle }}"></td><td style="font-variant-numeric:tabular-nums">{{ r.when }}</td><td>{{ r.emp }}</td><td>{{ r.loc }}</td><td>{{ r.item }}</td><td style="font-variant-numeric:tabular-nums">{{ r.qty }}</td><td>{{ r.note }}</td>
+          <td><sc-if value="{{ r.hasPhotos }}" hint-placeholder-val="{{ true }}"><button type="button" class="linkbtn" onClick="{{ r.photos }}">View {{ r.photoCount }}</button></sc-if><sc-if value="{{ r.purged }}" hint-placeholder-val="{{ false }}"><span class="sub">Deleted</span></sc-if></td>
+          <td><sc-if value="{{ r.requested }}" hint-placeholder-val="{{ false }}"><button type="button" class="linkbtn" onClick="{{ r.viewAck }}">{{ r.ack }}</button></sc-if><sc-if value="{{ r.notRequested }}" hint-placeholder-val="{{ true }}"><span class="sub">Not requested</span></sc-if></td></tr>
+      </sc-for></tbody>
+    </table></div>
+    <button type="button" class="btn btn-ghost" style="width:fit-content" onClick="{{ loadMore }}">Load more</button>
+    </sc-if>
+
+    <sc-if value="{{ tLocations }}" hint-placeholder-val="{{ false }}">
+    <button type="button" class="btn btn-primary" style="width:fit-content" onClick="{{ addLocation }}">Add location</button>
+    <div class="tablebox" role="region" aria-label="Locations" tabindex="0"><table>
+      <thead><tr><th scope="col">Name</th><th scope="col">Status</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+      <tbody><sc-for list="{{ locations }}" as="l" hint-placeholder-count="3"><tr><td>{{ l.name }}</td><td><span class="chip">{{ l.status }}</span></td><td><button type="button" class="btn btn-ghost" aria-label="Edit {{ l.name }}" onClick="{{ l.edit }}">Edit</button></td></tr></sc-for></tbody>
+    </table></div>
+    </sc-if>
+
+    <sc-if value="{{ tItems }}" hint-placeholder-val="{{ false }}">
+    <button type="button" class="btn btn-primary" style="width:fit-content" onClick="{{ addItem }}">Add item</button>
+    <div class="tablebox" role="region" aria-label="Items" tabindex="0"><table>
+      <thead><tr><th scope="col">Name</th><th scope="col">Unit</th><th scope="col">Status</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+      <tbody><sc-for list="{{ items }}" as="i" hint-placeholder-count="4"><tr><td>{{ i.name }}</td><td>{{ i.unit }}</td><td><div style="display:flex;flex-wrap:wrap;gap:8px"><span class="chip">{{ i.status }}</span><sc-if value="{{ i.review }}" hint-placeholder-val="{{ false }}"><span class="chip chip-gold">Added by staff, check it</span></sc-if></div></td><td><div style="display:flex;gap:8px"><sc-if value="{{ i.review }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ i.verify }}">Verify</button></sc-if><button type="button" class="btn btn-ghost" aria-label="Edit {{ i.name }}" onClick="{{ i.edit }}">Edit</button></div></td></tr></sc-for></tbody>
+    </table></div>
+    </sc-if>
+
+    <sc-if value="{{ tSupplies }}" hint-placeholder-val="{{ false }}">
+    <div class="seg" role="tablist" aria-label="Supply request status"><sc-for list="{{ supplyFilters }}" as="f" hint-placeholder-count="5"><button type="button" role="tab" aria-pressed="{{ f.on }}" aria-selected="{{ f.on }}" onClick="{{ f.go }}">{{ f.label }}</button></sc-for></div>
+    <sc-if value="{{ suppliesEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">No supply requests for this status.</p></sc-if>
+    <div class="tablebox" role="region" aria-label="Supply requests" tabindex="0"><table>
+      <thead><tr><th scope="col">Employee</th><th scope="col">Items</th><th scope="col">Note</th><th scope="col">Status</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
+      <tbody><sc-for list="{{ supplies }}" as="s" hint-placeholder-count="2"><tr><td>{{ s.emp }}</td><td>{{ s.lines }}</td><td>{{ s.note }}</td><td><span class="{{ s.chip }}">{{ s.status }}</span></td><td><div style="display:flex;flex-wrap:wrap;gap:8px"><sc-if value="{{ s.isRequested }}" hint-placeholder-val="{{ true }}"><button type="button" class="btn btn-primary" onClick="{{ s.approve }}">Approve</button><button type="button" class="btn btn-ghost" onClick="{{ s.decline }}">Decline</button></sc-if><sc-if value="{{ s.isApproved }}" hint-placeholder-val="{{ false }}"><button type="button" class="btn btn-primary" onClick="{{ s.fulfil }}">Mark fulfilled</button></sc-if></div></td></tr></sc-for></tbody>
+    </table></div>
+    </sc-if>
+  </main>
+</div>
+
+<sc-if value="{{ photoOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ photoTitle }}">
+  <section style="width:min(560px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ photoTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closePhoto }}" style="min-width:44px">×</button></div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px"><sc-for list="{{ photoList }}" as="p" hint-placeholder-count="2"><div class="thumb">{{ p.label }}</div></sc-for></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ ackOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Partner acknowledgment">
+  <section style="width:min(480px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Partner acknowledgment</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeAck }}" style="min-width:44px">×</button></div>
+    <strong>{{ ack.item }}, Virtanen Oy</strong>
+    <span class="{{ ack.chip }}" style="width:fit-content">{{ ack.status }}</span>
+    <span class="sub">Requested 20 Nov 2026 09:12</span>
+    <span>Message: Please confirm the supplies used at your Espoo office this week.</span>
+    <sc-if value="{{ ack.answered }}" hint-placeholder-val="{{ false }}"><span class="sub">Päivi Virtanen, 21 Nov 2026 14:30</span><span>{{ ack.note }}</span></sc-if>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ requestOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="Request partner acknowledgment">
+  <section style="width:min(520px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">Request partner acknowledgment</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeRequest }}" style="min-width:44px">×</button></div>
+    <span class="sub">{{ selCount }} entries selected</span>
+    <label class="field">Partner company<input class="input" type="search" placeholder="Search active partner companies" list="partners"><datalist id="partners"><option value="Virtanen Oy"></option><option value="Hietaniemi office Oy"></option></datalist><span class="sub">Up to 25 companies are shown. Type to find another.</span></label>
+    <label class="field">Message to partner (optional)<textarea class="input"></textarea></label>
+    <p style="margin:0" class="sub">The partner sees the item, quantity, location, date, notes and photos, but not who took them. Photos are deleted after three months.</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeRequest }}">Cancel</button><button type="button" class="btn btn-primary" onClick="{{ sendRequest }}">Send request</button></div>
+  </section>
+</div>
+</sc-if>
+
+<sc-if value="{{ editOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dlg" role="dialog" aria-modal="true" aria-label="{{ editTitle }}">
+  <section style="width:min(440px,100%)">
+    <div class="dlg-head"><strong style="font-size:18px">{{ editTitle }}</strong><button type="button" class="btn btn-ghost" aria-label="Close" onClick="{{ closeEdit }}" style="min-width:44px">×</button></div>
+    <label class="field">Name (2 to 80 characters)<input class="input" type="text" maxlength="80" value="{{ e.name }}" onChange="{{ onEditName }}"></label>
+    <sc-if value="{{ e.isItem }}" hint-placeholder-val="{{ false }}"><label class="field">Unit<select class="input"><option>pcs</option><option>bottle</option><option>roll</option><option>pack</option><option>litre</option></select></label></sc-if>
+    <sc-if value="{{ e.existing }}" hint-placeholder-val="{{ false }}"><label style="display:flex;align-items:center;gap:12px;min-height:44px"><input type="checkbox" checked="{{ e.active }}" onChange="{{ toggleEditActive }}" style="width:20px;height:20px">Active</label></sc-if>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ closeEdit }}">Cancel</button><button type="button" class="btn btn-primary" disabled="{{ nameBad }}" onClick="{{ saveEdit }}">Save</button></div>
+  </section>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1040}}'>
+const LOG = [
+  { id: 'r1', when: '25 Nov 2026 16:40', emp: 'Aino Korhonen', loc: 'Espoo head office closet', item: 'Glass cleaner', qty: '2 bottle', note: 'Restocked kitchen', photos: 2, purged: false, ack: 'Acknowledged' },
+  { id: 'r2', when: '24 Nov 2026 08:15', emp: 'Mikael Nieminen', loc: 'Main storage, Pasila', item: 'Microfibre cloths', qty: '10 pcs', note: '', photos: 1, purged: false, ack: '' },
+  { id: 'r3', when: '22 Nov 2026 17:05', emp: 'Aino Korhonen', loc: 'Espoo head office closet', item: 'Bin liners', qty: '1 roll', note: '', photos: 1, purged: false, ack: 'Awaiting acknowledgment' },
+  { id: 'r4', when: '12 Aug 2026 10:00', emp: 'Leena Ojala', loc: 'Main storage, Pasila', item: 'Floor detergent', qty: '1 bottle', note: 'Old entry', photos: 1, purged: true, ack: '' },
+];
+const LOCATIONS = [{ id: 'l1', name: 'Main storage, Pasila', active: true }, { id: 'l2', name: 'Espoo head office closet', active: true }, { id: 'l3', name: 'Old van', active: false }];
+const ITEMS = [{ id: 'i1', name: 'Glass cleaner', unit: 'bottle', active: true, verified: true }, { id: 'i2', name: 'Microfibre cloths', unit: 'pcs', active: true, verified: true }, { id: 'i3', name: 'Bin liners', unit: 'roll', active: true, verified: true }, { id: 'i4', name: 'Descaler spray', unit: 'bottle', active: true, verified: false }];
+const SUPPLIES = [{ id: 'q1', emp: 'Aino Korhonen', lines: '6 bottle Glass cleaner, 20 pcs Microfibre cloths', note: 'For the Espoo route', status: 'Requested' }, { id: 'q2', emp: 'Mikael Nieminen', lines: '2 pack Gloves (M)', note: '', status: 'Approved' }, { id: 'q3', emp: 'Aino Korhonen', lines: '1 roll Bin liners', note: '', status: 'Fulfilled' }];
+const TABS = [['log', 'Take log'], ['locations', 'Locations'], ['items', 'Items'], ['supplies', 'Supply requests']];
+const SUPPLY_FILTERS = ['Requested', 'Approved', 'Fulfilled', 'Declined', 'All'];
+
+class Component extends DCLogic {
+  st() { return this.state || {}; }
+  renderVals() {
+    const st = this.st();
+    const tab = st.tab || 'log';
+    const log = st.log || LOG;
+    const sel = st.sel || [];
+    const locations = st.locations || LOCATIONS;
+    const items = st.items || ITEMS;
+    const supplies = st.supplies || SUPPLIES;
+    const sf = st.sf || 'Requested';
+    const shownSupplies = supplies.filter(s => sf === 'All' || s.status === sf);
+    const photo = st.photo ? log.find(r => r.id === st.photo) : null;
+    const ackRow = st.ack ? log.find(r => r.id === st.ack) : null;
+    const ed = st.edit || null;
+    const emp = st.emp || '';
+    const shownLog = log.filter(r => !st.appliedEmp || r.emp === st.appliedEmp);
+    return {
+      hasMsg: !!st.msg, msg: st.msg || '',
+      tabs: TABS.map(([k, l]) => ({ label: l, on: tab === k, go: () => this.setState({ tab: k }) })),
+      tLog: tab === 'log', tLocations: tab === 'locations', tItems: tab === 'items', tSupplies: tab === 'supplies',
+      onEmp: e => this.setState({ emp: e.target.value }),
+      applyFilters: () => this.setState({ appliedEmp: emp.replace(' (inactive)', ''), sel: [] }),
+      exportCsv: () => this.setState({ msg: 'inventory-2026-11-26.csv downloaded. (Prototype: no file.)' }),
+      hasSel: sel.length > 0, noSel: sel.length === 0, selCount: sel.length,
+      clearSel: () => this.setState({ sel: [] }), openRequest: () => this.setState({ request: true }),
+      logEmpty: shownLog.length === 0,
+      log: shownLog.map(r => ({ when: r.when, emp: r.emp, loc: r.loc, item: r.item, qty: r.qty, note: r.note || '', photoCount: r.photos,
+        hasPhotos: !r.purged && r.photos > 0, purged: r.purged, requested: !!r.ack, notRequested: !r.ack, ack: r.ack,
+        on: sel.includes(r.id), locked: !!r.ack || r.purged || r.photos === 0 || (!sel.includes(r.id) && sel.length >= 50),
+        toggle: () => this.setState({ sel: sel.includes(r.id) ? sel.filter(x => x !== r.id) : sel.concat([r.id]) }),
+        photos: () => this.setState({ photo: r.id }), viewAck: () => this.setState({ ack: r.id }) })),
+      loadMore: () => this.setState({ msg: 'All entries are loaded.' }),
+      photoOpen: !!photo, photoTitle: photo ? photo.item + ', ' + photo.emp : '',
+      photoList: photo ? Array.from({ length: photo.photos }, (x, i) => ({ label: 'Photo ' + (i + 1) })) : [],
+      closePhoto: () => this.setState({ photo: null }),
+      ackOpen: !!ackRow, closeAck: () => this.setState({ ack: null }),
+      ack: ackRow ? { item: ackRow.item, status: ackRow.ack, chip: 'chip' + (ackRow.ack === 'Acknowledged' ? ' chip-ink' : ' chip-gold'), answered: ackRow.ack === 'Acknowledged', note: 'Response: Matches what we saw on site.' } : { item: '', status: '', chip: 'chip', answered: false, note: '' },
+      requestOpen: !!st.request, closeRequest: () => this.setState({ request: false }),
+      sendRequest: () => this.setState({ log: log.map(r => (sel.includes(r.id) ? { ...r, ack: 'Awaiting acknowledgment' } : r)), sel: [], request: false, msg: 'Acknowledgment request sent to the partner portal.' }),
+      addLocation: () => this.setState({ edit: { kind: 'location', id: null, name: '', active: true } }),
+      locations: locations.map(l => ({ name: l.name, status: l.active ? 'Active' : 'Inactive', edit: () => this.setState({ edit: { kind: 'location', ...l } }) })),
+      addItem: () => this.setState({ edit: { kind: 'item', id: null, name: '', active: true } }),
+      items: items.map(i => ({ name: i.name, unit: i.unit, status: i.active ? 'Active' : 'Inactive', review: !i.verified,
+        verify: () => this.setState({ items: items.map(x => (x.id === i.id ? { ...x, verified: true } : x)), msg: i.name + ' verified.' }),
+        edit: () => this.setState({ edit: { kind: 'item', ...i } }) })),
+      supplyFilters: SUPPLY_FILTERS.map(f => ({ label: f, on: sf === f, go: () => this.setState({ sf: f }) })),
+      suppliesEmpty: shownSupplies.length === 0,
+      supplies: shownSupplies.map(s => {
+        const set = (status, m) => this.setState({ supplies: supplies.map(x => (x.id === s.id ? { ...x, status: status } : x)), msg: m });
+        return { emp: s.emp, lines: s.lines, note: s.note || 'No note', status: s.status, chip: 'chip' + (s.status === 'Requested' ? ' chip-gold' : s.status === 'Fulfilled' ? ' chip-ink' : ''),
+          isRequested: s.status === 'Requested', isApproved: s.status === 'Approved',
+          approve: () => set('Approved', 'Request approved.'), decline: () => set('Declined', 'Request declined.'), fulfil: () => set('Fulfilled', 'Request marked fulfilled.') };
+      }),
+      editOpen: !!ed, editTitle: ed ? (ed.id ? 'Edit ' : 'Add ') + ed.kind : '',
+      e: ed ? { name: ed.name, isItem: ed.kind === 'item', existing: !!ed.id, active: ed.active } : { name: '', isItem: false, existing: false, active: true },
+      onEditName: ev => this.setState({ edit: { ...ed, name: ev.target.value } }),
+      toggleEditActive: () => this.setState({ edit: { ...ed, active: !ed.active } }),
+      nameBad: !ed || ed.name.trim().length < 2 || ed.name.trim().length > 80,
+      closeEdit: () => this.setState({ edit: null }),
+      saveEdit: () => {
+        const list = ed.kind === 'item' ? items : locations;
+        const rec = { ...ed, id: ed.id || ed.kind[0] + Date.now(), unit: ed.unit || 'pcs', verified: true };
+        const next = ed.id ? list.map(x => (x.id === ed.id ? rec : x)) : list.concat([rec]);
+        this.setState(ed.kind === 'item' ? { items: next, edit: null, msg: ed.id ? 'Item saved.' : 'Item added.' } : { locations: next, edit: null, msg: ed.id ? 'Location saved.' : 'Location added.' });
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

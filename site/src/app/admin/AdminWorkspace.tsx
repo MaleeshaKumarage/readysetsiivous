@@ -17,7 +17,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
-  LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CalendarCheck2, CheckSquare, Receipt, LogOut, LogIn, UserRound, Package, LayoutGrid,
+  LayoutDashboard, ListChecks, Sparkles, FileSignature, Users, Building2, CalendarClock, CalendarCheck2, CheckSquare, Receipt, LogOut, LogIn, UserRound, Package, LayoutGrid, CalendarDays,
 } from 'lucide-react';
 import { initAuth, isAuthenticated, isAdmin, authTenant, refreshToken, login, logout } from '@/lib/auth';
 import { showError } from '@/lib/toast';
@@ -28,7 +28,7 @@ import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL, AccessVerificationError, verif
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Work orders', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/calendar', label: 'Shift calendar', icon: CalendarClock }, { href: 'shifts/employee-schedule', label: 'Employee schedule', icon: Users }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
+  { label: 'Operations', items: [{ href: 'shifts', label: 'Work orders', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/scheduler', label: 'Scheduler', icon: CalendarDays }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
   { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
@@ -50,7 +50,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<'pending' | 'allowed' | 'denied' | 'error'>('pending');
   const [hasOwnWorkIdentity, setHasOwnWorkIdentity] = useState(false);
   const [accessError, setAccessError] = useState(ACCESS_VERIFY_ERROR);
-  const [canUseShiftCalendar, setCanUseShiftCalendar] = useState(false);
   const verification = useRef(0);
   // Capture before the child provider's layout effect writes its forced scheme.
   const previousScheme = useRef(typeof document === 'undefined' ? null : document.documentElement.getAttribute('data-mantine-color-scheme'));
@@ -79,7 +78,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       if (response.status === 401 || response.status === 403) { setAccess('denied'); return; }
       if (!response.ok) throw new Error('Could not verify your admin access right now. Refresh the page to retry.');
       const identity = await response.json();
-      setCanUseShiftCalendar(identity.canUseShiftCalendar === true);
       const hasAdmin = Array.isArray(identity.roles) && identity.roles.some((value: unknown) => {
         if (typeof value !== 'string') return false;
         try { const roles = JSON.parse(value)?.roles; return Array.isArray(roles) && roles.includes('admin'); } catch { return false; }
@@ -107,18 +105,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return () => { console.warn('[diag] header unmounted'); };
   }, [access]);
 
-  useEffect(() => {
-    const refreshAccess = async () => {
-      try {
-        const bearer = await refreshToken();
-        if (!bearer) { setCanUseShiftCalendar(false); return; }
-        const response = await verifyIdentity(`${API_URL}/api/v1/me`, bearer);
-        setCanUseShiftCalendar(response.ok && (await response.json()).canUseShiftCalendar === true);
-      } catch { setCanUseShiftCalendar(false); }
-    };
-    window.addEventListener('admin-calendar-access-changed', refreshAccess);
-    return () => window.removeEventListener('admin-calendar-access-changed', refreshAccess);
-  }, []);
 
   // The admin is light on every device. Tailwind's dark: variants follow the site's dark class, so it is removed here
   // and put back for the public site when the admin unmounts.
@@ -201,7 +187,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         {NAV_GROUPS.map(group => <div key={group.label}>
           <Text className="admin-nav-label" size="xs" fw={700} c="dimmed" mb={6}>{group.label}</Text>
           <Stack gap={4}>{group.items.map(item => {
-            if (item.href === 'shifts/calendar' && !canUseShiftCalendar) return null;
             const href = item.href ? `${base}${item.href}/` : base;
             const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : item.href === 'shifts' ? pathname === '/admin/shifts' || pathname === '/admin/shifts/' : pathname.startsWith(base + item.href);
             return <NavLink key={href} component={Link} href={href} label={item.label} aria-label={item.label} rightSection={item.href === 'partner-requests' ? <PartnerPendingBadge /> : undefined} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
