@@ -57,7 +57,6 @@ td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
     <a href="Bookings.dc.html">Bookings</a>
     <a href="Scheduler.dc.html">Scheduler</a>
     <a href="Work-queue.dc.html">Work queue</a>
-    <a href="Partner-operations.dc.html">Partner operations</a>
     <a href="Quality-cycle.dc.html">Quality Cycle</a>
     <div class="grp">Customers</div>
     <a href="Leads.dc.html">Leads</a>
@@ -80,6 +79,11 @@ td{padding:12px;border-bottom:1px solid var(--line);vertical-align:top}
     <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}"><div role="status" class="msg">{{ msg }}</div></sc-if>
     <div class="seg" role="tablist" aria-label="Service activity"><button type="button" role="tab" aria-pressed="{{ tActive }}" aria-selected="{{ tActive }}" onClick="{{ showActive }}">Active {{ nActive }}</button><button type="button" role="tab" aria-pressed="{{ tInactive }}" aria-selected="{{ tInactive }}" onClick="{{ showInactive }}">Inactive {{ nInactive }}</button></div>
     <sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><p class="msg" style="margin:0">{{ emptyText }}</p></sc-if>
+    <form aria-label="Key request fee" onSubmit="{{ saveFee }}" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)">
+      <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Partner key request fee, excl. VAT (€)<input type="number" min="0" step="0.01" value="25.00" onChange="{{ onFee }}" style="min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);width:180px"></label>
+      <button type="submit" class="btn btn-ghost">Save fee</button>
+      <span class="sub" style="flex-basis:100%">Charged for each key pickup or handover a partner requests. New requests use the new fee.</span>
+    </form>
     <div class="tablebox" role="region" aria-label="Services" tabindex="0">
       <table>
         <thead><tr><th scope="col">Name</th><th scope="col" class="num">Price excl. VAT</th><th scope="col" class="num">Duration</th><th scope="col">Status</th><th scope="col"><span class="sub">Actions</span></th></tr></thead>
@@ -144,6 +148,8 @@ class Component extends DCLogic {
     const setF = ch => this.setState({ form: { ...f, ...ch } });
     const del = st.del ? all.find(s => s.id === st.del) : null;
     return {
+      onFee: e => this.setState({ fee: e.target.value }),
+      saveFee: e => { if (e && e.preventDefault) e.preventDefault(); const v = Number(this.state && this.state.fee !== undefined ? this.state.fee : 25); this.setState({ msg: 'Key request fee saved: €' + v.toFixed(2) + ' excl. VAT. New key requests use this fee.' }); },
       addService: () => this.setState({ form: { id: null, slug: '', fi: '', en: '', sv: '', price: 0, dur: 120 }, lang: 'fi' }),
       hasMsg: !!st.msg, msg: st.msg || '',
       tActive: tab === 'active', tInactive: tab === 'inactive',

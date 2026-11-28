@@ -74,8 +74,7 @@ h1,h2{text-wrap:balance}
     <a href="Shifts.dc.html">Work orders</a>
     <a href="Bookings.dc.html">Bookings</a>
     <a href="Scheduler.dc.html">Scheduler</a>
-    <a href="Work-queue.dc.html">Work queue</a>
-    <a href="Partner-operations.dc.html">Partner operations <span class="badge" aria-label="{{ partnerCount }} pending">{{ partnerCount }}</span></a>
+    <a href="Work-queue.dc.html">Work queue <span class="badge" aria-label="{{ partnerCount }} partner requests pending">{{ partnerCount }}</span></a>
     <a href="Quality-cycle.dc.html">Quality Cycle</a>
     <div class="grp">Customers</div>
     <a href="Leads.dc.html">Leads</a>
@@ -111,7 +110,7 @@ h1,h2{text-wrap:balance}
     <sc-if value="{{ hasQuotes }}" hint-placeholder-val="{{ true }}">
     <section role="status" aria-label="Pending quote requests" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border:1px solid var(--gold);border-radius:14px;background:var(--gold-wash);color:var(--gold-ink)">
       <strong>{{ quoteText }}</strong>
-      <a href="Partner-operations.dc.html" style="color:var(--gold-ink);font-weight:700">Review quotes</a>
+      <a href="Work-queue.dc.html" style="color:var(--gold-ink);font-weight:700">Review quotes in the Work queue</a>
     </section>
     </sc-if>
 
@@ -129,7 +128,7 @@ h1,h2{text-wrap:balance}
       <div class="tiles">
         <a class="tile" href="Work-queue.dc.html"><small>Visits needing action</small><b>{{ needsAction }}</b><small>Unassigned, overdue or not started</small></a>
         <a class="tile" href="Work-queue.dc.html"><small>Scheduled visits</small><b>{{ scheduled }}</b><small>Accepted or assigned</small></a>
-        <a class="tile" href="Partner-operations.dc.html"><small>Partner actions</small><b>{{ partnerCount }}</b><small>Quotes, requests and changes to arrange</small></a>
+        <a class="tile" href="Work-queue.dc.html"><small>Partner requests</small><b>{{ partnerCount }}</b><small>Quotes, cleaning, change and key requests in the Work queue</small></a>
         <button type="button" class="tile" onClick="{{ openBell }}"><small>Unread notifications</small><b>{{ unread }}</b><small>Staff alerts in your inbox</small></button>
       </div>
     </section>

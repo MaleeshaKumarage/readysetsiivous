@@ -46,15 +46,6 @@
       "expand": "fill",
       "is_interactive": true
     },
-    "Partner-operations.dc.html": {
-      "x": 1400,
-      "y": 2320,
-      "w": 1280,
-      "h": 1040,
-      "title": "Partner operations",
-      "expand": "fill",
-      "is_interactive": true
-    },
     "Quality-cycle.dc.html": {
       "x": 2800,
       "y": 2320,
@@ -161,7 +152,6 @@
     "Shifts.dc.html",
     "Scheduler.dc.html",
     "Bookings.dc.html",
-    "Partner-operations.dc.html",
     "Quality-cycle.dc.html",
     "Leads.dc.html",
     "Companies.dc.html",
