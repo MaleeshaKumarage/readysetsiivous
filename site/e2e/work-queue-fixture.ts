@@ -24,7 +24,8 @@ const BRANCHES = [
   { id: 'b-aurora', companyId: 'aurora', name: 'Aurora clinic', city: 'Espoo', isActive: true, pricingReady: true },
 ];
 
-const shiftVisit = (fields: Record<string, unknown>) => ({ originalStartUtc: null, exceptionId: null, extraExceptionId: null, status: null, visitEmployeeId: null,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const shiftVisit = (fields: Record<string, unknown>): Record<string, any> => ({ originalStartUtc: null, exceptionId: null, extraExceptionId: null, status: null, visitEmployeeId: null,
   rosterVersion: 'roster-1', assignmentVersion: null, isBranchMain: false, cleaningType: null, notes: null, offeredEmployeeId: null, offerRevision: 0, ...fields });
 const SHIFTS = [
   { source: 'shift', id: 'occ-lindqvist', reference: 'Lindqvist weekly', customerName: 'Lindqvist household', scheduledLocal: '2030-01-14 08:00', status: 'needs-action',
@@ -38,7 +39,8 @@ const BOOKINGS = [
   { source: 'booking', id: 'bk-1042', reference: 'B-1042', customerName: 'Eeva Mäkinen', scheduledLocal: '2030-01-16 08:00', status: 'New', stateLabel: 'New booking',
     assigneeName: null, href: '/admin/work-queue/?booking=bk-1042', service: 'Kotisiivous', durationMinutes: 180 },
 ];
-const request = (fields: Record<string, unknown>) => ({ version: 3, notes: null, cleaningType: 'Normal', priceNet: 180, vatRatePercent: 25.5, estimatedDurationMinutes: 180,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const request = (fields: Record<string, unknown>): Record<string, any> => ({ version: 3, notes: null, cleaningType: 'Normal', priceNet: 180, vatRatePercent: 25.5, estimatedDurationMinutes: 180,
   exactStartLocalTime: null, firstAcceptedAtUtc: null, linkedShiftId: null, plannedStartUtc: null, plannedEndUtc: null, acceptedCleanerName: null, actualStartUtc: null, actualEndUtc: null,
   offeredEmployeeId: null, ...fields });
 const REQUESTS = [
@@ -48,7 +50,8 @@ const REQUESTS = [
   request({ id: 'p309', companyId: 'nordea', branchId: 'b-nordea', branchName: 'Nordea office', fromDate: '2030-01-18', toDate: '2030-01-18', exactStartLocalTime: '09:00', status: 'Accepted', acceptedCleanerName: 'Ville Rantanen', version: 5 }),
   request({ id: 'p305', companyId: 'aurora', branchId: 'b-aurora', branchName: 'Aurora clinic', fromDate: '2030-01-24', toDate: '2030-01-24', exactStartLocalTime: '08:00', status: 'Accepted', acceptedCleanerName: 'Minna Salo', version: 2, notes: 'Use the back door.' }),
 ];
-const change = (fields: Record<string, unknown>) => ({ branchId: null, requestId: null, kind: 'Request', resolvedUtc: null, resolution: null, proposedFromDate: null, proposedToDate: null,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const change = (fields: Record<string, unknown>): Record<string, any> => ({ branchId: null, requestId: null, kind: 'Request', resolvedUtc: null, resolution: null, proposedFromDate: null, proposedToDate: null,
   proposedExactStartLocalTime: null, proposedNotes: null, ...fields });
 const CHANGES = [
   change({ id: 'ch-move', companyId: 'nordea', requestId: 'p309', createdUtc: '2030-01-12T10:00:00Z', message: 'The office is closed on Friday. Could you come next week instead?',
@@ -57,7 +60,8 @@ const CHANGES = [
   change({ id: 'ch-notes', companyId: 'nordea', requestId: 'p311', createdUtc: '2030-01-13T11:00:00Z', message: 'Please use the side entrance.', action: 'Instructions', proposedNotes: 'Side entrance, code 1234.' }),
   change({ id: 'ch-msg', companyId: 'kesko', branchId: 'b-kesko', kind: 'Branch', createdUtc: '2030-01-11T10:00:00Z', message: 'Can you bring extra towels next time?', action: 'Message' }),
 ];
-const key = (fields: Record<string, unknown>) => ({ revision: 1, notes: null, feeNet: 25, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null, assignedEmployeeId: null, assignedEmployeeName: null, photos: [], ...fields });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const key = (fields: Record<string, unknown>): Record<string, any> => ({ revision: 1, notes: null, feeNet: 25, vatRatePercent: 25.5, status: 'Requested', cancellationReason: null, assignedEmployeeId: null, assignedEmployeeName: null, photos: [], ...fields });
 const KEYS = [
   key({ id: 'k-kesko', companyId: 'kesko', branchId: 'b-kesko', branchName: 'Kesko store', kind: 'Pickup', date: '2030-01-19', notes: 'Pick up from the security desk.' }),
   key({ id: 'k-aurora', companyId: 'aurora', branchId: 'b-aurora', branchName: 'Aurora clinic', kind: 'Handover', date: '2030-01-25', status: 'Assigned', assignedEmployeeId: 'minna', assignedEmployeeName: 'Minna Salo' }),
@@ -78,7 +82,8 @@ const BOOKED = [
 export type Saved = { method: string; path: string; body: any };
 export type WorkQueueState = { saved: Saved[]; fail: Set<string>; queueCalls: number; partnerDown: boolean; queueDown: boolean };
 
-const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const clone = (value: unknown): any[] => JSON.parse(JSON.stringify(value));
 
 /** Mocks every endpoint the Work queue reads and writes. Writes are recorded and remove the item, as the server would. */
 export async function setupWorkQueue(page: Page, options: { empty?: boolean; many?: number } = {}) {

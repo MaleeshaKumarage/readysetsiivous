@@ -28,7 +28,7 @@ test('the queue always asks for all unassigned work, with no date window and no 
     expect(query.has('to')).toBe(false);
     expect(query.has('assignee')).toBe(false);
   }
-  expect(queries.map(query => query.get('source')).sort()).toEqual(['booking', 'shift']);
+  expect([...new Set(queries.map(query => query.get('source')))].sort()).toEqual(['booking', 'shift']);
   await expect(page.getByLabel('From date')).toHaveCount(0);
   await expect(page.getByLabel('Assignee')).toHaveCount(0);
   await expect(page.getByText('Show all work')).toHaveCount(0);

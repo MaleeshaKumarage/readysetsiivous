@@ -40,7 +40,8 @@ test('a 500-row queue reads unassigned visits 100 at a time and shows one page o
   await expect(page.getByRole('listitem').filter({ hasText: 'Customer 025' })).toBeVisible();
   const shiftReads = requests.filter(params => params.get('source') === 'shift');
   expect(shiftReads.every(params => Number(params.get('take')) <= 100 && params.get('view') === 'needs-action' && params.get('unassigned') === 'true')).toBe(true);
-  expect(shiftReads.map(params => params.get('skip'))).toEqual(['0', '100', '200', '300', '400']);
+  // Development mode mounts the page twice, so a load can run twice; each still reads the same five pages.
+  expect([...new Set(shiftReads.map(params => params.get('skip')))]).toEqual(['0', '100', '200', '300', '400']);
 });
 
 test('searching a 500-row queue narrows the list and resets to page 1', async ({ page }) => {

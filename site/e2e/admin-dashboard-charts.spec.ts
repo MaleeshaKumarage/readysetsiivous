@@ -87,10 +87,11 @@ test('each employee has a donut split by customer against the 37.5 hour full wee
   expect(scrollable).toBe(true);
 });
 
-test('a KPI tile opens the work queue on the view it names', async ({ page }) => {
+// The Work queue holds only waiting work; scheduled visits are in the Scheduler.
+test('a KPI tile opens the page it names: scheduled visits in the Scheduler, visits needing action in the Work queue', async ({ page }) => {
   await setup(page);
   await page.goto('/admin/');
+  await expect(page.getByRole('link', { name: /Visits needing action/ })).toHaveAttribute('href', '/admin/work-queue/');
   await page.getByRole('link', { name: /Scheduled visits/ }).click();
-  await expect(page).toHaveURL(/work-queue\/\?view=scheduled/);
-  await expect(page.getByRole('tab', { name: /^Scheduled/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/\/admin\/shifts\/scheduler\/$/, { timeout: 20000 });
 });

@@ -84,7 +84,7 @@ test('administrator prices a quote and offers work only to staff', async ({ page
   await page.route(/\/api\/v1\/admin\/companies(?:\?.*)?$/, route => route.fulfill({ headers, json: { items: [{ id: branch.companyId, name: 'Owner company', isActive: true, isPartnerEnabled: true }], total: 1 } }));
   await page.route(/\/api\/v1\/admin\/partner\//, route => {
     const req = route.request(), path = new URL(req.url()).pathname.split('/partner')[1]; if (req.method() === 'OPTIONS') return route.fulfill({ headers });
-    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [currentRequest] : path === '/change-requests' ? [] : [branch] });
+    if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [currentRequest] : path === '/change-requests' ? [] : path === '/quotes' ? [{ ...branch, pricingReady: false, quoteRequestedUtc: '2026-11-01T10:00:00Z' }] : path === '/key-requests' ? { feeNet: 0, vatRatePercent: 25.5, items: [] } : [branch] });
     const body = req.postDataJSON(); writes.push({ path, body });
     if (path.endsWith('/offer')) currentRequest = { ...currentRequest, version: currentRequest.version + 1, status: 'Offered', offeredEmployeeId: body.employeeId };
     return route.fulfill({ headers, json: path.includes('pricing') ? branch : currentRequest });
@@ -93,18 +93,34 @@ test('administrator prices a quote and offers work only to staff', async ({ page
   // This navigation test uses the real mobile drawer; the shared helper normally
   // hides that drawer so unrelated form tests cannot be obscured by it.
   await page.evaluate(() => document.getElementById('mock-test-style')?.remove());
-  const navigationToggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
-  if ((page.viewportSize()?.width ?? 1280) < 768) await navigationToggle.click();
-  const partnerNav = page.locator('a[aria-label="Partner operations"]').first(); const navToggle = page.getByRole('button', { name: 'Toggle navigation', exact: true }); await expect(partnerNav.or(navToggle).first()).toBeVisible(); if (!(await partnerNav.isVisible())) await navToggle.click();
-  await partnerNav.click(); await page.getByRole('tab', { name: 'Quote requests', exact: true }).click(); await page.getByRole('button', { name: 'Set cleaning price' }).click();
-  await page.getByLabel('Fixed cleaning price excl. VAT (€)').fill('85'); await page.getByLabel('Estimated duration (minutes)').fill('90'); await page.getByRole('button', { name: 'Save pricing' }).click(); await expect(page.getByText('Pricing saved.')).toBeVisible();
+  // Partner work is handled in the Work queue; there is no Partner operations entry any more.
+  const queueNav = page.locator('a[aria-label="Work queue"]').first(); const navToggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+  await expect(queueNav.or(navToggle).first()).toBeVisible(); if (!(await queueNav.isVisible())) await navToggle.click();
+  await expect(page.locator('a[aria-label="Partner operations"]')).toHaveCount(0);
+  await queueNav.click();
+  await page.getByLabel('Type').selectOption('quote');
+  await page.getByRole('button', { name: /^Set price/ }).click();
+  await page.getByLabel('Price excl. VAT (€)').fill('85'); await page.getByLabel('Estimated duration (minutes)').fill('90'); await page.getByRole('button', { name: 'Save price' }).click();
+  await expect(page.locator('.mantine-Notification-root').filter({ hasText: 'is priced at €85.00 excl. VAT' })).toBeVisible();
   expect(writes[0].body).toEqual({ priceNet: 85, vatRatePercent: 25.5, estimatedDurationMinutes: 90 });
-  await page.getByRole('tab', { name: 'Requests', exact: true }).click(); await page.getByRole('button', { name: 'Arrange employee / time' }).click();
-  await expect(page.getByRole('option', { name: 'Property Owner' })).toHaveCount(0); await page.getByLabel('Employee', { exact: true }).selectOption('employee'); await page.getByRole('button', { name: 'Send cleaning offer' }).click(); await expect(page.getByText('Offer sent. Waiting for employee acceptance.')).toBeVisible();
-  expect(writes[1].body).toEqual({ version: 1, employeeId: 'employee', plannedStartLocal: null });
-  await page.getByRole('button', { name: 'Arrange employee / time', exact: true }).click(); await expect(page.getByLabel('Employee', { exact: true })).toHaveValue('employee');
-  await page.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await page.getByRole('button', { name: 'Send cleaning offer', exact: true }).click(); await expect(page.getByText('Offer sent. Waiting for employee acceptance.', { exact: true })).toBeVisible();
-  expect(writes[2]).toEqual({ path: `/requests/${request.id}/offer`, body: { version: 2, employeeId: 'employee', plannedStartLocal: '2026-12-01T10:00' } });
+  await page.getByLabel('Type').selectOption('cleaning');
+  await page.getByRole('button', { name: /^Offer cleaning/ }).click();
+  // Only office staff can be offered work: the property owner's account is not in the list.
+  const employee = page.getByRole('dialog').getByRole('combobox', { name: 'Employee' });
+  await expect(employee.locator('option', { hasText: 'Property Owner' })).toHaveCount(0);
+  await employee.selectOption('employee');
+  await page.getByRole('dialog').getByRole('button', { name: 'Send offer to Test Employee' }).click();
+  await expect(page.locator('.mantine-Notification-root').filter({ hasText: 'sent to Test Employee' })).toBeVisible();
+  expect(writes[1]).toEqual({ path: `/requests/${request.id}/offer`, body: { version: 1, employeeId: 'employee', plannedStartLocal: `${request.fromDate}T09:00` } });
+  // Offered again once the queue has refreshed: the employee it waits for is chosen first, and a tapped time is sent as the planned start.
+  await expect(page.getByRole('listitem').filter({ hasText: 'Awaiting acceptance · offered to Test Employee' })).toBeVisible();
+  await page.getByRole('button', { name: /^Offer cleaning/ }).click();
+  await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Employee' })).toHaveValue('employee');
+  const bar = page.getByRole('dialog').getByTestId('day-bar'); const box = (await bar.boundingBox())!;
+  await bar.click({ position: { x: box.width * (11.25 / 24), y: 4 } });
+  await page.getByRole('dialog').getByRole('button', { name: /^Send offer to Test Employee/ }).click();
+  await expect.poll(() => writes.length).toBe(3);
+  expect(writes[2]).toEqual({ path: `/requests/${request.id}/offer`, body: { version: 2, employeeId: 'employee', plannedStartLocal: `${request.fromDate}T10:15` } });
 });
 
 test('switching inline staff editors resets fields to the newly selected record', async ({ page }) => {

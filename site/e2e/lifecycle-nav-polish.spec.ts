@@ -50,16 +50,18 @@ test('phone tabs and pager controls meet the 44px touch target', async ({ page }
   expect((await next.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 });
 
-test('phone work queue tabs stay on one scrolling row instead of wrapping', async ({ page }) => {
+// The Work queue has no status tabs any more; on a phone its filters stack and the page never scrolls sideways.
+test('phone work queue filters fit the screen without sideways scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await setupAdminMocks(page); await installScaleRoutes(page, buildScaleData());
   await openAdmin(page, '/admin/work-queue/');
-  const tabs = page.getByRole('tab');
-  await expect(tabs.first()).toBeVisible();
-  const tops = new Set<number>();
-  const count = await tabs.count();
-  for (let i = 0; i < count; i++) tops.add(Math.round((await tabs.nth(i).boundingBox())!.y));
-  expect(tops.size).toBe(1);
+  await expect(page.getByLabel('Source')).toBeVisible();
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  for (const label of ['Source', 'Type', 'Search', 'Sort']) {
+    const box = (await page.getByLabel(label).boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('phone tables explain sideways scrolling and can be reached from the keyboard', async ({ page }) => {

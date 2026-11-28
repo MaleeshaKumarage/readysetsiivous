@@ -56,19 +56,24 @@ export default function WorkQueuePage() {
     const value = <T,>(result: PromiseSettledResult<T>, fallback: T): T => result.status === 'fulfilled' && result.value != null ? result.value : fallback;
     const failed = [shifts, bookings].some(r => r.status === 'rejected');
     const partnerFailed = [requests, quotes, changes, keys].some(r => r.status === 'rejected');
-    if (failed && partnerFailed) { setLoadError('The work queue could not be loaded.'); setLoading(false); return; }
+    // Show whatever loaded; only when nothing at all could be read is there nothing to show.
+    if ([shifts, bookings, requests, quotes, changes, keys].every(r => r.status === 'rejected')) { setLoadError('The work queue could not be loaded.'); setLoading(false); return; }
     if (failed) showError('Unassigned visits and bookings could not be loaded. Partner work is shown.', 'Work queue incomplete');
     if (partnerFailed) showError('Partner requests could not be loaded. Visits and bookings are shown.', 'Work queue incomplete');
-    const allRequests = value(requests, []);
+    // Partner work counts only for companies with partner access, as on Partner operations.
+    const companyList = value(companies, []) ?? [];
+    const partnerCompanies = new Set(companyList.filter(c => c.isPartnerEnabled).map(c => c.id));
+    const forPartners = <T extends { companyId: string }>(items: T[]) => companies.status === 'fulfilled' && companies.value ? items.filter(item => partnerCompanies.has(item.companyId)) : items;
+    const allRequests = forPartners(value(requests, []));
     const people = (value(employees, [] as Employee[]) ?? []).filter(e => e.isActive && e.role !== 'partner');
     setData({
       zone: value(tenant, null as { timeZoneId?: string } | null)?.timeZoneId?.trim() || DEFAULT_ZONE,
       shifts: value(shifts, []), bookings: value(bookings, []),
       requests: allRequests.filter(r => r.status === 'Requested' || r.status === 'Offered'), allRequests,
-      quotes: value(quotes, []).filter(b => b.isActive && !!b.quoteRequestedUtc && !b.pricingReady),
-      changes: value(changes, []).filter(c => !c.resolvedUtc),
-      keys: value(keys, { feeNet: 0, vatRatePercent: 0, items: [] }).items.filter(k => k.status !== 'Completed' && k.status !== 'Cancelled'),
-      companies: new Map((value(companies, []) ?? []).map(c => [c.id, c.name])),
+      quotes: forPartners(value(quotes, [])).filter(b => b.isActive && !!b.quoteRequestedUtc && !b.pricingReady),
+      changes: forPartners(value(changes, [])).filter(c => !c.resolvedUtc),
+      keys: forPartners(Array.isArray(value(keys, null)?.items) ? value(keys, null)!.items : []).filter(k => k.status !== 'Completed' && k.status !== 'Cancelled'),
+      companies: new Map(companyList.map(c => [c.id, c.name])),
       branches: new Map(value(branches, []).map(b => [b.id, b])),
       employees: people,
     });
@@ -114,7 +119,7 @@ export default function WorkQueuePage() {
   const list = useMemo(() => rows
     .filter(row => (source === 'all' || row.source === source) && (type === 'all' || row.kind === type)
       && (!q || `${row.customer} ${row.reference}`.toLowerCase().includes(q)))
-    .sort((a, b) => (sort === 'asc' ? 1 : -1) * (a.sortKey.localeCompare(b.sortKey) || a.id.localeCompare(b.id))), [rows, source, type, q, sort]);
+    .sort((a, b) => (sort === 'asc' ? 1 : -1) * (a.sortKey.localeCompare(b.sortKey) || a.customer.localeCompare(b.customer) || a.id.localeCompare(b.id))), [rows, source, type, q, sort]);
   const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
   const pageRows = list.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);

@@ -178,9 +178,11 @@ test('changes from companies without partner access stay out of the Changes list
     { id: 'change-on', companyId: ownerCompanyId, branchId: 'lake-branch', requestId: null, kind: 'Property', message: 'Enable the sauna', createdUtc: '2026-11-01T10:00:00Z', resolvedUtc: null, resolution: null },
     { id: 'change-off', companyId: otherCompanyId, branchId: 'other-branch', requestId: null, kind: 'Property', message: 'Not partner company', createdUtc: '2026-11-01T10:00:00Z', resolvedUtc: null, resolution: null },
   ]);
-  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
-  await page.getByRole('tab', { name: /^Changes/ }).click();
-  await expect(page.getByText('Enable the sauna', { exact: true })).toBeVisible();
+  await page.goto('/admin/work-queue/?type=change');
+  await expect(page.getByRole('listitem')).toHaveCount(1);
+  await page.getByRole('listitem').getByRole('button').click();
+  await expect(page.getByRole('dialog').getByText('Enable the sauna', { exact: true })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText('Not partner company', { exact: true })).toHaveCount(0);
   // One quote and one enabled change; the disabled company's change is not counted.
   await setNavOpen(page, true); await expect(page.getByLabel('2 pending partner actions')).toHaveCount(1, { timeout: 20000 }); await setNavOpen(page, false);
