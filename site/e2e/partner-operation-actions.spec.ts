@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 import type { CleaningRequest, PartnerChange } from '../src/lib/partnerApi';
+import { viaManagerPage } from './partner-operations-page';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companyId = '11111111-1111-4111-8111-111111111111';
@@ -50,7 +51,7 @@ async function setup(page: Page, requests: CleaningRequest[], changes: PartnerCh
 test.describe('partner operations actions open as modal dialogs', () => {
   test('Arrange employee opens a dialog in view and sends the offer', async ({ page }) => {
     const { writes } = await setup(page, Array.from({ length: 8 }, (_, index) => requestFor(index)));
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     const card = page.getByRole('article', { name: 'Property 7 request' });
     await card.getByRole('button', { name: 'Arrange employee / time', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Arrange Property 7', exact: true });
@@ -65,7 +66,7 @@ test.describe('partner operations actions open as modal dialogs', () => {
 
   test('Edit / reschedule dialog saves the new window and Cancel discards the draft', async ({ page }) => {
     const { writes } = await setup(page, [requestFor(0)]);
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     const card = page.getByRole('article', { name: 'Property 0 request' });
     await card.getByRole('button', { name: 'Edit / reschedule request', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: /^Edit \/ reschedule / });
@@ -86,7 +87,7 @@ test.describe('partner operations actions open as modal dialogs', () => {
 
   test('Cancel request needs a reason in a dialog; Keep request sends nothing', async ({ page }) => {
     const { writes } = await setup(page, [requestFor(0)]);
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     await page.getByRole('button', { name: 'Cancel request', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: /^Cancel / });
     const confirm = dialog.getByRole('button', { name: 'Confirm cancellation', exact: true });
@@ -105,7 +106,7 @@ test.describe('partner operations actions open as modal dialogs', () => {
 test.describe('partner operations completed work and large lists', () => {
   test('completed and cancelled requests leave Requests and appear under Completed requests without actions', async ({ page }) => {
     await setup(page, [requestFor(0), requestFor(1, 'Completed'), requestFor(2, 'Cancelled')]);
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     await expect(page.getByRole('article', { name: 'Property 0 request' })).toBeVisible();
     await expect(page.getByRole('article', { name: 'Property 1 request' })).toHaveCount(0);
     await expect(page.getByRole('article', { name: 'Property 2 request' })).toHaveCount(0);
@@ -123,7 +124,7 @@ test.describe('partner operations completed work and large lists', () => {
 
   test('large request lists page 25 at a time with Previous and Next', async ({ page }) => {
     await setup(page, Array.from({ length: 30 }, (_, index) => requestFor(index)));
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     await expect(page.getByRole('article')).toHaveCount(25);
     await expect(page.getByText('Showing 1–25 of 30', { exact: true })).toBeVisible();
     await page.getByRole('navigation', { name: 'Requests pages' }).getByRole('button', { name: 'Next', exact: true }).click();
@@ -136,7 +137,7 @@ test.describe('partner operations completed work and large lists', () => {
   test('Completed requests has its own pager that keeps its page separately from Requests', async ({ page }) => {
     const closed = Array.from({ length: 28 }, (_, index) => requestFor(index + 2, 'Completed'));
     await setup(page, [requestFor(0), requestFor(1), ...closed]);
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     await expect(page.getByRole('article')).toHaveCount(2);
     await expect(page.getByRole('navigation', { name: 'Requests pages' })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
@@ -162,7 +163,7 @@ test.describe('partner operations completed work and large lists', () => {
 
   test('the modal close control and Escape both close Arrange without sending anything', async ({ page }) => {
     const { writes } = await setup(page, [requestFor(0)]);
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     const card = page.getByRole('article', { name: 'Property 0 request' });
     const opener = card.getByRole('button', { name: 'Arrange employee / time', exact: true });
     const dialog = page.getByRole('dialog', { name: 'Arrange Property 0', exact: true });
@@ -182,7 +183,7 @@ test.describe('partner operations completed work and large lists', () => {
     const changes: PartnerChange[] = Array.from({ length: 27 }, (_, index) => ({ id: `change-${index}`, companyId, branchId: null, requestId: null, kind: 'Property change',
       message: `Change message ${index}`, createdUtc: '2026-11-01T10:00:00Z', resolvedUtc: null, resolution: null }));
     await setup(page, [], changes);
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     await page.getByRole('tab', { name: 'Changes', exact: true }).click();
     const pager = page.getByRole('navigation', { name: 'Changes pages' });
     await expect(page.getByRole('article')).toHaveCount(25);

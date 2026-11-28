@@ -46,7 +46,7 @@ test('opening a notification goes to the page it is about and marks it read', as
 
   await page.getByRole('button', { name: 'Notifications, 1 unread', exact: true }).click();
   await page.getByRole('dialog', { name: 'Notifications', exact: true }).getByRole('link', { name: /Employee accepted partner work/ }).click();
-  await expect(page).toHaveURL(/\/admin\/partner-requests\/$/);
+  await expect(page).toHaveURL(/\/admin\/work-queue\/\?source=partner$/);
   await expect.poll(() => state.read.has('a1')).toBe(true);
 });
 

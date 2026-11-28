@@ -1,353 +1,197 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Title, Button, Group, Stack, Text, Loader, Badge, Tabs, Select, TextInput, Drawer, Paper } from '@mantine/core';
-import {
-  adminWorkQueue, adminBookings, adminEmployees, adminTenant, type Booking, type Employee, type WorkQueueItem, type WorkQueuePage, type WorkQueueSource, type WorkQueueView,
-} from '@/lib/adminApi';
+import { Loader } from '@mantine/core';
+import { adminCompanies, adminEmployees, adminTenant, adminWorkQueue, type Employee, type WorkQueueItem } from '@/lib/adminApi';
+import { staffPartnerApi } from '@/lib/partnerApi';
+import { showError, showSuccess } from '@/lib/toast';
+import { SOURCES, SOURCE_CHIP, SOURCE_LABEL, TYPES, TYPE_LABEL, buildRows, type Kind, type Row, type Source, type Sources } from './model';
+import { WorkQueueDrawer } from './WorkQueueDrawer';
+import './work-queue.css';
 
-const VIEWS: { value: WorkQueueView; label: string }[] = [
-  { value: 'needs-action', label: 'Needs action' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'in-progress', label: 'In progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-const SOURCES: { value: WorkQueueSource; label: string }[] = [
-  { value: 'all', label: 'All sources' },
-  { value: 'booking', label: 'Public bookings' },
-  { value: 'partner', label: 'Partner requests' },
-  { value: 'shift', label: 'Company shifts' },
-];
 const PAGE_SIZE = 25;
-const VIEW_VALUES = VIEWS.map(view => view.value);
-const SOURCE_VALUES = SOURCES.map(source => source.value);
-
-/** Booking actions allowed per stored status. The server enforces the same transitions. */
-function bookingActions(status: string): ('confirm' | 'cancel' | 'complete')[] {
-  if (status === 'New') return ['confirm', 'cancel'];
-  if (status === 'Confirmed') return ['complete', 'cancel'];
-  return [];
-}
-
-const ACTION_LABEL = { confirm: 'Confirm', cancel: 'Cancel booking', complete: 'Mark completed' } as const;
-
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-/** A yyyy-MM-dd string that is a real calendar date (rejects 2026-13-45 and 2026-02-30). */
-function isCalendarDate(value: string): boolean {
-  if (!DATE_PATTERN.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-/** The first view shows this many days from today (tenant time zone), so a busy schedule opens on work that is due soon. */
-const DEFAULT_WINDOW_DAYS = 14;
-/** Assignee filter value for work with no employee. Sent to the server as unassigned=true. */
-const UNASSIGNED = 'unassigned';
-/** Used until the tenant's own time zone loads, and if it cannot be loaded. Matches the shift pages' fallback. */
 const DEFAULT_ZONE = 'Europe/Helsinki';
-/** Today's date in the tenant's time zone, and the window that follows it. The server filters on the same zone. */
-function defaultWindow(zone: string): { dateFrom: string; dateTo: string } {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: zone });
-  const end = new Date(Date.parse(`${today}T12:00:00Z`) + (DEFAULT_WINDOW_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
-  const start = new Date(Date.parse(`${today}T12:00:00Z`) - 180 * 86_400_000).toISOString().slice(0, 10);
-  return { dateFrom: start, dateTo: end };
-}
-/** Accepts real yyyy-MM-dd bounds only; a reversed range is dropped rather than sent to the server. */
-function readDates(from: string | null, to: string | null): { dateFrom: string; dateTo: string } {
-  const start = from && isCalendarDate(from) ? from : '';
-  const end = to && isCalendarDate(to) ? to : '';
-  return start && end && start > end ? { dateFrom: '', dateTo: '' } : { dateFrom: start, dateTo: end };
+type SourceFilter = 'all' | Source;
+type TypeFilter = 'all' | Kind;
+type Sort = 'asc' | 'desc';
+const SOURCE_VALUES = SOURCES.map(s => s.value);
+const TYPE_VALUES = TYPES.map(t => t.value);
+
+/** Every unassigned visit or booking of one source, read page by page (the server serves at most 100 a page). */
+async function unassigned(source: 'booking' | 'shift'): Promise<WorkQueueItem[]> {
+  const items: WorkQueueItem[] = [];
+  for (let skip = 0; skip < 2000; skip += 100) {
+    const page = await adminWorkQueue.page({ view: 'needs-action', source, assignee: 'unassigned', skip, take: 100 });
+    if (!page) throw new Error('The work queue could not be loaded.');
+    items.push(...page.items);
+    if (page.items.length < 100 || items.length >= page.total) break;
+  }
+  return items;
 }
 
 export default function WorkQueuePage() {
-  const [view, setView] = useState<WorkQueueView>('needs-action');
-  const [source, setSource] = useState<WorkQueueSource>('all');
-  const [query, setQuery] = useState('');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [assignee, setAssignee] = useState('');
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [result, setResult] = useState<WorkQueuePage | null>(null);
+  const [data, setData] = useState<Sources | null>(null);
   const [loading, setLoading] = useState(true);
-  const [listError, setListError] = useState('');
-  const [reload, setReload] = useState(0);
+  const [loadError, setLoadError] = useState('');
+  const [source, setSource] = useState<SourceFilter>('all');
+  const [type, setType] = useState<TypeFilter>('all');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<Sort>('asc');
+  const [page, setPage] = useState(1);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [zone, setZone] = useState<string | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const generation = useRef(0);
 
-  const [openBooking, setOpenBooking] = useState<Booking | null>(null);
-  const [detailError, setDetailError] = useState('');
-  const [actionBusy, setActionBusy] = useState<string | null>(null);
-
-  type Filters = { view: WorkQueueView; source: WorkQueueSource; search: string; page: number; dateFrom: string; dateTo: string; assignee: string };
-  const current = (overrides: Partial<Filters> = {}): Filters => ({ view, source, search, page, dateFrom, dateTo, assignee, ...overrides });
-
-  const writeUrl = (next: Filters, mode: 'push' | 'replace' = 'push') => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      params.set('view', next.view);
-      params.set('source', next.source);
-      if (next.search) params.set('q', next.search); else params.delete('q');
-      if (next.dateFrom) params.set('from', next.dateFrom); else params.delete('from');
-      if (next.dateTo) params.set('to', next.dateTo); else params.delete('to');
-      if (!next.dateFrom && !next.dateTo) params.set('range', 'all'); else params.delete('range');
-      // An explicit 'all' keeps a cleared assignee from falling back to the default on reload.
-      params.set('assignee', next.assignee || 'all');
-      params.set('page', String(next.page));
-      const qs = params.toString();
-      const url = `${window.location.pathname}?${qs}`;
-      if (mode === 'push') window.history.pushState(null, '', url); else window.history.replaceState(null, '', url);
-    } catch { /* URL state is a convenience; the queue still works without it */ }
-  };
-
-  const readUrl = () => {
-    const params = new URLSearchParams(window.location.search);
-    const requestedView = params.get('view') as WorkQueueView | null;
-    const requestedSource = params.get('source') as WorkQueueSource | null;
-    const requestedPage = Number(params.get('page'));
-    const view = requestedView && VIEW_VALUES.includes(requestedView) ? requestedView : 'needs-action' as WorkQueueView;
-    const chosenQueue = params.has('from') || params.has('to') || params.has('range') || params.has('assignee');
-    const dates = chosenQueue ? readDates(params.get('from'), params.get('to'))
-      : view === 'needs-action' ? defaultWindow(zone ?? DEFAULT_ZONE) : { dateFrom: '', dateTo: '' };
-    const rawAssignee = (params.get('assignee') ?? '').trim();
-    // Include assigned overdue work on a fresh Needs-action link. Explicit assignee filters remain unchanged.
-    const assignee = chosenQueue ? (rawAssignee === 'all' ? '' : rawAssignee) : '';
-    return {
-      view,
-      source: requestedSource && SOURCE_VALUES.includes(requestedSource) ? requestedSource : 'all' as WorkQueueSource,
-      search: (params.get('q') ?? '').trim(),
-      page: Number.isInteger(requestedPage) && requestedPage >= 1 ? requestedPage : 1,
-      ...dates,
-      assignee,
-      booking: params.get('booking'),
-    };
-  };
-
-  // The tenant's time zone decides the default window, so it loads before the URL state is applied.
-  useEffect(() => {
-    adminTenant.get().then(profile => setZone(profile?.timeZoneId?.trim() || DEFAULT_ZONE)).catch(() => setZone(DEFAULT_ZONE));
+  const load = useCallback(async () => {
+    const version = ++generation.current;
+    setLoading(true); setLoadError('');
+    const api = staffPartnerApi('admin');
+    const [tenant, shifts, bookings, requests, quotes, changes, keys, branches, employees, companies] = await Promise.allSettled([
+      adminTenant.get(), unassigned('shift'), unassigned('booking'), api.requests(), api.quotes(), api.changes(), api.keyRequests(), api.branches(),
+      adminEmployees.list(), adminCompanies.listAll(),
+    ]);
+    if (version !== generation.current) return;
+    const value = <T,>(result: PromiseSettledResult<T>, fallback: T): T => result.status === 'fulfilled' && result.value != null ? result.value : fallback;
+    const failed = [shifts, bookings].some(r => r.status === 'rejected');
+    const partnerFailed = [requests, quotes, changes, keys].some(r => r.status === 'rejected');
+    // Show whatever loaded; only when nothing at all could be read is there nothing to show.
+    if ([shifts, bookings, requests, quotes, changes, keys].every(r => r.status === 'rejected')) { setLoadError('The work queue could not be loaded.'); setLoading(false); return; }
+    if (failed) showError('Unassigned visits and bookings could not be loaded. Partner work is shown.', 'Work queue incomplete');
+    if (partnerFailed) showError('Partner requests could not be loaded. Visits and bookings are shown.', 'Work queue incomplete');
+    // Partner work counts only for companies with partner access, as on Partner operations.
+    const companyList = value(companies, []) ?? [];
+    const partnerCompanies = new Set(companyList.filter(c => c.isPartnerEnabled).map(c => c.id));
+    const forPartners = <T extends { companyId: string }>(items: T[]) => companies.status === 'fulfilled' && companies.value ? items.filter(item => partnerCompanies.has(item.companyId)) : items;
+    const allRequests = forPartners(value(requests, []));
+    const people = (value(employees, [] as Employee[]) ?? []).filter(e => e.isActive && e.role !== 'partner');
+    setData({
+      zone: value(tenant, null as { timeZoneId?: string } | null)?.timeZoneId?.trim() || DEFAULT_ZONE,
+      shifts: value(shifts, []), bookings: value(bookings, []),
+      requests: allRequests.filter(r => r.status === 'Requested' || r.status === 'Offered'), allRequests,
+      quotes: forPartners(value(quotes, [])).filter(b => b.isActive && !!b.quoteRequestedUtc && !b.pricingReady),
+      changes: forPartners(value(changes, [])).filter(c => !c.resolvedUtc),
+      keys: forPartners(Array.isArray(value(keys, null)?.items) ? value(keys, null)!.items : []).filter(k => k.status !== 'Completed' && k.status !== 'Cancelled'),
+      companies: new Map(companyList.map(c => [c.id, c.name])),
+      branches: new Map(value(branches, []).map(b => [b.id, b])),
+      employees: people,
+    });
+    setLoading(false);
   }, []);
 
-  // Restore state from the URL after mount, and on browser Back/Forward.
+  // Filters live in the URL, so a link or Back opens the same queue.
+  const readUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get('source') as SourceFilter | null, t = params.get('type') as TypeFilter | null, n = Number(params.get('page'));
+    setSource(s && SOURCE_VALUES.includes(s) ? s : 'all');
+    setType(t && TYPE_VALUES.includes(t) ? t : 'all');
+    setQuery(params.get('q') ?? '');
+    setSort(params.get('sort') === 'desc' ? 'desc' : 'asc');
+    setPage(Number.isInteger(n) && n >= 1 ? n : 1);
+    const booking = params.get('booking');
+    if (booking) setOpenId(`booking-${booking}`);
+  };
+  const writeUrl = (next: { source: SourceFilter; type: TypeFilter; q: string; sort: Sort; page: number }) => {
+    try {
+      const params = new URLSearchParams();
+      if (next.source !== 'all') params.set('source', next.source);
+      if (next.type !== 'all') params.set('type', next.type);
+      if (next.q.trim()) params.set('q', next.q.trim());
+      if (next.sort !== 'asc') params.set('sort', next.sort);
+      if (next.page > 1) params.set('page', String(next.page));
+      const qs = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+    } catch { /* the queue works without URL state */ }
+  };
   useEffect(() => {
-    if (!zone) return;
-    const apply = () => {
-      const state = readUrl();
-      setView(state.view); setSource(state.source); setQuery(state.search); setSearch(state.search); setPage(state.page);
-      setDateFrom(state.dateFrom); setDateTo(state.dateTo); setAssignee(state.assignee);
-    };
-    apply();
-    setReady(true);
-    window.addEventListener('popstate', apply);
-    return () => { window.removeEventListener('popstate', apply); generation.current++; };
-  }, [zone]);
-
-  // Open a deep-linked booking once.
-  const openedBooking = useRef<string | null>(null);
-  useEffect(() => {
-    if (!ready) return;
-    const requested = readUrl().booking;
-    if (!requested || openedBooking.current === requested) return;
-    openedBooking.current = requested;
-    void openDetail(requested);
+    readUrl(); setReady(true); void load();
+    const onFocus = () => { if (document.visibilityState === 'visible') void load(); };
+    window.addEventListener('popstate', readUrl);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { window.removeEventListener('popstate', readUrl); document.removeEventListener('visibilitychange', onFocus); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
+  }, []);
+  useEffect(() => { if (ready) writeUrl({ source, type, q: query, sort, page }); }, [ready, source, type, query, sort, page]);
 
-  // Debounce free-text search into the applied search.
+  const rows = useMemo(() => (data ? buildRows(data) : []), [data]);
+  const q = query.trim().toLowerCase();
+  const list = useMemo(() => rows
+    .filter(row => (source === 'all' || row.source === source) && (type === 'all' || row.kind === type)
+      && (!q || `${row.customer} ${row.reference}`.toLowerCase().includes(q)))
+    .sort((a, b) => (sort === 'asc' ? 1 : -1) * (a.sortKey.localeCompare(b.sortKey) || a.customer.localeCompare(b.customer) || a.id.localeCompare(b.id))), [rows, source, type, q, sort]);
+  const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const pageRows = list.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+  const overdue = list.filter(row => row.alert).length;
+  const open = openId ? rows.find(row => row.id === openId) ?? null : null;
+  // A booking link for a booking that is not waiting (it already has an employee, or is finished) opens it on the Bookings page.
   useEffect(() => {
-    if (!ready) return;
-    const timer = window.setTimeout(() => {
-      const next = query.trim();
-      if (next === search) return;
-      setSearch(next); setPage(1);
-      writeUrl(current({ search: next, page: 1 }));
-    }, 300);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+    if (!data || !openId?.startsWith('booking-') || rows.some(row => row.id === openId)) return;
+    window.location.replace(`/admin/bookings/?booking=${encodeURIComponent(openId.slice('booking-'.length))}`);
+  }, [data, openId, rows]);
 
-  // Load the current page. Stale responses are ignored by generation.
-  useEffect(() => {
-    if (!ready) return;
-    const version = ++generation.current;
-    setLoading(true); setListError('');
-    void adminWorkQueue.page({ view, source, q: search || undefined, from: dateFrom || undefined, to: dateTo || undefined, assignee: assignee || undefined, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }).then(next => {
-      if (version !== generation.current) return;
-      if (!next) { setListError('The work queue could not be loaded. Retry.'); setResult(null); }
-      else if (next.items.length === 0 && next.total > 0 && page > 1) {
-        const last = Math.ceil(next.total / PAGE_SIZE);
-        setPage(last); writeUrl(current({ page: last }), 'replace');
-        return;
-      } else setResult(next);
-      setLoading(false);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, view, source, search, page, dateFrom, dateTo, assignee, reload]);
+  const openRow = (row: Row, target: HTMLElement) => { opener.current = target; setOpenId(row.id); };
+  const closeDrawer = useCallback(() => {
+    setOpenId(null);
+    try { const params = new URLSearchParams(window.location.search); if (params.has('booking')) { params.delete('booking'); window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`); } } catch { /* ignore */ }
+    const target = opener.current; opener.current = null;
+    if (target?.isConnected) window.setTimeout(() => target.focus(), 0);
+  }, []);
+  const done = useCallback((message: string) => { showSuccess(message); closeDrawer(); void load(); }, [closeDrawer, load]);
+  const failed = useCallback((message: string) => { showError(message, 'Not saved'); }, []);
 
-  // Employees feed the assignee filter. A failure leaves the filter on "Anyone" rather than blocking the queue.
-  useEffect(() => {
-    if (!ready) return;
-    void adminEmployees.list(false).then(list => setEmployees(list ?? [])).catch(() => setEmployees([]));
-  }, [ready]);
-
-  const changeView = (next: WorkQueueView) => {
-    setView(next); setPage(1); writeUrl(current({ view: next, page: 1 }));
+  const filter = (patch: Partial<{ source: SourceFilter; type: TypeFilter; q: string; sort: Sort }>) => {
+    if (patch.source) setSource(patch.source);
+    if (patch.type) setType(patch.type);
+    if (patch.q !== undefined) setQuery(patch.q);
+    if (patch.sort) setSort(patch.sort);
+    setPage(1);
   };
-  const changeSource = (next: WorkQueueSource) => {
-    setSource(next); setPage(1); writeUrl(current({ source: next, page: 1 }));
-  };
-  const windowDates = defaultWindow(zone ?? DEFAULT_ZONE);
-  const defaultWindowActive = dateFrom === windowDates.dateFrom && dateTo === windowDates.dateTo;
-  // Show everything: clears the dates and the assignee together, so one URL change carries all three.
-  const showEverything = () => { setDateFrom(''); setDateTo(''); setAssignee(''); setPage(1); writeUrl(current({ dateFrom: '', dateTo: '', assignee: '', page: 1 })); };
-  const changeDates = (nextFrom: string, nextTo: string) => {
-    // Input edits go through the same rule as the URL, so a reversed or invalid pair is cleared before it is stored or sent.
-    const next = readDates(nextFrom, nextTo);
-    setDateFrom(next.dateFrom); setDateTo(next.dateTo); setPage(1); writeUrl(current({ dateFrom: next.dateFrom, dateTo: next.dateTo, page: 1 }));
-  };
-  const changeAssignee = (next: string) => {
-    setAssignee(next); setPage(1); writeUrl(current({ assignee: next, page: 1 }));
-  };
-  const changePage = (next: number) => {
-    setPage(next); writeUrl(current({ page: next }));
-  };
-
-  const openDetail = async (id: string) => {
-    setDetailError('');
-    const booking = await adminBookings.detail(id);
-    if (!booking) { setDetailError('This booking could not be loaded. Retry.'); }
-    setOpenBooking(booking ?? null);
-  };
-
-  const runAction = async (booking: Booking, action: 'confirm' | 'cancel' | 'complete') => {
-    if (action === 'cancel' && !window.confirm(`Cancel booking ${booking.bookingNumber}?`)) return;
-    setActionBusy(action); setDetailError('');
-    const ok = action === 'confirm' ? await adminBookings.confirm(booking.id)
-      : action === 'cancel' ? await adminBookings.cancel(booking.id)
-      : await adminBookings.complete(booking.id);
-    setActionBusy(null);
-    if (!ok) { setDetailError('The action could not be completed. Refresh and check the booking status.'); return; }
-    const refreshed = await adminBookings.detail(booking.id);
-    setOpenBooking(refreshed ?? null);
-    setReload(n => n + 1);
-  };
-
-  const onOpen = (item: WorkQueueItem) => {
-    if (item.source === 'booking') void openDetail(item.id);
-  };
-
-  const pageCount = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
-  const from = result && result.total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0;
-  const to = result ? Math.min(result.total, page * PAGE_SIZE) : 0;
 
   return (
-    <>
-      <Title order={2} component="h1" mb="md">Work queue</Title>
+    <div className="work-queue">
+      <header>
+        <h1>Work queue</h1>
+        <p className="lede">Everything waiting for the office: visits without an assignee, partner cleaning requests, quote requests, change requests and key requests. Assigned visits are in the <Link href="/admin/shifts/scheduler/">Scheduler</Link>.</p>
+      </header>
 
-      <Tabs value={view} onChange={value => value && changeView(value as WorkQueueView)}>
-        <Tabs.List aria-label="Work queue views" className="admin-tabs-list">
-          {VIEWS.map(item => (
-            <Tabs.Tab key={item.value} value={item.value}>
-              {item.label}{result ? ` (${result.counts[item.value]})` : ''}
-            </Tabs.Tab>
+      <div className="filters">
+        <label className="field">Source<select className="input" value={source} onChange={event => filter({ source: event.target.value as SourceFilter })}>{SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></label>
+        <label className="field">Type<select className="input" value={type} onChange={event => filter({ type: event.target.value as TypeFilter })}>{TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></label>
+        <label className="field">Search<input className="input" type="search" placeholder="Customer, property or reference" value={query} onChange={event => filter({ q: event.target.value })} /></label>
+        <label className="field">Sort<select className="input" value={sort} onChange={event => filter({ sort: event.target.value as Sort })}><option value="asc">Date, earliest first</option><option value="desc">Date, latest first</option></select></label>
+      </div>
+
+      {loading && !data ? <Loader aria-label="Loading the work queue" /> : loadError ? (
+        <div className="row"><p role="alert" className="problem">{loadError}</p><button type="button" className="btn btn-ghost" onClick={() => void load()}>Retry</button></div>
+      ) : <>
+        <strong role="status">{list.length === 0 ? 'Nothing is waiting.' : `${list.length} ${list.length === 1 ? 'item is' : 'items are'} waiting${overdue ? `, ${overdue} overdue.` : '.'}`}</strong>
+        {pageRows.length === 0 && <p className="note">{q ? `Nothing waiting matches “${query.trim()}”.` : 'New visits, bookings and partner requests appear here when they need the office.'}</p>}
+        <div role="list" aria-label="Work waiting for the office" className="list">
+          {pageRows.map(row => (
+            <div role="listitem" key={row.id} className={`item${row.alert ? ' alert' : ''}`}>
+              <div className="item-text">
+                <strong>{row.customer}</strong>
+                <span className="item-sub">{row.reference} · {row.when}</span>
+                <span className="tags">
+                  <span className={SOURCE_CHIP[row.source]}>{SOURCE_LABEL[row.source]}</span>
+                  <span className="chip chip-type">{TYPE_LABEL[row.kind]}</span>
+                  {row.cleanType && <span className="chip chip-sub">{row.cleanType}</span>}
+                  <span className={`chip ${row.alert ? 'chip-alert' : 'chip-state'}`}>{row.state}</span>
+                </span>
+              </div>
+              <button type="button" className="btn btn-primary" aria-label={`${row.action} ${TYPE_LABEL[row.kind].toLowerCase()} ${row.reference}`} onClick={event => openRow(row, event.currentTarget)}>{row.action}</button>
+            </div>
           ))}
-        </Tabs.List>
-      </Tabs>
+        </div>
+        <div className="pager">
+          <span>{list.length ? `Showing ${(current - 1) * PAGE_SIZE + 1}–${Math.min(list.length, current * PAGE_SIZE)} of ${list.length}` : 'Showing 0 of 0'}</span>
+          <div className="row"><button type="button" className="btn btn-ghost" disabled={current <= 1} onClick={() => setPage(current - 1)}>Previous</button><span>Page {current} of {pageCount}</span><button type="button" className="btn btn-ghost" disabled={current >= pageCount} onClick={() => setPage(current + 1)}>Next</button></div>
+        </div>
+      </>}
 
-      <Group className="work-queue-filters" mt="md" mb="md" align="flex-end" wrap="wrap" gap="sm">
-        <Select aria-label="Source" label="Source" data={SOURCES} value={source}
-          onChange={value => value && changeSource(value as WorkQueueSource)} allowDeselect={false} w={220} />
-        <TextInput label="Search" placeholder="Customer, booking number or company" value={query}
-          onChange={event => setQuery(event.currentTarget.value)} w={320} />
-        <TextInput type="date" label="From" aria-label="From date" value={dateFrom} max={dateTo || undefined}
-          onChange={event => changeDates(event.currentTarget.value, dateTo)} w={170} />
-        <TextInput type="date" label="To" aria-label="To date" value={dateTo} min={dateFrom || undefined}
-          onChange={event => changeDates(dateFrom, event.currentTarget.value)} w={170} />
-        <Select aria-label="Assignee" label="Assignee" placeholder="Anyone" clearable clearButtonProps={{ 'aria-label': 'Clear assignee' }}
-          data={[{ value: UNASSIGNED, label: 'Unassigned' }, ...employees.map(employee => ({ value: employee.id, label: `${employee.firstName} ${employee.lastName}`.trim() }))]}
-          value={assignee || null} onChange={value => changeAssignee(value ?? '')} w={220} />
-      </Group>
-      {defaultWindowActive && (
-        <Group gap="xs" mb="md" role="status">
-          <Text size="sm">Showing overdue and upcoming work ({dateFrom} to {dateTo}).{assignee === UNASSIGNED ? ' Assigned work is hidden.' : ''}</Text>
-          <Button size="xs" variant="subtle" onClick={showEverything}>Show all work</Button>
-        </Group>
-      )}
-
-      {assignee && assignee !== UNASSIGNED && <Text size="sm" c="dimmed" mb="sm">Partner requests have no assignee, so they are hidden while this filter is on.</Text>}
-
-      {loading ? <Loader /> : listError ? (
-        <Stack>
-          <Text role="alert" c="red">{listError}</Text>
-          <Button variant="light" onClick={() => setReload(n => n + 1)}>Retry</Button>
-        </Stack>
-      ) : !result || result.items.length === 0 ? (
-        <Text c="dimmed">{search ? `Nothing in this view matches “${search}”.` : 'Nothing in this view.'}</Text>
-      ) : (
-        <Stack gap="xs" role="list" aria-label="Work items">
-          {result.items.map(item => (
-            <Paper key={`${item.source}-${item.id}`} withBorder p="sm" role="listitem" data-state={item.stateLabel === 'Not started' ? 'not-started' : undefined} style={item.stateLabel === 'Not started' ? { borderColor: 'var(--mantine-color-red-6)' } : undefined}>
-              <Group justify="space-between" wrap="wrap" gap="xs">
-                <Stack gap={2}>
-                  <Text fw={600}>{item.customerName}</Text>
-                  <Text size="sm" c="dimmed">{item.reference} · {item.scheduledLocal}</Text>
-                  <Group gap={6}>
-                    <Badge size="sm" variant="light" color={item.stateLabel === 'Not started' ? 'red' : undefined}>{item.stateLabel}</Badge>
-                    {item.source === 'shift' && item.stateLabel === 'Overdue · not started' && !item.assigneeName && <Badge size="sm" variant="light" color="gray">Unassigned</Badge>}
-                    <Badge size="sm" variant="outline" color="gray">{item.source === 'booking' ? 'Public booking' : item.source === 'shift' ? 'Company shift' : 'Partner request'}</Badge>
-                    {item.assigneeName && <Text size="xs">{item.assigneeName}</Text>}
-                  </Group>
-                </Stack>
-                {item.source === 'booking' ? (
-                  <Button size="sm" variant="light" onClick={() => onOpen(item)} aria-label={`Open booking ${item.reference}`}>Open</Button>
-                ) : (
-                  <Button size="sm" variant="light" component={Link} href={item.href} aria-label={item.source === 'shift' ? `Open company shift ${item.reference}` : `Open partner request for ${item.customerName}`}>Open</Button>
-                )}
-              </Group>
-            </Paper>
-          ))}
-        </Stack>
-      )}
-
-      {result && result.total > 0 && (
-        <Group justify="space-between" mt="md" wrap="wrap" gap="sm">
-          <Text size="sm">Showing {from}–{to} of {result.total}</Text>
-          <Group gap="xs">
-            <Button variant="default" size="sm" disabled={page <= 1 || loading} onClick={() => changePage(page - 1)}>Previous</Button>
-            <Text size="sm">Page {page} of {pageCount}</Text>
-            <Button variant="default" size="sm" disabled={page >= pageCount || loading} onClick={() => changePage(page + 1)}>Next</Button>
-          </Group>
-        </Group>
-      )}
-
-      <Drawer opened={openBooking !== null || detailError !== ''} onClose={() => { setOpenBooking(null); setDetailError(''); }}
-        title={openBooking ? `Booking ${openBooking.bookingNumber}` : 'Booking'} position="right" size="md">
-        {detailError && <Text role="alert" c="red" mb="sm">{detailError}</Text>}
-        {openBooking && (
-          <Stack gap="sm">
-            <Text><strong>Customer:</strong> {openBooking.customer.name}</Text>
-            <Text><strong>Contact:</strong> {openBooking.customer.phone} · {openBooking.customer.email}</Text>
-            <Text><strong>Service:</strong> {openBooking.service.nameFi}, {openBooking.service.durationMinutes} min</Text>
-            <Text><strong>Start:</strong> {openBooking.startLocalDate} {openBooking.startLocalTime}</Text>
-            <Text><strong>Status:</strong> {openBooking.status}</Text>
-            <Text><strong>Assigned to:</strong> {openBooking.employeeName ?? 'Unassigned'}</Text>
-            <Group gap="xs" wrap="wrap">
-              {bookingActions(openBooking.status).map(action => (
-                <Button key={action} size="sm" variant={action === 'cancel' ? 'light' : 'filled'} color={action === 'cancel' ? 'red' : undefined}
-                  loading={actionBusy === action} disabled={actionBusy !== null} onClick={() => void runAction(openBooking, action)}>
-                  {ACTION_LABEL[action]}
-                </Button>
-              ))}
-            </Group>
-          </Stack>
-        )}
-      </Drawer>
-    </>
+      {open && data && <WorkQueueDrawer key={open.id} row={open} employees={data.employees} zone={data.zone} onClose={closeDrawer} onDone={done} onFail={failed} />}
+    </div>
   );
 }

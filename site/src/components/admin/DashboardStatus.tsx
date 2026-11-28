@@ -32,9 +32,9 @@ export function DashboardStatus() {
 
   const partner = queue ? queue.branches.length + queue.requestCount + queue.changeCount : null;
   const tiles = [
-    { label: 'Visits needing action', value: counts?.needsAction, href: '/admin/work-queue/?view=needs-action', note: 'Unassigned, overdue or not started' },
-    { label: 'Scheduled visits', value: counts?.scheduled, href: '/admin/work-queue/?view=scheduled', note: 'Accepted or assigned' },
-    { label: 'Partner actions', value: partner ?? undefined, href: '/admin/partner-requests/', note: 'Quotes, requests and changes to arrange' },
+    { label: 'Visits needing action', value: counts?.needsAction, href: '/admin/work-queue/', note: 'Unassigned, overdue or not started' },
+    { label: 'Scheduled visits', value: counts?.scheduled, href: '/admin/shifts/scheduler/', note: 'Accepted or assigned' },
+    { label: 'Partner actions', value: partner ?? undefined, href: '/admin/work-queue/?source=partner', note: 'Quotes, requests and changes to arrange' },
     { label: 'Unread notifications', value: counts?.inbox, href: '/account/', note: 'Staff alerts in your inbox' },
   ];
 

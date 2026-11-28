@@ -3,6 +3,7 @@ import { setupAdminMocks } from './admin-helpers';
 import { partnerCopy, partnerStatus, type PartnerLanguage } from '../src/lib/partnerLocale';
 import type { Branch } from '../src/lib/adminApi';
 import type { PartnerIdentity, KeyRequest } from '../src/lib/partnerApi';
+import { viaManagerPage } from './partner-operations-page';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companyId = '11111111-1111-4111-8111-111111111111';
@@ -95,7 +96,7 @@ test('staff save the key request fee from Partner operations', async ({ page }) 
     return route.fulfill({ headers, json: path === '/branches' ? [branch] : [] });
   });
 
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Key requests', exact: true }).click();
   await expect(page.getByText('Current fee 15.00 EUR excl. VAT; VAT 25.5%.')).toBeVisible();
   await page.getByLabel('Fee per key request, excl. VAT (EUR)', { exact: true }).fill('22.5');
@@ -140,7 +141,7 @@ test('staff assign an employee, complete a key request and attach a completion p
     return route.fulfill({ headers, json: path === '/branches' ? [branch] : [] });
   });
 
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Key requests', exact: true }).click();
   // Retired staff are not offered for assignment.
   const picker = page.getByRole('combobox', { name: 'Collected or handed over by', exact: true });

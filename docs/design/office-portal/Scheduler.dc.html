@@ -11,7 +11,7 @@
 <helmet>
 <style>
 /* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
-:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--red:#b42318;--red-wash:#fdecea;--teal-wash:#e4f3f0;--teal-ink:#1d5c53;--teal:#5fa89c;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
 html,body{overflow-x:clip}
 body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
 :focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
@@ -51,6 +51,18 @@ a{color:var(--muted)}
 .blk-over{border:2px solid var(--gold-ink)}
 .blk-needs{background:var(--gold-wash);border-color:var(--gold)}
 .chip-needs{background:var(--gold-wash);color:var(--gold-ink)}
+/* Overdue: an assigned visit whose time has passed and nobody started it. */
+.blk-late{background:var(--red-wash);border:2px solid var(--red);color:var(--red)}
+.blk-late strong,.blk-late span{color:var(--red)}
+.chip-late{background:var(--red-wash);color:var(--red);border:1px solid var(--red)}
+/* Partner portal visits carry the partner colour, as in the Work queue. */
+.blk-partner{box-shadow:inset 4px 0 0 var(--teal)}
+.blk .tag.tag-partner{font-style:normal;background:var(--teal-wash);color:var(--teal-ink);border-color:var(--teal)}
+.chip-partner{background:var(--teal-wash);color:var(--teal-ink);border:1px solid var(--teal)}
+/* Key requests have a day but no time: they sit at the top of the employee's column. */
+.keys{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.keychip{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:4px 8px;border:1px solid var(--teal);border-radius:8px;background:var(--teal-wash);color:var(--teal-ink);font:inherit;font-size:12px;font-weight:600;text-align:left;cursor:grab;white-space:normal}
+.keychip[aria-pressed='true']{outline:3px solid var(--gold-ink);outline-offset:1px}
 .blk[aria-pressed='true']{outline:3px solid var(--gold-ink);outline-offset:1px}
 .blk:disabled{cursor:not-allowed}
 .handle{position:absolute;height:10px;cursor:ns-resize;border-radius:6px;background:var(--line-3);opacity:.8}
@@ -96,7 +108,6 @@ a{color:var(--muted)}
     <a href="Bookings.dc.html">Bookings</a>
     <a href="Scheduler.dc.html" aria-current="page">Scheduler</a>
     <a href="Work-queue.dc.html">Work queue</a>
-    <a href="Partner-operations.dc.html">Partner operations</a>
     <a href="Quality-cycle.dc.html">Quality Cycle</a>
     <div class="grp">Customers</div>
     <a href="Leads.dc.html">Leads</a>
@@ -155,7 +166,7 @@ a{color:var(--muted)}
       <div class="grid" style="{{ gridStyle }}">
         <div class="colhead" style="font-size:13px;color:var(--muted)">Time</div>
         <sc-for list="{{ cols }}" as="c" hint-placeholder-count="3">
-        <div class="colhead" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>{{ c.name }}<small>{{ c.sub }}</small><small>{{ c.hours }} · {{ c.count }}</small></span><button type="button" class="btn btn-ghost" onClick="{{ c.addVisit }}" aria-label="Add visit for {{ c.name }}" style="min-height:40px;padding:0 10px;font-size:13px">+ Visit</button></div>
+        <div class="colhead" onDragOver="{{ c.dragOver }}" onDrop="{{ c.drop }}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>{{ c.name }}<small>{{ c.sub }}</small><small>{{ c.hours }} · {{ c.count }}</small></span><button type="button" class="btn btn-ghost" onClick="{{ c.addVisit }}" aria-label="Add visit for {{ c.name }}" style="min-height:40px;padding:0 10px;font-size:13px">+ Visit</button></div><sc-if value="{{ c.hasKeys }}" hint-placeholder-val="{{ false }}"><div class="keys" aria-label="Key requests"><sc-for list="{{ c.keys }}" as="k" hint-placeholder-count="1"><button type="button" class="keychip" draggable="true" onDragStart="{{ k.dragStart }}" onClick="{{ k.open }}" aria-pressed="{{ k.selected }}" aria-label="{{ k.label }}"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h7M12 8v3M14 8v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>{{ k.text }}</button></sc-for></div></sc-if></div>
         </sc-for>
 
         <div class="gutter" style="{{ colStyle }}"><sc-for list="{{ hourLabels }}" as="h" hint-placeholder-count="12"><span style="{{ h.pos }}">{{ h.t }}</span></sc-for></div>
@@ -166,6 +177,7 @@ a{color:var(--muted)}
             <strong>{{ b.title }}</strong>
             <span>{{ b.time }}</span>
             <span>{{ b.statusText }}</span>
+            <sc-if value="{{ b.partner }}" hint-placeholder-val="{{ false }}"><em class="tag tag-partner">Partner portal</em></sc-if>
             <sc-if value="{{ b.review }}" hint-placeholder-val="{{ false }}"><em class="tag">{{ b.reviewTag }}</em></sc-if>
           </button>
           <sc-if value="{{ b.canResize }}" hint-placeholder-val="{{ true }}"><div class="handle" role="separator" aria-label="Drag to change the end time" draggable="true" style="{{ b.handleBox }}" onDragStart="{{ b.resizeStart }}"></div></sc-if>
@@ -174,7 +186,7 @@ a{color:var(--muted)}
         </sc-for>
       </div>
     </div>
-    <p class="note">Visits in progress, done or cancelled cannot be moved. Gold outline: overlaps another visit for the same assignee. Grey dashed: offered, waiting for the employee to accept.</p>
+    <p class="note">Visits in progress, done or cancelled cannot be moved. Red: the time has passed and nobody started it. Gold outline: overlaps another visit for the same assignee. Grey dashed: offered, waiting for the employee to accept. Teal edge: booked through the partner portal. Key requests sit at the top of each column; drag one to another employee to give it to them.</p>
   </main>
 </div>
 
@@ -208,6 +220,7 @@ a{color:var(--muted)}
         <span class="{{ sel.chip }}">{{ sel.statusText }}</span>
         <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">Overlap</span></sc-if>
         <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><span class="chip chip-needs">{{ sel.reviewKind }}</span></sc-if>
+        <sc-if value="{{ sel.partner }}" hint-placeholder-val="{{ false }}"><span class="chip chip-partner">Partner portal</span></sc-if>
       </div>
     </div>
     <button type="button" class="btn btn-ghost x" aria-label="Close visit details" onClick="{{ closeSel }}">×</button>
@@ -223,6 +236,7 @@ a{color:var(--muted)}
     <sc-if value="{{ sel.hasReview }}" hint-placeholder-val="{{ false }}"><dt style="color:var(--muted)">Review</dt><dd style="margin:0">{{ sel.reviewLabel }}</dd></sc-if>
   </dl>
   <sc-if value="{{ sel.overlap }}" hint-placeholder-val="{{ false }}"><p style="margin:0 0 12px;padding:12px;border:1px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);font-size:14px">This visit overlaps another visit by the same assignee. Move or reassign one of them.</p></sc-if>
+  <sc-if value="{{ sel.late }}" hint-placeholder-val="{{ false }}"><p role="status" style="margin:0 0 12px;padding:12px;border:2px solid var(--red);border-radius:12px;background:var(--red-wash);color:var(--red);font-size:14px">{{ sel.lateText }}</p></sc-if>
   <sc-if value="{{ sel.lockedNotOffer }}" hint-placeholder-val="{{ false }}"><p class="note" style="margin-bottom:12px">Status: {{ sel.statusText }}. It cannot be moved or reassigned now.</p></sc-if>
   <sc-if value="{{ sel.isOffer }}" hint-placeholder-val="{{ false }}">
   <p class="note" style="margin-bottom:12px">Waiting for {{ sel.cleanerName }} to accept. Drag it to another employee to offer it to them instead.</p>
@@ -231,10 +245,49 @@ a{color:var(--muted)}
     <button type="button" class="btn btn-primary" onClick="{{ sel.sendOffer }}" disabled="{{ sel.noOfferTo }}">Send offer</button>
   </div>
   </sc-if>
+  <sc-if value="{{ sel.partnerActions }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;padding:12px;border:1px solid var(--teal);border-radius:12px;background:var(--surface)">
+    <strong style="font-size:15px">Partner visit</strong>
+    <p class="note">Drag it to move the time, day or employee. The partner sees the new time. Changing the employee sends them an offer.</p>
+    <label class="field">Give it to someone else<select class="input" onChange="{{ sel.onPartnerTo }}"><option value="">Choose an employee</option><sc-for list="{{ sel.offerChoices }}" as="o" hint-placeholder-count="2"><option value="{{ o.id }}">{{ o.name }}</option></sc-for></select></label>
+    <button type="button" class="btn btn-primary" onClick="{{ sel.sendPartnerOffer }}" disabled="{{ sel.noPartnerTo }}">Send offer</button>
+    <label class="field">Instructions for this visit<textarea class="input" rows="2" style="padding:10px 12px" onChange="{{ sel.onInstr }}">{{ sel.notesRaw }}</textarea></label>
+    <button type="button" class="btn btn-ghost" onClick="{{ sel.saveInstr }}">Save instructions</button>
+    <button type="button" class="btn btn-ghost" onClick="{{ sel.askCancel }}">Cancel visit</button>
+    <sc-if value="{{ sel.cancelAsk }}" hint-placeholder-val="{{ false }}"><div role="alertdialog" aria-label="Cancel visit" style="padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);display:flex;flex-direction:column;gap:8px"><strong>Cancel this visit?</strong><label class="field">Reason, shown to the partner<input class="input" type="text" maxlength="500" onChange="{{ sel.onCancelReason }}"></label><sc-if value="{{ sel.hasCancelErr }}" hint-placeholder-val="{{ false }}"><p role="alert" style="margin:0;color:var(--gold-ink);font-weight:600">Enter a reason for the partner.</p></sc-if><div style="display:flex;gap:8px"><button type="button" class="btn btn-ghost" onClick="{{ sel.keep }}">Keep</button><button type="button" class="btn btn-primary" onClick="{{ sel.doCancel }}">Cancel visit</button></div></div></sc-if>
+    <a href="Company-detail.dc.html">Partner history for {{ sel.company }}</a>
+  </div>
+  </sc-if>
   <div style="display:flex;flex-direction:column;gap:10px">
     <button type="button" class="btn btn-primary" onClick="{{ sel.record }}" disabled="{{ sel.noRecord }}">{{ sel.recordLabel }}</button>
     <button type="button" class="btn btn-ghost" onClick="{{ sel.photos }}" disabled="{{ sel.noPhoto }}">Add photos</button>
     <sc-if value="{{ sel.hasActionNote }}" hint-placeholder-val="{{ false }}"><p class="note">{{ sel.actionNote }}</p></sc-if>
+  </div>
+</aside>
+</sc-if>
+
+<sc-if value="{{ hasKey }}" hint-placeholder-val="{{ false }}">
+<aside class="panel" aria-label="Key request details">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+    <div style="min-width:0">
+      <h2 style="margin:0;font-size:18px">{{ key.title }}</h2>
+      <p class="note" style="margin-top:4px">{{ key.place }}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"><span class="chip chip-partner">Partner portal</span><span class="chip chip-sched">{{ key.state }}</span></div>
+    </div>
+    <button type="button" class="btn btn-ghost x" aria-label="Close key request" onClick="{{ closeKey }}">×</button>
+  </div>
+  <dl style="display:grid;grid-template-columns:auto 1fr;gap:10px 16px;font-size:14px;margin:16px 0">
+    <dt style="color:var(--muted)">Day</dt><dd style="margin:0;font-weight:600">{{ key.day }}</dd>
+    <dt style="color:var(--muted)">Staff member</dt><dd style="margin:0;font-weight:600">{{ key.who }}</dd>
+    <dt style="color:var(--muted)">Fee</dt><dd style="margin:0">{{ key.fee }}</dd>
+    <dt style="color:var(--muted)">Notes</dt><dd style="margin:0">{{ key.notes }}</dd>
+  </dl>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <label class="field">Give it to someone else<select class="input" onChange="{{ key.onTo }}"><option value="">Choose a staff member</option><sc-for list="{{ key.choices }}" as="o" hint-placeholder-count="2"><option value="{{ o.id }}">{{ o.name }}</option></sc-for></select></label>
+    <button type="button" class="btn btn-primary" onClick="{{ key.reassign }}" disabled="{{ key.noTo }}">Reassign</button>
+    <p class="note">The day is the one the partner asked for. Drag the key to another column to reassign it.</p>
+    <button type="button" class="btn btn-ghost" onClick="{{ key.addPhoto }}">Add a photo ({{ key.photos }} added)</button>
+    <button type="button" class="btn btn-ghost" onClick="{{ key.complete }}">Mark completed</button>
   </div>
 </aside>
 </sc-if>
@@ -300,11 +353,19 @@ const SEED = [
   { id: 'v6', emp: 'ville', day: 2, start: 9 * 60, end: 12 * 60, title: 'Kallio, Ville R.', place: 'Kallio · Virtanen Oy', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'v7', emp: 'anna', day: 3, start: 13 * 60, end: 16 * 60, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 2, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'v8', emp: 'minna', day: 4, start: 8 * 60, end: 11 * 60, title: 'Töölö, Minna S.', place: 'Töölö · Aurora clinic', number: 1, status: 'sched', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
-  { id: 'v9', emp: 'minna', day: 1, start: 7 * 60 + 30, end: 9 * 60 + 30, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 3, status: 'needs', checklist: 'No checklist yet', notes: 'Not started. Call the assignee.', actual: '', hours: null, version: false, review: { kind: 'Missing completion', label: 'No start or end recorded' } },
+  { id: 'v9', emp: 'minna', day: 1, start: 7 * 60 + 30, end: 9 * 60 + 30, title: 'Espoo, weekly clean', place: 'Espoo · Virtanen Oy', number: 3, status: 'late', checklist: 'No checklist yet', notes: 'Not started. Call the assignee.', actual: '', hours: null, version: false, review: { kind: 'Missing completion', label: 'No start or end recorded' } },
+  { id: 'p1', emp: 'ville', day: 1, start: 15 * 60, end: 17 * 60, title: 'Nordea office', place: 'Mannerheimintie · Nordea branch', company: 'Nordea branch', number: 1, status: 'sched', partner: true, checklist: 'No checklist yet', notes: 'Keys at reception.', actual: '', hours: null, version: false, review: null },
+  { id: 'p2', emp: 'minna', day: 0, start: 8 * 60, end: 9 * 60 + 30, title: 'Kesko store', place: 'Kamppi · Kesko store', company: 'Kesko store, Kamppi', number: 1, status: 'late', partner: true, checklist: 'No checklist yet', notes: 'Store opens at 09:00.', actual: '', hours: null, version: false, review: null },
   { id: 'o1', emp: 'anna', day: 1, start: 13 * 60, end: 15 * 60, title: 'Töölö, move-out', place: 'Töölö · Aurora clinic', number: 2, status: 'offered', checklist: 'No checklist yet', actual: '', hours: null, version: false, review: null },
   { id: 'c1', emp: 'ville', day: 2, start: 9 * 60, end: 12 * 60, title: 'Helsinki showroom', place: 'Virtanen Oy · Helsinki showroom', number: 1, status: 'cancelled', checklist: 'Not needed', actual: '', hours: null, version: false, review: null },
 ];
+// Key requests: a day, a staff member, no time.
+const KEYS = [
+  { id: 'k1', emp: 'ville', day: 1, kind: 'Key pickup', place: 'Kesko store, Kamppi', fee: '€25.00 excl. VAT', notes: 'Pick up from the security desk.', photos: 0 },
+  { id: 'k2', emp: 'anna', day: 1, kind: 'Key handover', place: 'Aurora clinic', fee: '€25.00 excl. VAT', notes: 'Hand over to the clinic manager.', photos: 0 },
+];
 const STATUS = {
+  late: { text: 'Not started · overdue', cls: 'blk-late', chip: 'chip chip-late', locked: false },
   done: { text: 'Done', cls: 'blk-done', chip: 'chip chip-done', locked: true },
   progress: { text: 'In progress', cls: 'blk-progress', chip: 'chip chip-progress', locked: true },
   sched: { text: 'Scheduled', cls: 'blk-sched', chip: 'chip chip-sched', locked: false },
@@ -365,7 +426,7 @@ class Component extends DCLogic {
     }
     const len = v.end - v.start;
     start = Math.max(FIRST, Math.min(LAST - len, start));
-    this.change(id, { emp: emp, day: day, start: start, end: start + len }, v.title + ' moved to ' + DAYS[day] + ', ' + fmt(start) + ' with ' + EMP_BY_ID[emp] + '.');
+    this.change(id, { emp: emp, day: day, start: start, end: start + len, status: v.status === 'late' && day >= TODAY ? 'sched' : v.status }, v.title + ' moved to ' + DAYS[day] + ', ' + fmt(start) + ' with ' + EMP_BY_ID[emp] + '.' + (v.partner ? ' The partner sees the new time.' : ''));
   }
   resizeAt(id, emp, day, e) {
     const v = this.visits().find(x => x.id === id);
@@ -394,6 +455,12 @@ class Component extends DCLogic {
     const clash = prev.some(o => overlaps(v, o));
     const who = emp ? EMP_BY_ID[emp] : 'no assignee yet';
     this.setState({ visits: prev.concat([v]), prevVisits: prev, newOpen: false, msg: 'Scheduled ' + title + ' for ' + who + ' on ' + DAYS[day] + ', ' + fmt(start) + '–' + fmt(end) + '.' + (clash ? ' It overlaps another visit for the same assignee.' : '') });
+  }
+  keys() { return this.st().keys || KEYS; }
+  giveKey(id, emp) {
+    const k = this.keys().find(x => x.id === id);
+    if (!k || !emp || k.emp === emp) return;
+    this.setState({ keys: this.keys().map(x => (x.id === id ? { ...x, emp: emp } : x)), keySel: null, keyTo: '', msg: k.kind + ' at ' + k.place + ' is now with ' + EMP_BY_ID[emp] + ' on ' + DAYS[k.day] + '.' });
   }
   undo() { if (this.st().prevVisits) this.setState({ visits: this.st().prevVisits, prevVisits: null, msg: 'Change undone.' }); }
   openDlg(kind, vid, extra) { this.setState({ dlg: { kind: kind, vid: vid }, ...(extra || {}), msg: '' }); }
@@ -448,8 +515,9 @@ class Component extends DCLogic {
         time: fmt(v.start) + '–' + fmt(v.end),
         statusText: s.text,
         review: !!v.review,
+        partner: !!v.partner,
         reviewTag: v.review ? 'Needs review' : '',
-        cls: s.cls + (over ? ' blk-over' : '') + (v.emp === null ? ' blk-unassigned' : ''),
+        cls: s.cls + (over ? ' blk-over' : '') + (v.emp === null ? ' blk-unassigned' : '') + (v.partner ? ' blk-partner' : ''),
         box: box(v),
         draggable: !s.locked || v.status === 'offered' ? 'true' : 'false',
         selected: selId === v.id,
@@ -457,7 +525,7 @@ class Component extends DCLogic {
         handleBox: { position: 'absolute', left: box(v).left, width: box(v).width, top: (((v.end - FIRST) / 60) * HOUR_PX - 8) + 'px' },
         resizeStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', v.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ resizing: v.id }); },
         label: v.title + ', ' + fmt(v.start) + ' to ' + fmt(v.end) + ', ' + s.text,
-        open: () => this.setState({ sel: v.id, msg: '' }),
+        open: () => this.setState({ sel: v.id, keySel: null, cancelAsk: false, msg: '' }),
         dragStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', v.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ dragging: v.id }); },
       };
     };
@@ -474,9 +542,16 @@ class Component extends DCLogic {
         count: list.length + (list.length === 1 ? ' visit' : ' visits'),
         addVisit: () => this.setState({ newOpen: true, newTitle2: null, newEmp: c.emp || 'anna', newDay: String(c.day), newStart: '08:00', newDur: '60', newTitle: '', newErr: '', msg: '' }),
         blocks: list.map(blockOf),
+        hasKeys: this.keys().some(k => k.emp === c.emp && k.day === c.day),
+        keys: this.keys().filter(k => k.emp === c.emp && k.day === c.day).map(k => ({
+          text: k.kind + ' · ' + k.place, label: k.kind + ' at ' + k.place + ', ' + EMP_BY_ID[k.emp] + '. Drag to another employee to reassign.', selected: st.keySel === k.id,
+          open: () => this.setState({ keySel: k.id, sel: null, keyTo: '', msg: '' }),
+          dragStart: e => { if (e && e.dataTransfer) { e.dataTransfer.setData('text/plain', k.id); e.dataTransfer.effectAllowed = 'move'; } this.setState({ draggingKey: k.id }); },
+        })),
         dragOver: e => { if (e && e.preventDefault) e.preventDefault(); },
         drop: e => {
           if (e && e.preventDefault) e.preventDefault();
+          if (st.draggingKey) { const kid = st.draggingKey; this.setState({ draggingKey: null }); if (c.day === this.keys().find(k => k.id === kid).day) this.giveKey(kid, c.emp); else this.say('A key request stays on the day the partner asked for. Drop it on another employee for that day.'); return; }
           if (st.resizing) { const rid = st.resizing; this.setState({ resizing: null }); this.resizeAt(rid, c.emp, c.day, e); return; }
           const id = st.dragging || (e && e.dataTransfer ? e.dataTransfer.getData('text/plain') : '');
           this.setState({ dragging: null });
@@ -513,6 +588,23 @@ class Component extends DCLogic {
           locked: s.locked,
           lockedNotOffer: s.locked && sel.status !== 'offered',
           isOffer: sel.status === 'offered',
+          partner: !!sel.partner,
+          partnerActions: !!sel.partner && !s.locked,
+          company: sel.company || '',
+          late: sel.status === 'late',
+          lateText: 'The visit time has passed and ' + (sel.emp ? EMP_BY_ID[sel.emp] : 'nobody') + ' has not started it. Call them, move the visit, or give it to someone else.',
+          notesRaw: sel.notes || '',
+          onPartnerTo: e => this.setState({ partnerTo: e.target.value }),
+          noPartnerTo: !st.partnerTo || st.partnerTo === sel.emp,
+          sendPartnerOffer: () => { const to = st.partnerTo; this.change(sel.id, { emp: to, status: 'offered' }, sel.title + ' is offered to ' + EMP_BY_ID[to] + '. ' + EMP_BY_ID[sel.emp] + ' no longer has it, and it moves to ' + EMP_BY_ID[to] + ' when they accept.'); this.setState({ sel: null, partnerTo: '' }); },
+          onInstr: e => this.setState({ instr: e.target.value }),
+          saveInstr: () => this.change(sel.id, { notes: st.instr !== undefined ? st.instr : sel.notes }, 'Instructions for ' + sel.title + ' are saved. The assignee and the partner see them.'),
+          askCancel: () => this.setState({ cancelAsk: true, cancelReason: '', cancelErr: false }),
+          cancelAsk: !!st.cancelAsk,
+          onCancelReason: e => this.setState({ cancelReason: e.target.value, cancelErr: false }),
+          hasCancelErr: !!st.cancelErr,
+          keep: () => this.setState({ cancelAsk: false }),
+          doCancel: () => { if (!(st.cancelReason || '').trim()) { this.setState({ cancelErr: true }); return; } this.change(sel.id, { status: 'cancelled' }, sel.title + ' is cancelled. ' + EMP_BY_ID[sel.emp] + ' and the partner are told.'); this.setState({ cancelAsk: false }); },
           offerChoices: EMPLOYEES.filter(e => e.id !== sel.emp).map(e => ({ id: e.id, name: e.name })),
           assigneeLabel: sel.status === 'offered' ? 'Offered to' : 'Assignee',
           onOfferTo: e => this.setState({ offerTo: e.target.value }),
@@ -607,6 +699,15 @@ class Component extends DCLogic {
       orderPlace: dv ? dv.place : '',
       orderWhen: dv ? DAYS[dv.day] + ', ' + fmt(dv.start) + ' – ' + fmt(dv.end) : '',
       closeDlg: () => this.setState({ dlg: null, recMsg: '', photoMsg: '' }),
+      hasKey: !!st.keySel,
+      key: (() => { const k = this.keys().find(x => x.id === st.keySel); if (!k) return {}; return {
+        title: k.kind, place: k.place, day: DAYS[k.day], who: EMP_BY_ID[k.emp], fee: k.fee, notes: k.notes, photos: k.photos, state: 'Assigned · not completed',
+        choices: EMPLOYEES.filter(e => e.id !== k.emp).map(e => ({ id: e.id, name: e.name })),
+        onTo: e => this.setState({ keyTo: e.target.value }), noTo: !st.keyTo, reassign: () => this.giveKey(k.id, st.keyTo),
+        addPhoto: () => this.setState({ keys: this.keys().map(x => (x.id === k.id ? { ...x, photos: x.photos + 1 } : x)) }),
+        complete: () => this.setState({ keys: this.keys().filter(x => x.id !== k.id), keySel: null, msg: k.kind + ' at ' + k.place + ' is completed.' }),
+      }; })(),
+      closeKey: () => this.setState({ keySel: null }),
       hasSel: selOut.hasSel,
       sel: selOut.sel,
     });

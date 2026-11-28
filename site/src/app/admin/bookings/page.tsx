@@ -77,6 +77,14 @@ export default function BookingsAdminPage() {
 
   useEffect(() => { load(statusFilter); }, [statusFilter]);
 
+  // A link such as /admin/bookings/?booking=<id> (from the Work queue) opens that booking's details.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('booking');
+    if (!id) return;
+    adminBookings.detail(id).then(detail => { if (detail) setSelected(detail); else setActionError('That booking could not be found. It may have been removed.'); })
+      .catch(() => setActionError('That booking could not be loaded. Refresh to try again.'));
+  }, []);
+
   useEffect(() => {
     // Includes inactive employees so the day view can show a past schedule for someone since deactivated; the assign picker filters them out.
     adminEmployees.list(true)

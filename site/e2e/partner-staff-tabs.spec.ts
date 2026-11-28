@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 import type { CleaningRequest } from '../src/lib/partnerApi';
+import { viaManagerPage } from './partner-operations-page';
 
 // Staff Assigned, Completed and Cancelled lists: empty states and independent pagers (R10).
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -27,7 +28,7 @@ async function setup(page: Page, requests: CleaningRequest[]) {
 
 test('Assigned, Completed and Cancelled tabs say what is empty', async ({ page }) => {
   await setup(page, []);
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
   await expect(page.getByText('No assigned visits.', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Completed requests', exact: true }).click();
@@ -41,7 +42,7 @@ test('Assigned and Cancelled tabs page 25 rows at a time, each keeping its own p
   const assigned = Array.from({ length: 27 }, (_, index) => requestFor(index, 'Accepted'));
   const cancelled = Array.from({ length: 28 }, (_, index) => requestFor(100 + index, 'Cancelled'));
   await setup(page, [...assigned, ...cancelled]);
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
   const assignedPages = page.getByRole('navigation', { name: 'Assigned pages' });
   await expect(assignedPages.getByText('Page 1 of 2', { exact: true })).toBeVisible();
@@ -66,7 +67,7 @@ test('Assigned and Cancelled tabs page 25 rows at a time, each keeping its own p
 
 test('staff Assigned pager moves between pages from the keyboard', async ({ page }) => {
   await setup(page, Array.from({ length: 27 }, (_, index) => requestFor(index, 'Accepted')));
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
   const pages = page.getByRole('navigation', { name: 'Assigned pages' });
   const next = pages.getByRole('button', { name: 'Next', exact: true });

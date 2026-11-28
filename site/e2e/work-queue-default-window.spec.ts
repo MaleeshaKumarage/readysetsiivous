@@ -3,14 +3,6 @@ import { setupAdminMocks } from './admin-helpers';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
 
-// Today and the last day of the default 14-day window, in the tenant time zone the page uses.
-function windowDays() {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Helsinki' });
-  const end = new Date(Date.parse(`${today}T12:00:00Z`) + 13 * 86_400_000).toISOString().slice(0, 10);
-  const start = new Date(Date.parse(`${today}T12:00:00Z`) - 180 * 86_400_000).toISOString().slice(0, 10);
-  return { today: start, end };
-}
-
 async function setup(page: Page) {
   await setupAdminMocks(page, { authenticated: true });
   const queries: URLSearchParams[] = [];
@@ -23,63 +15,31 @@ async function setup(page: Page) {
   return { queries, last: () => queries.at(-1) };
 }
 
-const windowNotice = (page: Page) => page.getByRole('status').filter({ hasText: 'Showing overdue and upcoming work' });
-
-test('the first view includes assigned overdue work and the next 14 days', async ({ page }) => {
-  const { last } = await setup(page);
-  const { today, end } = windowDays();
+// The queue no longer has a date window or an assignee filter: it always shows all unassigned work (design: "always should show all").
+test('the queue always asks for all unassigned work, with no date window and no assignee', async ({ page }) => {
+  const { queries } = await setup(page);
   await page.goto('/admin/work-queue/');
-  await expect(windowNotice(page)).toBeVisible();
-  await expect.poll(() => last()?.get('from')).toBe(today);
-  expect(last()?.get('to')).toBe(end);
-  expect(last()?.has('unassigned')).toBe(false);
-  expect(last()?.has('assignee')).toBe(false);
+  await expect(page.getByRole('status').filter({ hasText: 'Nothing is waiting.' })).toBeVisible();
+  await expect.poll(() => queries.length).toBeGreaterThanOrEqual(2);
+  for (const query of queries) {
+    expect(query.get('view')).toBe('needs-action');
+    expect(query.get('unassigned')).toBe('true');
+    expect(query.has('from')).toBe(false);
+    expect(query.has('to')).toBe(false);
+    expect(query.has('assignee')).toBe(false);
+  }
+  expect([...new Set(queries.map(query => query.get('source')))].sort()).toEqual(['booking', 'shift']);
+  await expect(page.getByLabel('From date')).toHaveCount(0);
+  await expect(page.getByLabel('Assignee')).toHaveCount(0);
+  await expect(page.getByText('Show all work')).toHaveCount(0);
 });
 
-test('Show all work clears dates and the assignee, and a reload keeps them cleared', async ({ page }) => {
-  const { last } = await setup(page);
-  await page.goto('/admin/work-queue/');
-  await expect(windowNotice(page)).toBeVisible();
-  await page.getByRole('button', { name: 'Show all work' }).click();
-  await expect(windowNotice(page)).toHaveCount(0);
-  await expect.poll(() => last()?.has('from')).toBe(false);
-  expect(last()?.has('unassigned')).toBe(false);
-  expect(new URL(page.url()).searchParams.get('range')).toBe('all');
-  expect(new URL(page.url()).searchParams.get('assignee')).toBe('all');
-  await page.reload();
-  await expect.poll(() => last()?.has('from')).toBe(false);
-  expect(last()?.has('unassigned')).toBe(false);
-  await expect(windowNotice(page)).toHaveCount(0);
-});
-
-test('dates in a link are used as chosen, with no default unassigned filter', async ({ page }) => {
-  const { last } = await setup(page);
-  await page.goto('/admin/work-queue/?view=needs-action&from=2026-11-01&to=2026-11-30');
-  await expect.poll(() => last()?.get('from')).toBe('2026-11-01');
-  expect(last()?.get('to')).toBe('2026-11-30');
-  expect(last()?.has('unassigned')).toBe(false);
-  await expect(windowNotice(page)).toHaveCount(0);
-});
-
-test('choosing Unassigned in the assignee list sends the unassigned filter, and a named employee sends the assignee', async ({ page }) => {
-  const { last } = await setup(page);
-  await page.goto('/admin/work-queue/?view=needs-action&range=all&assignee=all');
-  await expect.poll(() => last()?.has('unassigned')).toBe(false);
-  await page.getByRole('textbox', { name: 'Assignee', exact: true }).click();
-  await page.getByRole('option', { name: 'Unassigned', exact: true }).click();
-  await expect.poll(() => last()?.get('unassigned')).toBe('true');
-  await page.getByRole('textbox', { name: 'Assignee', exact: true }).click();
-  await page.getByRole('option', { name: 'Ada Employee', exact: true }).click();
-  await expect.poll(() => last()?.get('assignee')).toBe('emp-1');
-  expect(last()?.has('unassigned')).toBe(false);
-});
-
-test('the 14-day window follows the tenant time zone, not Helsinki', async ({ page }) => {
-  // 23:30 UTC on 5 Nov is still 5 Nov in Honolulu (UTC-10) but already 6 Nov in Helsinki (UTC+2).
-  await page.clock.setFixedTime(new Date('2026-11-05T23:30:00Z'));
-  const { last } = await setup(page);
-  await page.route(/\/api\/v1\/admin\/tenant$/, route => route.fulfill({ headers, json: { companyName: 'QA', timeZoneId: 'Pacific/Honolulu' } }));
-  await page.goto('/admin/work-queue/');
-  await expect.poll(() => last()?.get('from')).toBe('2026-05-09');
-  expect(last()?.get('to')).toBe('2026-11-18');
+test('old links with dates, an assignee or a view still open the whole queue', async ({ page }) => {
+  const { queries } = await setup(page);
+  await page.goto('/admin/work-queue/?view=scheduled&from=2026-01-01&to=2026-01-31&assignee=emp-1&range=all');
+  await expect(page.getByRole('status').filter({ hasText: 'Nothing is waiting.' })).toBeVisible();
+  await expect.poll(() => queries.length).toBeGreaterThanOrEqual(2);
+  expect(queries.every(query => query.get('view') === 'needs-action' && !query.has('from') && !query.has('assignee'))).toBe(true);
+  // The unused parameters are dropped from the address.
+  await expect(page).toHaveURL(/\/admin\/work-queue\/$/);
 });

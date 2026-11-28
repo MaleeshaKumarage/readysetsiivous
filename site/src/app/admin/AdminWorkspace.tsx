@@ -28,7 +28,7 @@ import { ACCESS_VERIFY_ERROR, ACCESS_RETRY_LABEL, AccessVerificationError, verif
 
 const NAV_GROUPS = [
   { label: 'Workspace', items: [{ href: '', label: 'Dashboard', icon: LayoutDashboard }] },
-  { label: 'Operations', items: [{ href: 'shifts', label: 'Work orders', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/scheduler', label: 'Scheduler', icon: CalendarDays }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'partner-requests', label: 'Partner operations', icon: Building2 }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
+  { label: 'Operations', items: [{ href: 'shifts', label: 'Work orders', icon: CalendarClock }, { href: 'bookings', label: 'Bookings', icon: CalendarCheck2 }, { href: 'shifts/scheduler', label: 'Scheduler', icon: CalendarDays }, { href: 'work-queue', label: 'Work queue', icon: ListChecks }, { href: 'quality-cycle', label: 'Quality Cycle', icon: CheckSquare }] },
   { label: 'Customers', items: [{ href: 'leads', label: 'Leads', icon: Users }, { href: 'companies', label: 'Companies', icon: Building2 }, { href: 'agreements', label: 'Agreements', icon: FileSignature }] },
   { label: 'People', items: [{ href: 'employees', label: 'Employees', icon: Users }] },
   { label: 'Finance', items: [{ href: 'invoices', label: 'Invoices', icon: Receipt }] },
@@ -189,7 +189,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <Stack gap={4}>{group.items.map(item => {
             const href = item.href ? `${base}${item.href}/` : base;
             const active = item.href === '' ? pathname === '/admin' || pathname === '/admin/' : item.href === 'shifts' ? pathname === '/admin/shifts' || pathname === '/admin/shifts/' : pathname.startsWith(base + item.href);
-            return <NavLink key={href} component={Link} href={href} label={item.label} aria-label={item.label} rightSection={item.href === 'partner-requests' ? <PartnerPendingBadge /> : undefined} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
+            return <NavLink key={href} component={Link} href={href} label={item.label} aria-label={item.label} rightSection={item.href === 'work-queue' ? <PartnerPendingBadge /> : undefined} leftSection={<item.icon size={18} aria-hidden="true" />} active={active} aria-current={active ? 'page' : undefined} onClick={close} />;
           })}</Stack>
         </div>)}
       </Stack>

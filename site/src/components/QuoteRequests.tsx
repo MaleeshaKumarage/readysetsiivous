@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { adminCompanies, type Branch } from '@/lib/adminApi';
 import { staffPartnerApi } from '@/lib/partnerApi';
 
@@ -58,11 +59,14 @@ export function QuoteRequestProvider({ pathname, children }: { pathname: string;
 
 export function QuoteRequestBanner() {
   const queue = useQuoteRequests();
+  const pathname = usePathname();
+  // The Work queue lists the quotes itself, so the banner would only repeat them there.
+  if (pathname?.startsWith('/admin/work-queue')) return null;
   if (!queue || (!queue.branches.length && !queue.error && !queue.actionsError)) return null;
   const count = queue.branches.length;
   return <section aria-label="Pending quote requests" role="status" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-red-900">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      {count > 0 && <><p className="font-semibold">{count} {count === 1 ? 'branch awaiting a quote' : 'branches awaiting quotes'}</p><Link className="inline-flex min-h-11 items-center font-semibold underline" href="/admin/partner-requests/?tab=quotes">Review quotes</Link></>}
+      {count > 0 && <><p className="font-semibold">{count} {count === 1 ? 'branch awaiting a quote' : 'branches awaiting quotes'}</p><Link className="inline-flex min-h-11 items-center font-semibold underline" href="/admin/work-queue/?type=quote">Review quotes in the Work queue</Link></>}
       {queue.actionsError && <div className="flex flex-wrap items-center gap-3"><p role="alert">Partner action counts could not be checked. Displayed counts may be out of date.</p><button type="button" className="min-h-11 font-semibold underline" onClick={() => void queue.refresh()}>Retry partner counts</button></div>}
       {queue.error && <div className="flex flex-wrap items-center gap-3"><p>Quote requests could not be checked. {queue.loaded && 'Showing the last checked requests.'}</p><button type="button" className="min-h-11 font-semibold underline" onClick={() => void queue.refresh()}>Retry quote requests</button></div>}
     </div>

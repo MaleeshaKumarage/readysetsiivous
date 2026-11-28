@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { chooseEmployeeSection } from './employee-section';
 import { OTHER_COMPANY, PartnerFlowBackend, openActor, prepareRolePage, type WriteRecord } from './partner-flow-backend';
+import { viaManagerPage } from './partner-operations-page';
 
 // One visit travels through every role: owner portal → staff partner operations → employee offers.
 // Each test owns a fresh fake backend, so the flow test and the edge cases never share state.
@@ -19,14 +20,14 @@ async function ownerOpenRequests(page: Page) {
   await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
 }
 async function staffOpenRequests(page: Page) {
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
 }
 // Cancelled owner bookings leave the active list and open from the collapsed section.
 async function ownerOpenCancelled(page: Page) {
   await page.getByRole('tab', { name: /^Cancelled requests/ }).click();
 }
 async function staffOpenAssigned(page: Page) {
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
 }
 async function cleanerOpenOffers(page: Page) {
@@ -71,18 +72,20 @@ test('one visit from owner request to employee acceptance and back to the owner'
     await expect(property.getByRole('button', { name: 'Request cleaning', exact: true })).toBeDisabled();
 
     // 2. Staff sets the fixed price from the quote queue.
-    await staffOpenRequests(staff.page);
+    // The office prices it in the Work queue, reached from the quote banner.
+    await staff.page.goto('/admin/companies/');
     await expect(staff.page.getByText('1 branch awaiting a quote', { exact: true })).toBeVisible();
-    await staff.page.getByRole('link', { name: 'Review quotes', exact: true }).click();
-    await expect(staff.page).toHaveURL(/tab=quotes/);
-    await expect(staff.page.getByRole('tab', { name: 'Quote requests', exact: true })).toHaveAttribute('aria-selected', 'true');
-    await expect(staff.page.getByText('Rooms: 2 · Beds: 3')).toBeVisible();
-    await staff.page.getByRole('button', { name: 'Set cleaning price', exact: true }).click();
-    await staff.page.getByLabel('Fixed cleaning price excl. VAT (€)', { exact: true }).fill('85');
-    await staff.page.getByLabel('Estimated duration (minutes)', { exact: true }).fill('90');
-    await staff.page.getByRole('button', { name: 'Save pricing', exact: true }).click();
-    await expect(staff.page.getByText('Pricing saved.', { exact: true })).toBeVisible();
-    await expect(staff.page.getByText('branch awaiting a quote', { exact: false })).toHaveCount(0);
+    await staff.page.getByRole('link', { name: 'Review quotes in the Work queue', exact: true }).click();
+    await expect(staff.page).toHaveURL(/type=quote/);
+    await staff.page.getByRole('listitem').filter({ hasText: PROPERTY }).getByRole('button', { name: /^Set price/ }).click();
+    const pricing = staff.page.getByRole('dialog', { name: `Price ${PROPERTY}` });
+    await expect(pricing.locator('.facts')).toContainText('Rooms2');
+    await expect(pricing.locator('.facts')).toContainText('Beds3');
+    await pricing.getByLabel('Price excl. VAT (€)', { exact: true }).fill('85');
+    await pricing.getByLabel('Estimated duration (minutes)', { exact: true }).fill('90');
+    await pricing.getByRole('button', { name: 'Save price', exact: true }).click();
+    await expect(staff.page.locator('.mantine-Notification-root').filter({ hasText: `${PROPERTY} is priced at €85.00 excl. VAT.` })).toBeVisible();
+    await expect(staff.page.getByRole('listitem').filter({ hasText: PROPERTY })).toHaveCount(0);
 
     // 3. Owner sees the price and books one visit inside the date window.
     await ownerOpenRequests(page);
@@ -581,12 +584,12 @@ test('employees and owners cannot reach partner operations pages', async ({ page
   const cleaner = await openActor(browser, testInfo, backend, 'employee');
   await cleaner.page.goto('/partner/');
   await expect(cleaner.page.getByText('Access denied.', { exact: false })).toBeVisible();
-  await cleaner.page.goto('/admin/partner-requests/');
+  await cleaner.page.goto('/admin/work-queue/');
   await expect(cleaner.page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
   await expect(cleaner.page.getByRole('article', { name: `${PROPERTY} request`, exact: true })).toHaveCount(0);
 
   await prepareRolePage(page, backend, 'owner');
-  await page.goto('/admin/partner-requests/');
+  await page.goto('/admin/work-queue/');
   await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
   expect(backend.writes).toHaveLength(0);
   await cleaner.context.close();

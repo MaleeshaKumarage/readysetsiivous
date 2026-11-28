@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { PartnerFlowBackend, prepareRolePage } from './partner-flow-backend';
+import { viaManagerPage } from './partner-operations-page';
 
 // Staff review an owner's structured request on the Changes tab and apply it, rather than cancelling in a separate step.
 
@@ -12,7 +13,7 @@ test('staff apply a cancellation from the change request and the request is canc
     message: 'The owner cannot host this week.', resolvedUtc: null, resolution: null, action: 'Cancel' });
   await prepareRolePage(page, backend, 'admin');
 
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Changes', exact: true }).click();
   const change = page.getByRole('article').filter({ hasText: 'The owner cannot host this week.' });
   await expect(change.getByText('Requested: Cancel the request', { exact: true })).toBeVisible();

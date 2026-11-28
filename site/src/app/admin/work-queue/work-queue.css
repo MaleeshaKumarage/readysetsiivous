@@ -1,0 +1,76 @@
+/* Work queue: ported from docs/design/office-portal/Work-queue.dc.html, scoped to .work-queue so it cannot leak into other admin pages. */
+.work-queue{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--teal-wash:#e4f3f0;--teal-ink:#1d5c53;--teal:#5fa89c;
+  display:flex;flex-direction:column;gap:16px;color:var(--ink);font-size:16px;line-height:1.5;min-width:0}
+.work-queue :focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
+.work-queue button:active{transform:translateY(1px)}
+.work-queue button:disabled{opacity:.5;cursor:not-allowed}
+.work-queue .btn,.work-queue button{white-space:nowrap}
+.work-queue a{color:var(--muted);text-decoration:underline}
+.work-queue h1{margin:0;font-size:28px;line-height:1.2;font-weight:700;color:var(--ink)}
+.work-queue .lede{margin:4px 0 0;font-size:15px;color:var(--muted)}
+.work-queue .btn{min-height:44px;padding:0 16px;border-radius:10px;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;text-decoration:none}
+.work-queue .btn-primary{border:0;background:var(--ink);color:var(--surface)}
+.work-queue .btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--ink)}
+.work-queue .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.work-queue .field{display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)}
+.work-queue .input{min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface);box-sizing:border-box;width:100%;min-width:0}
+.work-queue textarea.input{padding:12px;min-height:0}
+.work-queue .list{display:flex;flex-direction:column;gap:8px}
+.work-queue .item{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.work-queue .item.alert{border-color:var(--gold-ink);border-width:2px}
+.work-queue .item-text{display:flex;flex-direction:column;gap:4px;min-width:0}
+.work-queue .item-sub{font-size:14px;color:var(--muted)}
+.work-queue .tags{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.work-queue .chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600}
+.work-queue .chip-state{background:var(--line);color:var(--ink)}
+.work-queue .chip-alert{background:var(--gold-wash);color:var(--gold-ink)}
+.work-queue .chip-sub{background:var(--wash);border:1px dashed var(--line-3);color:var(--ink-2)}
+.work-queue .chip-type{background:transparent;border:1px solid var(--line-3);color:var(--ink)}
+/* Where an item comes from: one colour each. */
+.work-queue .src-admin{background:var(--ink);color:var(--surface)}
+.work-queue .src-booking{background:var(--gold-wash);color:var(--gold-ink);border:1px solid var(--gold)}
+.work-queue .src-partner{background:var(--teal-wash);color:var(--teal-ink);border:1px solid var(--teal)}
+.work-queue .note{margin:0;font-size:14px;color:var(--muted)}
+.work-queue .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.work-queue .pager{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.work-queue .pager span{font-size:14px}
+.work-queue .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.work-queue .problem{margin:0;color:var(--gold-ink);font-weight:600}
+/* Availability card: the chosen employee's whole day, 00 to 24, with a line every hour. */
+.work-queue .pp{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--ink);box-shadow:inset 0 0 0 1px var(--ink);border-radius:12px;background:var(--surface)}
+.work-queue .pp-pick{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:8px;min-height:44px}
+.work-queue .pp-sub{font-size:13px;color:var(--muted)}
+.work-queue .pp-day{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px}
+.work-queue .day-btn{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:36px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);font:inherit;font-size:18px;color:var(--ink);cursor:pointer}
+.work-queue .day-btn:disabled{opacity:.4;cursor:not-allowed}
+.work-queue .chip-free{background:var(--teal-wash);color:var(--teal-ink);border:1px solid var(--teal)}
+.work-queue .chip-busy{background:var(--gold-wash);color:var(--gold-ink);border:1px solid var(--gold)}
+.work-queue .chip-best{background:var(--ink);color:var(--surface);font-size:12px;padding:2px 8px}
+.work-queue .bar{position:relative;display:block;height:36px;border-radius:8px;background-color:var(--wash);background-image:repeating-linear-gradient(to right,var(--line-2) 0 1px,transparent 1px calc(100% / 24));border:1px solid var(--line);cursor:copy;touch-action:none}
+.work-queue .bar.fixed{cursor:default}
+.work-queue .bar .b-busy{position:absolute;top:4px;bottom:4px;border-radius:6px;background:var(--line-3)}
+.work-queue .bar .b-slot,.work-queue .bar .b-clash{position:absolute;top:0;bottom:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:10px;font-weight:600;cursor:grab;white-space:nowrap;overflow:hidden;touch-action:none}
+.work-queue .bar.fixed .b-slot,.work-queue .bar.fixed .b-clash{cursor:default}
+.work-queue .bar .b-end{position:absolute;top:-4px;bottom:-4px;width:8px;margin-left:-4px;border-radius:4px;background:var(--ink);cursor:ew-resize;touch-action:none}
+.work-queue .bar .b-end::after{content:'';position:absolute;left:3px;top:10px;bottom:10px;width:2px;background:var(--surface)}
+.work-queue .bar .b-slot{border:2px solid var(--teal-ink);background:var(--teal-wash);color:var(--teal-ink)}
+.work-queue .bar .b-clash{border:2px solid var(--gold-ink);background:var(--gold-wash);color:var(--gold-ink)}
+.work-queue .scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.work-queue .clash{margin:0;padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);color:var(--gold-ink);font-size:14px}
+/* Help text lives behind an "i": shown on hover or keyboard focus. */
+.work-queue .info{position:relative;display:inline-flex;vertical-align:middle}
+.work-queue .info-btn{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);cursor:help}
+.work-queue .info-btn:hover{color:var(--ink);background:var(--wash)}
+.work-queue .info .tip{display:none;position:absolute;left:0;top:calc(100% + 4px);z-index:60;width:260px;max-width:70vw;padding:12px;border:2px solid var(--line-3);border-radius:12px;background:var(--surface);font-size:13px;font-weight:400;line-height:1.45;color:var(--ink-2);white-space:normal}
+.work-queue .info:hover .tip,.work-queue .info:focus-within .tip{display:block}
+.work-queue .drawer{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100%;box-sizing:border-box;overflow-y:auto;padding:20px;background:var(--surface);border-left:2px solid var(--line-2);z-index:200;display:flex;flex-direction:column;gap:12px}
+.work-queue .drawer-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.work-queue .drawer-head strong{font-size:18px}
+.work-queue .facts{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px;margin:0}
+.work-queue .facts dt{color:var(--muted)}
+.work-queue .facts dd{margin:0;overflow-wrap:anywhere}
+.work-queue .message{margin:0;padding:12px;border:1px solid var(--line-2);border-radius:12px;background:var(--wash);font-size:14px;white-space:pre-wrap}
+.work-queue .box{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line-2);border-radius:12px}
+.work-queue .ask{padding:12px;border:2px solid var(--gold-ink);border-radius:12px;background:var(--gold-wash);display:flex;flex-direction:column;gap:8px}
+.work-queue .foot{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+@media (max-width:640px){.work-queue .drawer{width:100%}}

@@ -74,7 +74,8 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
                 rows.Add((LocalKey(booking.StartLocalDate, booking.StartLocalTime) ?? booking.StartUtc, booking.Id, new WorkQueueItem(
                     "booking", booking.Id, booking.BookingNumber, booking.Customer.Name,
                     booking.StartLocalDate + " " + booking.StartLocalTime, booking.Status,
-                    WorkQueueRules.BookingLabel(booking), booking.EmployeeName, "/admin/work-queue/?booking=" + booking.Id)));
+                    WorkQueueRules.BookingLabel(booking), booking.EmployeeName, "/admin/work-queue/?booking=" + booking.Id,
+                    null, booking.Service.NameFi, booking.Service.DurationMinutes)));
             }
         }
 
@@ -103,13 +104,20 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
             ordered = closedFirst ? ordered.OrderByDescending(r => r.Local).ThenBy(r => r.Shift.Id) : ordered.OrderBy(r => r.Local).ThenBy(r => r.Shift.Id);
             var page = ordered.Take(window).ToList();
             var companies = await CompaniesAsync(page.Select(r => r.Shift.CompanyId), ct);
+            var branches = await BranchesAsync(page.Select(r => r.Shift.BranchId), ct);
             foreach (var row in page)
             {
                 companies.TryGetValue(row.Shift.CompanyId, out var company);
+                branches.TryGetValue(row.Shift.BranchId, out var branch);
+                var occurrence = row.Visit.Occurrence;
                 rows.Add((row.Local, row.Id, new WorkQueueItem(
                     "shift", row.Id, row.Shift.Name, company?.Name ?? "Customer",
                     row.Local.ToString("yyyy-MM-dd HH:mm"), row.View,
-                    row.Label, null, "/admin/shifts/calendar/")));
+                    row.Label, null, "/admin/shifts/scheduler/",
+                    new WorkQueueVisit(row.Shift.Id, occurrence.StartUtc, occurrence.EndUtc, occurrence.OriginalStartUtc,
+                        occurrence.ExceptionId, row.Visit.ExtraExceptionId, occurrence.Status is { } status ? (int)status : null,
+                        occurrence.EmployeeId, row.Visit.RosterVersion, row.Visit.Assignment?.Version, row.Shift.IsBranchMain,
+                        branch?.Name, row.Record?.CleaningType, row.Record?.Notes, row.Record?.OfferedEmployeeId, row.Record?.OfferRevision ?? 0))));
             }
         }
 
@@ -145,7 +153,7 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
 
     private sealed record PartnerView(string View, PartnerCleaningRequest Request);
 
-    private sealed record ShiftRow(string View, string Label, Shift Shift, ShiftVisitRosterEntry Visit, DateTime Local, Guid Id);
+    private sealed record ShiftRow(string View, string Label, Shift Shift, ShiftVisitRosterEntry Visit, DateTime Local, Guid Id, ShiftOccurrenceException? Record = null);
 
     /// <summary>
     /// Company shifts (not partner-created ones, which appear as partner requests). Each occurrence in the bounded
@@ -197,7 +205,9 @@ public sealed class WorkQueueReader(ITenantSession tenant, ITenantProfileReposit
                 var view = WorkQueueRules.ShiftView(visit, evidence, now);
                 if (!evidence.Any(f => f.StartedAtUtc.HasValue || f.IsSubmitted))
                     view = WorkQueueRules.ActiveShiftView(shift.IsActive, view, start, now);
-                rows.Add(new ShiftRow(view, WorkQueueRules.ShiftLabel(visit, view, now), shift, visit, TimeZoneInfo.ConvertTimeFromUtc(start, zone), StableOccurrenceId(shift.Id, start)));
+                var changeId = visit.ExtraExceptionId ?? visit.Occurrence.ExceptionId;
+                var record = changeId is { } id ? (exceptions.GetValueOrDefault(shift.Id) ?? none).FirstOrDefault(x => x.Id == id) : null;
+                rows.Add(new ShiftRow(view, WorkQueueRules.ShiftLabel(visit, view, now), shift, visit, TimeZoneInfo.ConvertTimeFromUtc(start, zone), StableOccurrenceId(shift.Id, start), record));
             }
         }
         return rows;

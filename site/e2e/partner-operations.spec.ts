@@ -4,6 +4,7 @@ import { setupAdminMocks, shiftsResponse } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 import type { CleanerOffer, CleaningRequest, PartnerChange } from '../src/lib/partnerApi';
 import type { InvoiceIssuer, ShiftInvoice, ShiftInvoiceInput } from '../src/lib/invoiceBillingApi';
+import { viaManagerPage } from './partner-operations-page';
 async function pickMonth(page: Page, label: string) { await page.getByRole('textbox', { name: 'Completion month', exact: true }).click(); await page.getByRole('option', { name: label, exact: true }).click(); }
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -34,7 +35,7 @@ test('Partner Operations excludes ordinary properties and reveals editors below 
     Object.assign(partnerProperties[0], body);
     return route.fulfill({ headers, json: partnerProperties[0] });
   });
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page.getByRole('article')).toHaveCount(25);
   await expect(page.getByText('Ordinary property', { exact: true })).toHaveCount(0);
@@ -232,7 +233,7 @@ test('staff resolves owner changes, creates a property and cancels a versioned r
     if (path === `/requests/${cleaning.id}/cancel`) { requests = [{ ...requests[0], version: 8, status: 'Cancelled' }]; return route.fulfill({ headers, json: requests[0] }); }
     return route.fulfill({ status: 404, headers });
   });
-  await page.goto('/admin/partner-requests/'); await page.getByRole('tab', { name: 'Changes', exact: true }).click();
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/'); await page.getByRole('tab', { name: 'Changes', exact: true }).click();
   await expect(page.getByText('Add spare towels.', { exact: true })).toBeVisible(); await page.getByRole('button', { name: 'Resolve change request', exact: true }).click();
   await page.getByLabel('Resolution', { exact: true }).fill('Spare towels added to cleaning instructions.'); await page.getByRole('button', { name: 'Save resolution', exact: true }).click();
   await expect(page.getByText('Resolved: Spare towels added to cleaning instructions.', { exact: true })).toBeVisible();
@@ -264,7 +265,7 @@ test('staff updates reusable cleaning pricing from Properties and sees the refre
     property = { ...property, priceNet: Number(body.priceNet), vatRatePercent: Number(body.vatRatePercent), estimatedDurationMinutes: Number(body.estimatedDurationMinutes), pricingReady: true };
     return route.fulfill({ headers, json: property });
   });
-  await page.goto('/admin/partner-requests/'); await page.getByRole('tab', { name: 'Properties', exact: true }).click();
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/'); await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page.getByText('€70.00 excl. VAT · 120 minutes', { exact: true })).toBeVisible(); await page.getByRole('button', { name: 'Set cleaning price', exact: true }).click();
   await expect(page.getByLabel('Fixed cleaning price excl. VAT (€)')).toHaveValue('70'); await expect(page.getByLabel('VAT (%)')).toHaveValue('25.5'); await expect(page.getByLabel('Estimated duration (minutes)')).toHaveValue('120');
   await page.getByLabel('Fixed cleaning price excl. VAT (€)').fill('95'); await page.getByLabel('VAT (%)').fill('14'); await page.getByLabel('Estimated duration (minutes)').fill('150'); await page.getByRole('button', { name: 'Save pricing', exact: true }).click();
@@ -287,7 +288,7 @@ test('A01 automatic employee can take a flexible visit; a start time is optional
     if (path.endsWith('/offer')) { const body = request.postDataJSON(); writes.push(body); current = { ...current, status: body.employeeId === 'auto' ? 'Accepted' : 'Offered', version: current.version + 1 }; return route.fulfill({ headers, json: current }); }
     return route.fulfill({ status: 404, headers });
   });
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('button', { name: 'Arrange employee / time' }).click();
   await page.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('auto');
   const time = page.getByLabel(/^Planned start/); await expect(time).not.toHaveAttribute('required', '');

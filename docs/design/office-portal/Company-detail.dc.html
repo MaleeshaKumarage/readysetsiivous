@@ -11,7 +11,7 @@
 <helmet>
 <style>
 /* Hallmark: navy and gold from the design-system tokens, one token block per screen, no literal colour below it. */
-:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
+:root{--ink:#0a1741;--ink-2:#232e54;--muted:#32406f;--line:#e4e8f2;--line-2:#c6cee3;--line-3:#9ca9cc;--wash:#f3f5fa;--surface:#fdfeff;--gold:#c9a340;--gold-wash:#fbf7ec;--gold-ink:#7d6220;--teal-wash:#e4f3f0;--teal-ink:#1d5c53;--teal:#5fa89c;--scrim:rgba(10,23,65,.45);--shadow-pop:0 8px 24px rgba(13,20,40,.18);--font:'Inter',system-ui,-apple-system,sans-serif}
 html,body{overflow-x:clip}
 body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
 :focus-visible{outline:3px solid var(--gold-ink);outline-offset:2px}
@@ -34,6 +34,9 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .panel{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
 .chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
 .chip-gold{background:var(--gold-wash);color:var(--gold-ink)}
+.hchip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line-3);white-space:nowrap}
+.hchip-done{background:var(--teal-wash);color:var(--teal-ink);border-color:var(--teal)}
+.hchip-cancel{background:var(--wash);color:var(--muted);border-style:dashed}
 .tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px}
 table{width:100%;border-collapse:collapse;min-width:560px}
 th{text-align:left;font-size:14px;color:var(--muted);font-weight:600;padding:12px;border-bottom:1px solid var(--line);background:var(--wash)}
@@ -52,7 +55,6 @@ td{padding:12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular
     <a href="Bookings.dc.html">Bookings</a>
     <a href="Scheduler.dc.html">Scheduler</a>
     <a href="Work-queue.dc.html">Work queue</a>
-    <a href="Partner-operations.dc.html">Partner operations</a>
     <a href="Quality-cycle.dc.html">Quality Cycle</a>
     <div class="grp">Customers</div>
     <a href="Leads.dc.html">Leads</a>
@@ -120,6 +122,22 @@ td{padding:12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular
     </section>
     </sc-if>
 
+    <sc-if value="{{ tPartner }}" hint-placeholder-val="{{ false }}">
+    <section class="panel" aria-label="Partner activity">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:18px">Partner activity</h2><a class="btn btn-ghost" href="Work-queue.dc.html">Open waiting work in the Work queue</a></div>
+      <p style="margin:0;font-size:14px;color:var(--muted)">Everything this partner asked for that is finished: cleaning that was done or cancelled, change requests and their answers, and key pickups and handovers. Waiting work is in the Work queue; booked visits are in the Scheduler.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Type<select onChange="{{ onHType }}" style="min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)"><option value="all">All types</option><option value="Cleaning">Cleaning</option><option value="Change request">Change request</option><option value="Key handling">Key handling</option></select></label>
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted)">Result<select onChange="{{ onHResult }}" style="min-height:44px;padding:0 12px;border:1px solid var(--line-3);border-radius:10px;font:inherit;color:var(--ink);background:var(--surface)"><option value="all">All results</option><option value="done">Done or answered</option><option value="cancelled">Cancelled or declined</option></select></label>
+      </div>
+      <div class="tablebox" role="region" aria-label="Partner activity table" tabindex="0"><table>
+        <thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col">What</th><th scope="col">Result</th></tr></thead>
+        <tbody><sc-for list="{{ history }}" as="h" hint-placeholder-count="5"><tr><td style="white-space:nowrap">{{ h.date }}</td><td><span class="hchip">{{ h.type }}</span></td><td>{{ h.what }}</td><td><span class="{{ h.cls }}">{{ h.result }}</span><div style="font-size:13px;color:var(--muted);margin-top:4px">{{ h.detail }}</div></td></tr></sc-for></tbody>
+      </table></div>
+      <sc-if value="{{ hEmpty }}" hint-placeholder-val="{{ false }}"><p style="margin:0;color:var(--muted)">Nothing matches these filters.</p></sc-if>
+    </section>
+    </sc-if>
+
     <sc-if value="{{ tInvoices }}" hint-placeholder-val="{{ false }}">
     <section class="panel" aria-label="Invoices">
       <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0;font-size:18px">Invoices</h2><a class="btn btn-ghost" href="Invoices.dc.html">Open invoices</a></div>
@@ -133,7 +151,15 @@ td{padding:12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
-const TABS = [['overview', 'Overview'], ['properties', 'Properties'], ['agreements', 'Agreements'], ['work', 'Work orders'], ['invoices', 'Invoices']];
+const TABS = [['overview', 'Overview'], ['properties', 'Properties'], ['agreements', 'Agreements'], ['work', 'Work orders'], ['partner', 'Partner activity'], ['invoices', 'Invoices']];
+const HISTORY = [
+  { date: '2026-11-26', type: 'Cleaning', what: 'Espoo head office, 26 Nov 08:00–11:00', result: 'Done', ok: true, detail: 'Anna K. · 08:04–10:58 · checklist 12 of 12' },
+  { date: '2026-11-24', type: 'Change request', what: 'Reschedule Espoo head office to next week', result: 'Answered', ok: true, detail: 'Moved to 2 Dec 13:00 with Ville R. Reply: "See you on Tuesday afternoon."' },
+  { date: '2026-11-21', type: 'Key handling', what: 'Key pickup, Espoo head office', result: 'Done', ok: true, detail: 'Minna S. · 1 photo · €25.00 excl. VAT' },
+  { date: '2026-11-18', type: 'Cleaning', what: 'Tampere warehouse, 18–19 Nov', result: 'Cancelled', ok: false, detail: 'By the office: "No staff that week."' },
+  { date: '2026-11-12', type: 'Change request', what: 'Message: bring extra towels', result: 'Declined', ok: false, detail: 'Reply: "Towels are not part of the agreement."' },
+  { date: '2026-11-05', type: 'Cleaning', what: 'Espoo head office, 5 Nov 08:00–11:00', result: 'Done', ok: true, detail: 'Ville R. · 08:10–11:05 · checklist 12 of 12' },
+];
 const WORK = [
   { name: 'Espoo, weekly clean', prop: 'Espoo head office', status: 'Active', from: '2026-01-05', until: '2026-12-31', active: true },
   { name: 'Tampere, monthly deep clean', prop: 'Tampere warehouse', status: 'Active', from: '2026-03-01', until: 'No end date', active: true },
@@ -146,7 +172,11 @@ class Component extends DCLogic {
     const w = st.w || 'active';
     return {
       tabs: TABS.map(([k, label]) => ({ label: label, on: tab === k, go: () => this.setState({ tab: k }) })),
-      tOverview: tab === 'overview', tProperties: tab === 'properties', tAgreements: tab === 'agreements', tWork: tab === 'work', tInvoices: tab === 'invoices',
+      tOverview: tab === 'overview', tProperties: tab === 'properties', tAgreements: tab === 'agreements', tWork: tab === 'work', tInvoices: tab === 'invoices', tPartner: tab === 'partner',
+      onHType: e => this.setState({ hType: e.target.value }), onHResult: e => this.setState({ hResult: e.target.value }),
+      history: HISTORY.filter(h => (!st.hType || st.hType === 'all' || h.type === st.hType) && (!st.hResult || st.hResult === 'all' || (st.hResult === 'done') === h.ok))
+        .map(h => ({ ...h, cls: 'hchip ' + (h.ok ? 'hchip-done' : 'hchip-cancel') })),
+      hEmpty: !HISTORY.some(h => (!st.hType || st.hType === 'all' || h.type === st.hType) && (!st.hResult || st.hResult === 'all' || (st.hResult === 'done') === h.ok)),
       wActive: w === 'active', wInactive: w === 'inactive',
       showWActive: () => this.setState({ w: 'active' }), showWInactive: () => this.setState({ w: 'inactive' }),
       work: WORK.filter(x => (w === 'active' ? x.active : !x.active)),

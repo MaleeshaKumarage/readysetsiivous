@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, setNavOpen } from './admin-helpers';
 import { buildScaleData, installScaleRoutes } from './admin-scale-data';
 
-const NAV_PAGES = ['/admin/', '/admin/shifts/', '/admin/shifts/scheduler/', '/admin/work-queue/', '/admin/partner-requests/', '/admin/quality-cycle/', '/admin/leads/', '/admin/companies/', '/admin/agreements/', '/admin/employees/', '/admin/invoices/', '/admin/services/'];
+const NAV_PAGES = ['/admin/', '/admin/shifts/', '/admin/shifts/scheduler/', '/admin/work-queue/', '/admin/quality-cycle/', '/admin/leads/', '/admin/companies/', '/admin/agreements/', '/admin/employees/', '/admin/invoices/', '/admin/services/'];
 
 async function openAdmin(page: Page, path: string) {
   await page.goto(path, { waitUntil: 'commit' }).catch(() => {});
@@ -10,15 +10,18 @@ async function openAdmin(page: Page, path: string) {
   await expect(page.getByText('Tenant administration', { exact: true })).toBeVisible({ timeout: 15000 });
 }
 
-test('header names the most specific section and the partner entry matches its page', async ({ page }) => {
+test('header names the most specific section, and partner work lives in the Work queue entry', async ({ page }) => {
   await setupAdminMocks(page); await installScaleRoutes(page, buildScaleData());
   await openAdmin(page, '/admin/shifts/scheduler/');
   await expect(page.getByText('Scheduler', { exact: true }).first()).toBeVisible();
-  const partnerLink = page.locator('a[aria-label="Partner operations"]').first();
-  if (!(await partnerLink.isVisible())) await setNavOpen(page, true);
-  await expect(partnerLink).toBeVisible({ timeout: 15000 });
+  const queueLink = page.locator('a[aria-label="Work queue"]').first();
+  if (!(await queueLink.isVisible())) await setNavOpen(page, true);
+  await expect(queueLink).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('a[aria-label="Partner operations"]')).toHaveCount(0);
+  // The old Partner operations address opens the Work queue with partner work shown.
   await openAdmin(page, '/admin/partner-requests/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Partner operations', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/work-queue\/\?source=partner/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Work queue', exact: true })).toBeVisible();
 });
 
 test('every admin nav page has exactly one top-level heading', async ({ page }) => {
@@ -47,16 +50,18 @@ test('phone tabs and pager controls meet the 44px touch target', async ({ page }
   expect((await next.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 });
 
-test('phone work queue tabs stay on one scrolling row instead of wrapping', async ({ page }) => {
+// The Work queue has no status tabs any more; on a phone its filters stack and the page never scrolls sideways.
+test('phone work queue filters fit the screen without sideways scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await setupAdminMocks(page); await installScaleRoutes(page, buildScaleData());
   await openAdmin(page, '/admin/work-queue/');
-  const tabs = page.getByRole('tab');
-  await expect(tabs.first()).toBeVisible();
-  const tops = new Set<number>();
-  const count = await tabs.count();
-  for (let i = 0; i < count; i++) tops.add(Math.round((await tabs.nth(i).boundingBox())!.y));
-  expect(tops.size).toBe(1);
+  await expect(page.getByLabel('Source')).toBeVisible();
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  for (const label of ['Source', 'Type', 'Search', 'Sort']) {
+    const box = (await page.getByLabel(label).boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('phone tables explain sideways scrolling and can be reached from the keyboard', async ({ page }) => {

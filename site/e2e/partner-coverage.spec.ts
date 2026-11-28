@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { chooseEmployeeSection } from './employee-section';
 import { PartnerFlowBackend, openActor, prepareRolePage } from './partner-flow-backend';
+import { viaManagerPage } from './partner-operations-page';
 
 // Coverage for the partner portal states that the flow does not visit: empty lists,
 // in-progress saves, validation the browser enforces, error fallbacks and Finnish labels.
@@ -13,7 +14,7 @@ async function ownerTab(page: Page, name: string) {
   await page.getByRole('tab', { name, exact: true }).click();
 }
 async function staffTab(page: Page, name: string) {
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name, exact: true }).click();
 }
 

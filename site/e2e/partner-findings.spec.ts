@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { chooseEmployeeSection } from './employee-section';
 import { OWNER_COMPANY, PartnerFlowBackend, openActor, prepareRolePage } from './partner-flow-backend';
+import { viaManagerPage } from './partner-operations-page';
 
 // Deep cleaning is visible to every role that books, staffs or does the visit.
 
@@ -18,7 +19,7 @@ test('staff see Deep cleaning and the surcharge on a partner request', async ({ 
   request.cleaningType = 'Deep';
   const staff = await openActor(browser, testInfo, backend, 'admin');
   try {
-    await staff.page.goto('/admin/partner-requests/');
+    await viaManagerPage(staff.page); await staff.page.goto('/manager/partner-requests/');
     const card = staff.page.getByRole('article', { name: 'Lake apartment request', exact: true });
     await expect(card.getByTestId('request-cleaning-type')).toHaveText('Deep cleaning · adds €15.00 excl. VAT');
   } finally { await staff.context.close(); }
@@ -30,7 +31,7 @@ test('a Normal request says Normal cleaning and adds no surcharge', async ({ bro
   backend.seedRequest(branch, WINDOW);
   const staff = await openActor(browser, testInfo, backend, 'admin');
   try {
-    await staff.page.goto('/admin/partner-requests/');
+    await viaManagerPage(staff.page); await staff.page.goto('/manager/partner-requests/');
     const card = staff.page.getByRole('article', { name: 'Lake apartment request', exact: true });
     await expect(card.getByTestId('request-cleaning-type')).toHaveText('Normal cleaning');
   } finally { await staff.context.close(); }
@@ -59,7 +60,7 @@ test('two employees with the same name are told apart by email in the staff Arra
   try {
     const staff = await openActor(browser, testInfo, backend, 'admin');
     try {
-      await staff.page.goto('/admin/partner-requests/');
+      await viaManagerPage(staff.page); await staff.page.goto('/manager/partner-requests/');
       await staff.page.getByRole('article', { name: 'Lake apartment request', exact: true }).getByRole('button', { name: 'Arrange employee / time', exact: true }).click();
       const select = staff.page.getByLabel('Employee', { exact: true });
       await expect(select.locator('option', { hasText: 'Test Employee (employee@example.invalid)' })).toHaveCount(1);

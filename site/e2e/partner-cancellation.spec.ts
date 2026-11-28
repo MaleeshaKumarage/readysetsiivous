@@ -2,6 +2,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { setupAdminMocks } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
 import type { CleaningRequest, PartnerChange, PartnerIdentity } from '../src/lib/partnerApi';
+import { viaManagerPage } from './partner-operations-page';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const companyId = '11111111-1111-4111-8111-111111111111';
@@ -54,7 +55,7 @@ test('owner cancels valid property, cleaning and staff-change drafts without any
 });
 
 test('staff cancels valid offer, pricing, resolution, reschedule and property drafts without writes', async ({ page }) => {
-  const state = await fixture(page, 'admin'); await page.goto('/admin/partner-requests/');
+  const state = await fixture(page, 'admin'); await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   const card = page.getByRole('article', { name: `${branch.name} request`, exact: true }).first();
   await card.getByRole('button', { name: 'Arrange employee / time', exact: true }).click();
   const offer = page.getByRole('dialog', { name: /^Arrange / }); await offer.getByLabel('Employee', { exact: true }).selectOption('employee'); await offer.getByLabel('Planned start (tenant local time, optional)').fill('2026-12-01T10:00'); await cancel(offer, state.writes);
