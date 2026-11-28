@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, setNavOpen } from './admin-helpers';
 import type { Branch } from '../src/lib/adminApi';
+import { viaManagerPage } from './partner-operations-page';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const company = { id: 'quote-company', name: 'Apartment owner', businessId: '1234567-8', isActive: true, isPartnerEnabled: true };
@@ -12,7 +13,7 @@ for (const access of ['anonymous', 'denied'] as const) {
     let quoteReads = 0;
     await page.route(/\/api\/v1\/admin\/partner\/quotes$/, route => { quoteReads++; return route.fulfill({ headers, json: [requested] }); });
     await page.clock.install();
-    await page.goto('/admin/partner-requests/');
+    await viaManagerPage(page); await page.goto('/manager/partner-requests/');
     if (access === 'denied') await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
     else await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
     await page.clock.fastForward(60_000);
@@ -71,7 +72,7 @@ test('admin sees banner and red branch tag, reviews quotes directly and pricing 
 
 test('quote banner switches tabs on the current operations page; an open property dialog must be closed first', async ({ page }) => {
   await fixture(page);
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
   await page.getByLabel('Property name', { exact: true }).fill('Preserve my draft');
@@ -90,7 +91,7 @@ test('quote banner switches tabs on the current operations page; an open propert
 test('visible polling and focus discover new quotes, errors retain count and retry clears resolved quotes', async ({ page }) => {
   const state = await fixture(page, []);
   await page.clock.install();
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await expect(page.getByRole('button', { name: 'Refresh partner operations' })).toBeEnabled();
   const banner = page.getByRole('status', { name: 'Pending quote requests' });
   await expect(banner).toHaveCount(0);
@@ -109,7 +110,7 @@ test('visible polling and focus discover new quotes, errors retain count and ret
 test('hidden tabs stop quote polling and returning to visibility refreshes without resetting a draft', async ({ page }) => {
   const state = await fixture(page);
   await page.clock.install();
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Properties', exact: true }).click();
   await expect(page.getByText('Quote requested', { exact: true })).toHaveClass(/text-red-800/);
   await page.getByRole('button', { name: 'Edit property', exact: true }).click();
@@ -159,7 +160,7 @@ test('pending action badges exclude cancelled and already arranged work, then re
   const request = { id: 'pending-clean', companyId: company.id, branchId: requested.id, branchName: 'Pending apartment', version: 1, status: 'Requested', fromDate: '2026-12-01', toDate: '2026-12-02', priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120 };
   state.work = [request, { ...request, id: 'cancelled', branchName: 'Cancelled apartment', status: 'Cancelled' }, { ...request, id: 'arranged', branchName: 'Arranged apartment', status: 'Offered' }];
   state.changes = [{ id: 'open-change', companyId: company.id, kind: 'Property', message: 'Please update access instructions', resolvedUtc: null }, { id: 'resolved-change', resolvedUtc: '2026-11-01T10:00:00Z' }];
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await setNavOpen(page, true); await expect(page.getByLabel('3 pending partner actions', { exact: true })).toHaveText('3', { timeout: 20000 }); await setNavOpen(page, false);
   for (const name of ['Requests', 'Quote requests', 'Changes']) await expect(page.getByRole('tab', { name, exact: true }).getByLabel('1 pending', { exact: true })).toHaveText('1');
   await expect(page.getByRole('article', { name: 'Cancelled apartment request', exact: true })).toHaveCount(0);

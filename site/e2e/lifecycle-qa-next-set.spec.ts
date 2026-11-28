@@ -126,7 +126,8 @@ test('weekly shifts show HH:mm times with no seconds for both day branches', asy
   await expect(page.getByRole('table').getByText(/:\d{2}:\d{2}/)).toHaveCount(0);
 });
 
-test('a deactivated shift future visit is listed under Cancelled', async ({ page }) => {
+// The Work queue shows only work waiting for the office, so a cancelled visit (a deactivated shift's future visit) is never listed.
+test('a deactivated shift future visit is not waiting in the Work queue', async ({ page }) => {
   test.setTimeout(180000);
   await setupAdminMocks(page, { authenticated: true });
   const cancelledVisit = { source: 'shift', id: '11111111-1111-4111-8111-111111111111', reference: 'Evening deep clean', customerName: 'AAA',
@@ -140,11 +141,9 @@ test('a deactivated shift future visit is listed under Cancelled', async ({ page
   });
   await page.route('**/api/v1/admin/employees**', route => route.fulfill({ status: 200, headers, json: [] }));
   await page.goto('/admin/work-queue/');
-  await expect(page.getByRole('tab', { name: /^Needs action/ })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByRole('status').filter({ hasText: 'Nothing is waiting.' })).toBeVisible({ timeout: 30000 });
   await expect(page.getByText('Evening deep clean', { exact: true })).toHaveCount(0);
-  await page.getByRole('tab', { name: /^Cancelled/ }).click();
-  await expect(page.getByRole('listitem').filter({ hasText: 'Evening deep clean' })).toBeVisible();
-  await expect(page.getByRole('listitem').filter({ hasText: 'Evening deep clean' })).toContainText('Cancelled');
+  await expect(page.getByRole('tab', { name: /^Cancelled/ })).toHaveCount(0);
 });
 
 test('a service without a VAT rate shows the net price and no broken VAT suffix', async ({ page }) => {

@@ -8,6 +8,7 @@ import { serviceFieldsFromForm } from '@/lib/serviceFields';
 import { adminServices } from '@/lib/adminApi';
 import { setServiceActivity } from '@/lib/serviceLifecycleApi';
 import { LifecycleTabs, inLifecycle, type LifecycleStatus } from '@/components/LifecycleTabs';
+import { KeyRequestFee } from '@/components/admin/KeyRequestFee';
 
 type ServiceRowLocal = { id: string; slug: string; category: string; name: { values: Record<string, string> }; description: { values: Record<string, string> }; additionalInfo: { values: Record<string, string> } | null; icon: string; imageUrl?: string | null; currency?: string; durationMinutes: number; priceNet: number; vatRatePercent: number; isActive: boolean; isFeatured: boolean; sortOrder: number };
 
@@ -114,6 +115,8 @@ export default function ServicesAdminPage() {
       </Group>
 
       {activityError && <Text role="alert" c="red" mb="sm">{activityError}</Text>}
+
+      <KeyRequestFee />
 
       <LifecycleTabs value={status} onChange={setStatus} label="Service activity"
         activeCount={loading ? undefined : services.filter(s => s.isActive).length}

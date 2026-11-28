@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { chooseEmployeeSection } from './employee-section';
 import { setupAdminMocks } from './admin-helpers';
+import { viaManagerPage } from './partner-operations-page';
 
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
 const branch = { id: 'branch-one', companyId: 'company-one', name: 'Lake apartment', street: 'Lake road 1', city: 'Tampere', isActive: true, roomCount: 2, bedCount: 3, priceNet: 70, vatRatePercent: 25.5, estimatedDurationMinutes: 120, pricingReady: true };
@@ -118,7 +119,7 @@ test('switching inline staff editors resets fields to the newly selected record'
     if (req.method() === 'GET') return route.fulfill({ headers, json: path === '/requests' ? [request, secondRequest] : path === '/branches' ? [branch, secondBranch] : [] });
     writes.push({ path, body: req.postDataJSON() }); return route.fulfill({ headers, json: {} });
   });
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('article', { name: 'Lake apartment request', exact: true }).getByRole('button', { name: 'Edit / reschedule request' }).click();
   await page.getByLabel('From date', { exact: true }).fill('2026-12-05');
   // Modal dialog blocks the page: close it (discarding the draft) before opening the other request.

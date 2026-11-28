@@ -12,7 +12,10 @@ export interface Booking {
   startLocalDate: string;
   startLocalTime: string;
   status: string;
+  employeeId?: string | null;
   employeeName?: string | null;
+  startUtc?: string;
+  endUtc?: string;
   history?: { status: string; atUtc: string; by: string; note?: string | null }[];
 }
 
@@ -228,6 +231,18 @@ export interface WorkQueueItem {
   stateLabel: string;
   assigneeName: string | null;
   href: string;
+  /** Shift items only: the visit identity and versions the Scheduler sends to assign or move it. */
+  visit?: WorkQueueVisit | null;
+  /** Bookings only: the booked service and its length. */
+  service?: string | null;
+  durationMinutes?: number | null;
+}
+
+export interface WorkQueueVisit {
+  shiftId: string; startUtc: string; endUtc: string; originalStartUtc: string | null;
+  exceptionId: string | null; extraExceptionId: string | null; status: number | null; visitEmployeeId: string | null;
+  rosterVersion: string; assignmentVersion: string | null; isBranchMain: boolean; branchName: string | null;
+  cleaningType: string | null; notes: string | null; offeredEmployeeId: string | null; offerRevision: number;
 }
 
 export interface WorkQueuePage {

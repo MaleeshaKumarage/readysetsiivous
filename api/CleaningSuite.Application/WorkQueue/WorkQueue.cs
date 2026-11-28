@@ -140,7 +140,32 @@ public record WorkQueueItem(
     string Status,
     string StateLabel,
     string? AssigneeName,
-    string Href);
+    string Href,
+    WorkQueueVisit? Visit = null,
+    string? Service = null,
+    int? DurationMinutes = null);
+
+/// <summary>
+/// What the office needs to assign or move a company-shift visit straight from the queue: the same identity and
+/// versions the Scheduler sends. Set on shift items only.
+/// </summary>
+public record WorkQueueVisit(
+    Guid ShiftId,
+    DateTime StartUtc,
+    DateTime EndUtc,
+    DateTime? OriginalStartUtc,
+    Guid? ExceptionId,
+    Guid? ExtraExceptionId,
+    int? Status,
+    Guid? VisitEmployeeId,
+    string RosterVersion,
+    Guid? AssignmentVersion,
+    bool IsBranchMain,
+    string? BranchName,
+    string? CleaningType,
+    string? Notes,
+    Guid? OfferedEmployeeId,
+    int OfferRevision);
 
 public record WorkQueuePage(
     string View,

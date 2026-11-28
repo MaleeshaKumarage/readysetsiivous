@@ -18,14 +18,17 @@ async function setup(page: Page) {
     requests.push(url.searchParams);
     const skip = Number(url.searchParams.get('skip') ?? 0), take = Number(url.searchParams.get('take') ?? 25);
     const search = (url.searchParams.get('q') ?? '').toLowerCase();
-    const matching = search ? items.filter(item => item.customerName.toLowerCase().includes(search)) : items;
+    const source = url.searchParams.get('source');
+    const matching = source === 'booking' ? [] : search ? items.filter(item => item.customerName.toLowerCase().includes(search)) : items;
     return route.fulfill({ headers, json: { view: 'needs-action', source: 'all', items: matching.slice(skip, skip + take), total: matching.length,
       counts: { 'needs-action': TOTAL, scheduled: 0, 'in-progress': 0, completed: 0, cancelled: 0 } } });
   });
   return requests;
 }
 
-test('a 500-row queue shows one page of 25 and asks the server for only that page', async ({ page }) => {
+// The queue merges visits, bookings and partner work into one list sorted by date, so it reads every unassigned visit,
+// at most 100 a request and never more than 2,000, and shows 25 a page.
+test('a 500-row queue reads unassigned visits 100 at a time and shows one page of 25', async ({ page }) => {
   const requests = await setup(page);
   await page.goto('/admin/work-queue/');
   await expect(page.getByText('Showing 1–25 of 500')).toBeVisible();
@@ -35,18 +38,18 @@ test('a 500-row queue shows one page of 25 and asks the server for only that pag
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByText('Showing 26–50 of 500')).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Customer 025' })).toBeVisible();
-  // Every request asks for at most one page, so no screen load fetches the whole queue.
-  expect(requests.every(params => Number(params.get('take')) <= 25)).toBe(true);
-  expect(requests.at(-1)?.get('skip')).toBe('25');
+  const shiftReads = requests.filter(params => params.get('source') === 'shift');
+  expect(shiftReads.every(params => Number(params.get('take')) <= 100 && params.get('view') === 'needs-action' && params.get('unassigned') === 'true')).toBe(true);
+  expect(shiftReads.map(params => params.get('skip'))).toEqual(['0', '100', '200', '300', '400']);
 });
 
-test('searching a 500-row queue narrows the server result and resets to page 1', async ({ page }) => {
-  const requests = await setup(page);
+test('searching a 500-row queue narrows the list and resets to page 1', async ({ page }) => {
+  await setup(page);
   await page.goto('/admin/work-queue/');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByText('Showing 26–50 of 500')).toBeVisible();
-  await page.getByRole('textbox', { name: /search/i }).fill('Customer 49');
-  await expect(page.getByText(/Showing 1–\d+ of 10\b/)).toBeVisible();
+  await page.getByRole('searchbox', { name: /search/i }).fill('Customer 49');
+  await expect(page.getByText('Showing 1–10 of 10')).toBeVisible();
   await expect(page.getByRole('listitem').filter({ hasText: 'Customer 490' })).toBeVisible();
-  expect(requests.at(-1)?.get('skip')).toBe('0');
+  await expect(page.getByText('Page 1 of 1', { exact: true })).toBeVisible();
 });

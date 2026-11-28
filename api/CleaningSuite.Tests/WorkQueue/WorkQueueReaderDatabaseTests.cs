@@ -189,6 +189,7 @@ public class WorkQueueReaderDatabaseTests
             db.Store(new Booking { BookingNumber = "BK-ASSIGNED", Customer = new Customer { Name = "Assigned" }, Status = Booking.StatusNew, EmployeeId = Guid.NewGuid().ToString(),
                 StartUtc = new DateTime(2026, 12, 2, 8, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "10:00" });
             db.Store(new Booking { BookingNumber = "BK-FREE", Customer = new Customer { Name = "Free" }, Status = Booking.StatusNew,
+                Service = new ServiceSnapshot { NameFi = "Kotisiivous", DurationMinutes = 180 },
                 StartUtc = new DateTime(2026, 12, 2, 9, 0, 0, DateTimeKind.Utc), StartLocalDate = "2026-12-02", StartLocalTime = "11:00" });
             await db.SaveChangesAsync();
         }
@@ -200,6 +201,9 @@ public class WorkQueueReaderDatabaseTests
 
         var unassigned = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "booking", null, 0, 25, UnassignedOnly: true));
         Assert.Equal(["BK-FREE"], unassigned.Items.Select(i => i.Reference).ToArray());
+        // The queue shows the booked service and its length, so the office can plan the visit without opening it.
+        Assert.Equal("Kotisiivous", unassigned.Items[0].Service);
+        Assert.Equal(180, unassigned.Items[0].DurationMinutes);
         Assert.Equal(1, unassigned.Total);
         Assert.Equal(1, unassigned.Counts[WorkQueueViews.NeedsAction]);
     }
@@ -372,6 +376,34 @@ public class WorkQueueReaderDatabaseTests
         Assert.DoesNotContain(needsAction.Items, item => item.Reference.Contains("Assigned daily"));
         var scheduled = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.Scheduled, "shift", null, 0, 200));
         Assert.Contains(scheduled.Items, item => item.Reference.Contains("Assigned daily") && item.StateLabel == "Scheduled");
+    }
+
+    [QualityCycleDatabaseFact]
+    public async Task Shift_items_carry_the_visit_identity_and_versions_needed_to_assign_or_move_them()
+    {
+        using var f = await Fixture.Create();
+        var company = new Company { Name = "Identity Co", BusinessId = "WQ-" + Guid.NewGuid().ToString("N")[..8], IsActive = true };
+        var branch = new Branch { Id = Guid.NewGuid(), CompanyId = company.Id, Name = "Identity office", IsActive = true };
+        var schedule = new ShiftSchedule { Type = ShiftScheduleType.DailySameTime, DailyStart = new TimeSpan(8, 0, 0), DailyEnd = new TimeSpan(10, 0, 0) };
+        var open = Shift.Create(company.Id, branch.Id, "Identity daily", schedule, null, DateTime.UtcNow.Date.AddDays(3), null);
+        using (var db = f.Store.LightweightSession(f.Tenant))
+        {
+            db.Store(company); db.Store(branch); db.Store(open);
+            await db.SaveChangesAsync();
+        }
+
+        using var session = f.Session();
+        var reader = Reader(f, session);
+        var page = await reader.ReadAsync(new WorkQueueQuery(WorkQueueViews.NeedsAction, "shift", null, 0, 200, UnassignedOnly: true));
+        var item = page.Items.Where(i => i.Reference == "Identity daily").OrderBy(i => i.ScheduledLocal, StringComparer.Ordinal).First();
+        var visit = Assert.IsType<WorkQueueVisit>(item.Visit);
+        Assert.Equal(open.Id, visit.ShiftId);
+        Assert.Equal(TimeSpan.FromHours(2), visit.EndUtc - visit.StartUtc);
+        Assert.False(string.IsNullOrEmpty(visit.RosterVersion));
+        Assert.Equal("Identity office", visit.BranchName);
+        Assert.False(visit.IsBranchMain);
+        Assert.Null(visit.ExtraExceptionId);
+        Assert.Equal("/admin/shifts/scheduler/", item.Href);
     }
 
     [QualityCycleDatabaseFact]

@@ -19,7 +19,7 @@ test('the dashboard shows the attention counts and links each one to its list', 
   await expect(page.getByLabel('Scheduled visits: 5')).toBeVisible();
   await expect(page.getByLabel('Unread notifications: 2')).toBeVisible();
   await expect(page.getByRole('link', { name: /Unread notifications/ })).toHaveAttribute('href', '/account/');
-  await expect(page.getByRole('link', { name: /Partner actions/ })).toHaveAttribute('href', '/admin/partner-requests/');
+  await expect(page.getByRole('link', { name: /Partner actions/ })).toHaveAttribute('href', '/admin/work-queue/?source=partner');
   const shot = process.env.DASHBOARD_SHOT_DIR;
   if (shot) await page.screenshot({ path: `${shot}/dashboard-after-${testInfo.project.name}.png`, fullPage: testInfo.project.name !== 'chromium-desktop' });
 });

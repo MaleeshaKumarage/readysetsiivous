@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { chooseEmployeeSection } from './employee-section';
 import { OTHER_COMPANY, PartnerFlowBackend, openActor, prepareRolePage, type WriteRecord } from './partner-flow-backend';
+import { viaManagerPage } from './partner-operations-page';
 
 // One visit travels through every role: owner portal → staff partner operations → employee offers.
 // Each test owns a fresh fake backend, so the flow test and the edge cases never share state.
@@ -19,14 +20,14 @@ async function ownerOpenRequests(page: Page) {
   await page.getByRole('tab', { name: 'Cleaning requests', exact: true }).click();
 }
 async function staffOpenRequests(page: Page) {
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
 }
 // Cancelled owner bookings leave the active list and open from the collapsed section.
 async function ownerOpenCancelled(page: Page) {
   await page.getByRole('tab', { name: /^Cancelled requests/ }).click();
 }
 async function staffOpenAssigned(page: Page) {
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: 'Assigned', exact: true }).click();
 }
 async function cleanerOpenOffers(page: Page) {
@@ -581,12 +582,12 @@ test('employees and owners cannot reach partner operations pages', async ({ page
   const cleaner = await openActor(browser, testInfo, backend, 'employee');
   await cleaner.page.goto('/partner/');
   await expect(cleaner.page.getByText('Access denied.', { exact: false })).toBeVisible();
-  await cleaner.page.goto('/admin/partner-requests/');
+  await viaManagerPage(cleaner.page); await cleaner.page.goto('/manager/partner-requests/');
   await expect(cleaner.page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
   await expect(cleaner.page.getByRole('article', { name: `${PROPERTY} request`, exact: true })).toHaveCount(0);
 
   await prepareRolePage(page, backend, 'owner');
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await expect(page.getByRole('heading', { name: 'Admin access required' })).toBeVisible();
   expect(backend.writes).toHaveLength(0);
   await cleaner.context.close();

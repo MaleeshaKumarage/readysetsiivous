@@ -8,8 +8,8 @@ for (const role of ['owner', 'admin', 'employee'] as const) {
     backend.seedRequest(backend.branches[0], {fromDate:'2026-12-01',toDate:'2026-12-02',notes:'Clean the kitchen and prepare fresh linen.'});
     await prepareRolePage(page, backend, role);
     await page.route(/\/api\/v1\/partner\/inventory-acknowledgments\?/, route => route.fulfill({json:{items:[],pendingCount:0,hasMore:false},headers:{'Access-Control-Allow-Origin':'*'}}));
-    await page.goto(role === 'owner' ? '/partner/' : role === 'admin' ? '/admin/partner-requests/' : '/me/shifts/');
-    await expect(page.getByRole('heading', {name:role === 'owner' ? 'Properties' : role === 'admin' ? 'Partner operations' : 'My Shifts',exact:true})).toBeVisible();
+    await page.goto(role === 'owner' ? '/partner/' : role === 'admin' ? '/admin/work-queue/' : '/me/shifts/');
+    await expect(page.getByRole('heading', {name:role === 'owner' ? 'Properties' : role === 'admin' ? 'Work queue' : 'My Shifts',exact:true})).toBeVisible();
     await expect(page.locator('meta[name=viewport]')).toHaveAttribute('content',/viewport-fit=cover/);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const imagePath = (name: string) => process.env.PORTAL_UI_EVIDENCE_DIR ? join(process.env.PORTAL_UI_EVIDENCE_DIR, `${info.project.name}-${name}.png`) : info.outputPath(`${name}.png`);

@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, setNavOpen } from './admin-helpers';
 import { buildScaleData, installScaleRoutes } from './admin-scale-data';
 
-const NAV_PAGES = ['/admin/', '/admin/shifts/', '/admin/shifts/scheduler/', '/admin/work-queue/', '/admin/partner-requests/', '/admin/quality-cycle/', '/admin/leads/', '/admin/companies/', '/admin/agreements/', '/admin/employees/', '/admin/invoices/', '/admin/services/'];
+const NAV_PAGES = ['/admin/', '/admin/shifts/', '/admin/shifts/scheduler/', '/admin/work-queue/', '/admin/quality-cycle/', '/admin/leads/', '/admin/companies/', '/admin/agreements/', '/admin/employees/', '/admin/invoices/', '/admin/services/'];
 
 async function openAdmin(page: Page, path: string) {
   await page.goto(path, { waitUntil: 'commit' }).catch(() => {});
@@ -10,15 +10,18 @@ async function openAdmin(page: Page, path: string) {
   await expect(page.getByText('Tenant administration', { exact: true })).toBeVisible({ timeout: 15000 });
 }
 
-test('header names the most specific section and the partner entry matches its page', async ({ page }) => {
+test('header names the most specific section, and partner work lives in the Work queue entry', async ({ page }) => {
   await setupAdminMocks(page); await installScaleRoutes(page, buildScaleData());
   await openAdmin(page, '/admin/shifts/scheduler/');
   await expect(page.getByText('Scheduler', { exact: true }).first()).toBeVisible();
-  const partnerLink = page.locator('a[aria-label="Partner operations"]').first();
-  if (!(await partnerLink.isVisible())) await setNavOpen(page, true);
-  await expect(partnerLink).toBeVisible({ timeout: 15000 });
+  const queueLink = page.locator('a[aria-label="Work queue"]').first();
+  if (!(await queueLink.isVisible())) await setNavOpen(page, true);
+  await expect(queueLink).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('a[aria-label="Partner operations"]')).toHaveCount(0);
+  // The old Partner operations address opens the Work queue with partner work shown.
   await openAdmin(page, '/admin/partner-requests/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Partner operations', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/work-queue\/\?source=partner/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Work queue', exact: true })).toBeVisible();
 });
 
 test('every admin nav page has exactly one top-level heading', async ({ page }) => {

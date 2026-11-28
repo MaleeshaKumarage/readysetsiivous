@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { chooseEmployeeSection } from './employee-section';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { CORS, PartnerFlowBackend, OWNER_COMPANY, prepareRolePage } from './partner-flow-backend';
+import { viaManagerPage } from './partner-operations-page';
 
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -165,7 +166,13 @@ test('admin pending counts, request ordering, statuses and quote links keep thei
   backend.seedOffer(second,'employee');
   backend.addBranch({name:'Harbour studio',companyId:OWNER_COMPANY.id,quoteRequestedUtc:'2026-11-01T10:00:00Z'});
   await prepareRolePage(page,backend,'admin');
-  await page.goto('/admin/partner-requests/');
+  // The quote banner is admin chrome: it links to the quotes in the Work queue.
+  await page.goto('/admin/');
+  await expect(page.getByRole('status',{name:'Pending quote requests'})).toContainText('1 branch awaiting a quote');
+  await expect(page.getByRole('link',{name:'Review quotes in the Work queue'})).toHaveAttribute('href','/admin/work-queue/?type=quote');
+  // Partner operations is the managers' screen now; its counts and ordering are unchanged.
+  await viaManagerPage(page);
+  await page.goto('/manager/partner-requests/');
   const requestsHelp = page.getByText('The Requests badge counts requests needing arrangement; this list also includes offers awaiting an employee’s response.');
   await expect(requestsHelp).toBeVisible();
   await expect(page.getByRole('tab',{name:'Requests',exact:true})).toContainText('1');
@@ -174,8 +181,6 @@ test('admin pending counts, request ordering, statuses and quote links keep thei
   await page.getByRole('tab',{name:'Requests',exact:true}).click();
   await expect(requestsHelp).toBeVisible();
   await expect(page.locator('.partner-staff-status')).toHaveText(['Requested','Offered']);
-  await expect(page.getByRole('status',{name:'Pending quote requests'})).toContainText('1 branch awaiting a quote');
-  await expect(page.getByRole('link',{name:'Review quotes'})).toHaveAttribute('href','/admin/partner-requests/?tab=quotes');
   await noOverflow(page); expect(backend.writes).toHaveLength(0);
 });
 

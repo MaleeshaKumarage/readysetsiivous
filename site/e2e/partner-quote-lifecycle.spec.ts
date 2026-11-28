@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { setupAdminMocks, setNavOpen } from './admin-helpers';
+import { viaManagerPage } from './partner-operations-page';
 
 // Owner withdraw/edit/declined-quote paths and staff rejection, plus banner counts limited to partner-enabled companies.
 const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS', 'Access-Control-Allow-Headers': 'Authorization,Content-Type' };
@@ -145,7 +146,7 @@ test('staff reject needs a reason, leaves the queue, and the banner counts only 
   // The banner and badge count only partner-enabled companies, the same rule the Quote requests tab uses.
   await expect(page.getByRole('status', { name: 'Pending quote requests' })).toContainText('1 branch awaiting a quote');
   await setNavOpen(page, true); await expect(page.getByLabel('1 pending partner actions')).toHaveCount(1, { timeout: 20000 }); await setNavOpen(page, false);
-  await page.goto('/admin/partner-requests/?tab=quotes');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/?tab=quotes');
   await expect(page.getByRole('heading', { name: 'Lake apartment', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Disabled flat', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Reject quote', exact: true }).click();
@@ -163,7 +164,7 @@ test('staff reject needs a reason, leaves the queue, and the banner counts only 
 
 test('staff can keep a quote after opening the reject dialog without writing anything', async ({ page }) => {
   const state = await staff(page, [enabledStaffQuote]);
-  await page.goto('/admin/partner-requests/?tab=quotes');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/?tab=quotes');
   await page.getByRole('button', { name: 'Reject quote', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Reject quote · Lake apartment', exact: true });
   await dialog.getByRole('button', { name: 'Keep quote', exact: true }).click();
@@ -177,7 +178,7 @@ test('changes from companies without partner access stay out of the Changes list
     { id: 'change-on', companyId: ownerCompanyId, branchId: 'lake-branch', requestId: null, kind: 'Property', message: 'Enable the sauna', createdUtc: '2026-11-01T10:00:00Z', resolvedUtc: null, resolution: null },
     { id: 'change-off', companyId: otherCompanyId, branchId: 'other-branch', requestId: null, kind: 'Property', message: 'Not partner company', createdUtc: '2026-11-01T10:00:00Z', resolvedUtc: null, resolution: null },
   ]);
-  await page.goto('/admin/partner-requests/');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/');
   await page.getByRole('tab', { name: /^Changes/ }).click();
   await expect(page.getByText('Enable the sauna', { exact: true })).toBeVisible();
   await expect(page.getByText('Not partner company', { exact: true })).toHaveCount(0);
@@ -204,7 +205,7 @@ test('owner edit and quote withdrawal work from the keyboard, and Escape returns
 
 test('staff reject from the keyboard: reason, Tab to confirm, Escape keeps the quote', async ({ page }) => {
   const state = await staff(page, [enabledStaffQuote]);
-  await page.goto('/admin/partner-requests/?tab=quotes');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/?tab=quotes');
   const reject = page.getByRole('button', { name: 'Reject quote', exact: true });
   await reject.focus(); await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Reject quote · Lake apartment', exact: true });
@@ -225,7 +226,7 @@ test('staff reject from the keyboard: reason, Tab to confirm, Escape keeps the q
 
 test('reject dialog opens with the reason field focused, not the close button', async ({ page }) => {
   await staff(page, [enabledStaffQuote]);
-  await page.goto('/admin/partner-requests/?tab=quotes');
+  await viaManagerPage(page); await page.goto('/manager/partner-requests/?tab=quotes');
   const reject = page.getByRole('button', { name: 'Reject quote', exact: true });
   await reject.focus(); await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Reject quote · Lake apartment', exact: true });
